@@ -1,5 +1,12 @@
 import { properties } from '@v01/db';
-import { type Property, PropertyCreateSchema, PropertyListSchema, PropertySchema } from '@v01/shared';
+import {
+  PROPERTY_TYPES,
+  type Property,
+  PropertyCreateSchema,
+  PropertyListSchema,
+  PropertySchema,
+  type PropertyType,
+} from '@v01/shared';
 import { asc, eq, isNull } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
@@ -8,6 +15,12 @@ import { pgErrorCode, type RequestScope, toIso } from '../context.ts';
 import { HttpError } from '../errors.ts';
 
 type PropertyRow = typeof properties.$inferSelect;
+
+/** Property types are stored as text so the list can grow; anything unknown reads as "other". */
+function propertyType(value: string | null): PropertyType | null {
+  if (value === null) return null;
+  return (PROPERTY_TYPES as readonly string[]).includes(value) ? (value as PropertyType) : 'other';
+}
 
 function toProperty(row: PropertyRow): Property {
   return {
@@ -19,7 +32,11 @@ function toProperty(row: PropertyRow): Property {
     postcode: row.postcode,
     countryCode: row.countryCode,
     area: row.area,
+    propertyType: propertyType(row.propertyType),
+    spaceType: row.spaceType,
     bedrooms: row.bedrooms,
+    beds: row.beds,
+    bathrooms: row.bathrooms,
     maxGuests: row.maxGuests,
     checkInTime: row.checkInTime.slice(0, 5),
     checkOutTime: row.checkOutTime.slice(0, 5),
@@ -75,10 +92,15 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
             postcode: input.postcode ?? null,
             countryCode: input.countryCode,
             area: input.area ?? null,
+            propertyType: input.propertyType ?? null,
+            ...(input.spaceType ? { spaceType: input.spaceType } : {}),
             bedrooms: input.bedrooms ?? null,
+            beds: input.beds ?? null,
+            bathrooms: input.bathrooms ?? null,
             maxGuests: input.maxGuests,
             ...(input.checkInTime ? { checkInTime: input.checkInTime } : {}),
             ...(input.checkOutTime ? { checkOutTime: input.checkOutTime } : {}),
+            ...(input.priceOwner ? { priceOwner: input.priceOwner } : {}),
             minPriceMinor: input.minPriceMinor ?? null,
             maxPriceMinor: input.maxPriceMinor ?? null,
           })

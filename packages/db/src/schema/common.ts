@@ -9,6 +9,7 @@ import {
   PLATFORM_ROLES,
   PRICE_OWNERS,
   RESERVATION_STATUSES,
+  SPACE_TYPES,
 } from '@v01/shared';
 import { customType, pgSchema, timestamp } from 'drizzle-orm/pg-core';
 
@@ -28,6 +29,7 @@ export const priceOwner = app.enum('price_owner', PRICE_OWNERS);
 export const outboxKind = app.enum('outbox_kind', OUTBOX_KINDS);
 export const outboxStatus = app.enum('outbox_status', OUTBOX_STATUSES);
 export const platformRole = app.enum('platform_role', PLATFORM_ROLES);
+export const spaceType = app.enum('space_type', SPACE_TYPES);
 
 /** Postgres daterange, read back as text such as "[2026-11-13,2026-11-15)". */
 export const daterange = customType<{ data: string; driverData: string }>({

@@ -14,6 +14,7 @@ import {
   type Property,
   PropertyCreateSchema,
   type PropertyList,
+  type PropertyType,
   SUPPORT_ROLE,
   SupportAccessStartSchema,
   type SupportGrant,
@@ -95,7 +96,8 @@ interface DemoSyncError {
 }
 
 interface DemoState {
-  version: 2;
+  /** Raised whenever the shape changes, so a browser holding older sample data starts fresh. */
+  version: 3;
   operators: DemoOperator[];
   grants: DemoGrant[];
   unmatchedWebhooks: { waiting: number; failed: number; lastMinutes: number | null };
@@ -125,32 +127,39 @@ const NO_ACTIVITY: DemoLive = {
   lastActivityMinutes: null,
 };
 
-function sampleProperty(
-  name: string,
-  code: string,
-  area: string,
-  bedrooms: number,
-  maxGuests: number,
-  prices: [number, number] | null,
-  managedBy: Property['managedBy'],
-): Property {
+function sampleProperty(p: {
+  name: string;
+  code: string;
+  area: string;
+  type: PropertyType;
+  bedrooms: number;
+  beds: number;
+  bathrooms: number;
+  guests: number;
+  prices: [number, number] | null;
+  managedBy: Property['managedBy'];
+}): Property {
   return {
     id: crypto.randomUUID(),
-    name,
-    internalCode: code,
+    name: p.name,
+    internalCode: p.code,
     addressLine1: null,
     city: null,
     postcode: null,
     countryCode: 'GB',
-    area,
-    bedrooms,
-    maxGuests,
+    area: p.area,
+    propertyType: p.type,
+    spaceType: 'entire_place',
+    bedrooms: p.bedrooms,
+    beds: p.beds,
+    bathrooms: p.bathrooms,
+    maxGuests: p.guests,
     checkInTime: '15:00',
     checkOutTime: '10:00',
-    managedBy,
+    managedBy: p.managedBy,
     priceOwner: 'v01',
-    minPriceMinor: prices ? prices[0] : null,
-    maxPriceMinor: prices ? prices[1] : null,
+    minPriceMinor: p.prices ? p.prices[0] : null,
+    maxPriceMinor: p.prices ? p.prices[1] : null,
     createdAt: new Date('2026-10-14T09:00:00Z').toISOString(),
   };
 }
@@ -179,7 +188,7 @@ function operatorWorkspace(
 function seed(): DemoState {
   const pastVisit = Date.now() - (2 * 24 * 60 + 190) * MINUTE;
   return {
-    version: 2,
+    version: 3,
     operators: [
       {
         role: 'admin',
@@ -210,10 +219,54 @@ function seed(): DemoState {
           '#2F5E8C',
         ),
         properties: [
-          sampleProperty('Harbour View Lodge', 'HVL', 'Harbourside', 3, 6, [12_000, 34_000], 'v01'),
-          sampleProperty('Mill Street Flat', 'MSF', 'Old Town', 1, 2, [6_500, 15_000], 'v01'),
-          sampleProperty('Orchard Cottage', 'ORC', 'Riverside', 2, 4, [9_000, 22_000], 'guesty'),
-          sampleProperty('The Granary', 'GRN', 'Riverside', 4, 8, null, 'guesty'),
+          sampleProperty({
+            name: 'Harbour View Lodge',
+            code: 'HVL',
+            area: 'Harbourside',
+            type: 'house',
+            bedrooms: 3,
+            beds: 4,
+            bathrooms: 2,
+            guests: 6,
+            prices: [12_000, 34_000],
+            managedBy: 'v01',
+          }),
+          sampleProperty({
+            name: 'Mill Street Flat',
+            code: 'MSF',
+            area: 'Old Town',
+            type: 'flat',
+            bedrooms: 1,
+            beds: 1,
+            bathrooms: 1,
+            guests: 2,
+            prices: [6_500, 15_000],
+            managedBy: 'v01',
+          }),
+          sampleProperty({
+            name: 'Orchard Cottage',
+            code: 'ORC',
+            area: 'Riverside',
+            type: 'cottage',
+            bedrooms: 2,
+            beds: 3,
+            bathrooms: 1.5,
+            guests: 4,
+            prices: [9_000, 22_000],
+            managedBy: 'guesty',
+          }),
+          sampleProperty({
+            name: 'The Granary',
+            code: 'GRN',
+            area: 'Riverside',
+            type: 'unusual',
+            bedrooms: 4,
+            beds: 5,
+            bathrooms: 2.5,
+            guests: 8,
+            prices: null,
+            managedBy: 'guesty',
+          }),
         ],
         createdAt: '2026-09-02T10:00:00.000Z',
         team: [
@@ -280,9 +333,42 @@ function seed(): DemoState {
           '#7A4A2B',
         ),
         properties: [
-          sampleProperty('Quay House', 'QYH', 'Quayside', 3, 6, [11_000, 28_000], 'guesty'),
-          sampleProperty('Linden Court, Flat 2', 'LC2', 'Town centre', 2, 4, [8_000, 18_000], 'guesty'),
-          sampleProperty('The Old Bakery', 'OBK', 'Village', 2, 5, null, 'guesty'),
+          sampleProperty({
+            name: 'Quay House',
+            code: 'QYH',
+            area: 'Quayside',
+            type: 'house',
+            bedrooms: 3,
+            beds: 4,
+            bathrooms: 2,
+            guests: 6,
+            prices: [11_000, 28_000],
+            managedBy: 'guesty',
+          }),
+          sampleProperty({
+            name: 'Linden Court, Flat 2',
+            code: 'LC2',
+            area: 'Town centre',
+            type: 'flat',
+            bedrooms: 2,
+            beds: 2,
+            bathrooms: 1,
+            guests: 4,
+            prices: [8_000, 18_000],
+            managedBy: 'guesty',
+          }),
+          sampleProperty({
+            name: 'The Old Bakery',
+            code: 'OBK',
+            area: 'Village',
+            type: 'cottage',
+            bedrooms: 2,
+            beds: 3,
+            bathrooms: 1.5,
+            guests: 5,
+            prices: null,
+            managedBy: 'guesty',
+          }),
         ],
         createdAt: '2026-10-08T11:30:00.000Z',
         team: [
@@ -351,7 +437,7 @@ function load(): DemoState {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved) as DemoState;
-      if (parsed.version === 2) {
+      if (parsed.version === 3) {
         state = parsed;
         return parsed;
       }
@@ -643,12 +729,16 @@ export async function demoFetch<T>(
       postcode: input.postcode ?? null,
       countryCode: input.countryCode,
       area: input.area ?? null,
+      propertyType: input.propertyType ?? null,
+      spaceType: input.spaceType ?? 'entire_place',
       bedrooms: input.bedrooms ?? null,
+      beds: input.beds ?? null,
+      bathrooms: input.bathrooms ?? null,
       maxGuests: input.maxGuests,
       checkInTime: input.checkInTime ?? '15:00',
       checkOutTime: input.checkOutTime ?? '10:00',
       managedBy: 'guesty',
-      priceOwner: 'v01',
+      priceOwner: input.priceOwner ?? 'v01',
       minPriceMinor: input.minPriceMinor ?? null,
       maxPriceMinor: input.maxPriceMinor ?? null,
       createdAt: new Date().toISOString(),

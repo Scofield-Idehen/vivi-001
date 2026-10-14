@@ -216,6 +216,53 @@ describe('properties', () => {
     const { status } = await call('GET', '/v1/properties', { as: asA() });
     expect(status).toBe(400);
   });
+
+  it('stores what kind of place it is, and its rooms, for the channels', async () => {
+    const { status, body } = await call('POST', '/v1/properties', {
+      as: asA(),
+      org: a.orgId,
+      body: {
+        name: 'Quay House',
+        countryCode: 'GB',
+        maxGuests: 6,
+        propertyType: 'cottage',
+        spaceType: 'entire_place',
+        bedrooms: 3,
+        beds: 4,
+        bathrooms: 1.5,
+        priceOwner: 'pricelabs',
+      },
+    });
+    expect(status).toBe(201);
+    expect(body).toMatchObject({
+      propertyType: 'cottage',
+      spaceType: 'entire_place',
+      bedrooms: 3,
+      beds: 4,
+      bathrooms: 1.5,
+      priceOwner: 'pricelabs',
+    });
+    const plain = await call('POST', '/v1/properties', {
+      as: asA(),
+      org: a.orgId,
+      body: { name: 'Plain Flat', countryCode: 'GB', maxGuests: 2 },
+    });
+    expect(plain.body).toMatchObject({
+      propertyType: null,
+      spaceType: 'entire_place',
+      beds: null,
+      bathrooms: null,
+    });
+  });
+
+  it('refuses bathrooms that are not whole or half', async () => {
+    const { status } = await call('POST', '/v1/properties', {
+      as: asA(),
+      org: a.orgId,
+      body: { name: 'Odd Baths', countryCode: 'GB', maxGuests: 2, bathrooms: 1.3 },
+    });
+    expect(status).toBe(400);
+  });
 });
 
 describe('workspace', () => {

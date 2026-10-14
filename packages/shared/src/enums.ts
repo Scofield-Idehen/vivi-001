@@ -59,6 +59,40 @@ export type ChannelAccountStatus = (typeof CHANNEL_ACCOUNT_STATUSES)[number];
 export const MANAGED_BY = ['guesty', 'v01'] as const;
 export type ManagedBy = (typeof MANAGED_BY)[number];
 
+/** What kind of place a property is. Stored as text, so the list can grow without a migration. */
+export const PROPERTY_TYPES = [
+  'house',
+  'flat',
+  'cottage',
+  'cabin',
+  'studio',
+  'serviced_apartment',
+  'unusual',
+  'other',
+] as const;
+export type PropertyType = (typeof PROPERTY_TYPES)[number];
+
+export const PROPERTY_TYPE_LABELS: Record<PropertyType, string> = {
+  house: 'House',
+  flat: 'Flat',
+  cottage: 'Cottage',
+  cabin: 'Cabin or lodge',
+  studio: 'Studio',
+  serviced_apartment: 'Serviced apartment',
+  unusual: 'Something unusual',
+  other: 'Other',
+};
+
+/** What guests get: the channels ask for this on every listing. */
+export const SPACE_TYPES = ['entire_place', 'private_room', 'shared_room'] as const;
+export type SpaceType = (typeof SPACE_TYPES)[number];
+
+export const SPACE_TYPE_LABELS: Record<SpaceType, string> = {
+  entire_place: 'The whole place',
+  private_room: 'A private room',
+  shared_room: 'A shared room',
+};
+
 /** Who owns the price for a property: our own rules, or PriceLabs (playbook, Section 15). */
 export const PRICE_OWNERS = ['v01', 'pricelabs'] as const;
 export type PriceOwner = (typeof PRICE_OWNERS)[number];

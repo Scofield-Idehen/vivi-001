@@ -13,6 +13,7 @@ import {
   parseMajorToMinor,
   SupportAccessStartSchema,
   staysOverlap,
+  suggestPropertyCode,
   todayIn,
 } from '../src/index.ts';
 
@@ -101,7 +102,26 @@ describe('permissions', () => {
   });
 });
 
+describe('property codes', () => {
+  it('suggests a short code from the name', () => {
+    expect(suggestPropertyCode('Harbour View Lodge')).toBe('HVL');
+    expect(suggestPropertyCode('The Granary')).toBe('GRA');
+    expect(suggestPropertyCode('Linden Court, Flat 2')).toBe('LCF2');
+    expect(suggestPropertyCode('  ')).toBe('');
+  });
+
+  it('adds a number when the code is taken', () => {
+    expect(suggestPropertyCode('Harbour View Lodge', ['HVL', 'hvl2'])).toBe('HVL3');
+  });
+});
+
 describe('property input', () => {
+  it('takes bathrooms in halves only', () => {
+    const base = { name: 'Quay House', countryCode: 'GB', maxGuests: 4 };
+    expect(PropertyCreateSchema.safeParse({ ...base, bathrooms: 1.5 }).success).toBe(true);
+    expect(PropertyCreateSchema.safeParse({ ...base, bathrooms: 1.25 }).success).toBe(false);
+  });
+
   it('rejects a minimum price above the maximum', () => {
     const result = PropertyCreateSchema.safeParse({
       name: 'Harbour View Lodge',
