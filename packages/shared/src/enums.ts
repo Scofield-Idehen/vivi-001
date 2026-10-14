@@ -6,12 +6,31 @@
 export const MEMBER_ROLES = ['admin', 'operations', 'guest_comms', 'accounts', 'field'] as const;
 export type MemberRole = (typeof MEMBER_ROLES)[number];
 
-export const ROLE_LABELS: Record<MemberRole, string> = {
+/**
+ * A V-01 staff member looking at an operator's workspace through support access.
+ * Never stored as a membership: it exists only while a time-limited grant is open, and it is read-only.
+ */
+export const SUPPORT_ROLE = 'v01_support';
+export const WORKSPACE_ROLES = [...MEMBER_ROLES, SUPPORT_ROLE] as const;
+export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
+
+export const ROLE_LABELS: Record<WorkspaceRole, string> = {
   admin: 'Operator admin',
   operations: 'Operations',
   guest_comms: 'Guest comms',
   accounts: 'Accounts',
   field: 'Field team',
+  v01_support: 'V-01 support, read-only',
+};
+
+/** V-01's own staff, who use the console. Separate from any operator's roles. */
+export const PLATFORM_ROLES = ['owner', 'support', 'viewer'] as const;
+export type PlatformRole = (typeof PLATFORM_ROLES)[number];
+
+export const PLATFORM_ROLE_LABELS: Record<PlatformRole, string> = {
+  owner: 'Owner',
+  support: 'Support',
+  viewer: 'Viewer',
 };
 
 export const CHANNELS = ['airbnb', 'booking_com', 'vrbo', 'expedia', 'direct'] as const;

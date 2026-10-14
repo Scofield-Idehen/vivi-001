@@ -1,6 +1,14 @@
 import { type ApiDatabase, memberships, type Tx } from '@v01/db';
-import { can, type MemberRole, type Permission } from '@v01/shared';
-import { and, eq } from 'drizzle-orm';
+import {
+  can,
+  canPlatform,
+  type Permission,
+  type PlatformPermission,
+  type PlatformRole,
+  SUPPORT_ROLE,
+  type WorkspaceRole,
+} from '@v01/shared';
+import { and, eq, sql } from 'drizzle-orm';
 import type { FastifyRequest } from 'fastify';
 import { type AuthUser, bearerToken, type TokenVerifier } from './auth.ts';
 import { HttpError } from './errors.ts';
@@ -8,7 +16,15 @@ import { HttpError } from './errors.ts';
 export interface OrgContext {
   orgId: string;
   userId: string;
-  role: MemberRole;
+  role: WorkspaceRole;
+  /** Set when a V-01 staff member is here on a support grant: read-only, and every request logged. */
+  supportGrantId: string | null;
+}
+
+export interface StaffContext {
+  userId: string;
+  email: string;
+  role: PlatformRole;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -33,6 +49,9 @@ export class RequestScope {
    * Runs `fn` inside the operator chosen by the `x-org-id` header, after checking the
    * person belongs to it and their role allows `permission`. Row-level security in
    * Postgres also enforces the operator boundary, so a mistake here cannot leak data.
+   *
+   * V-01 staff who are not members get in only on an open support grant: read-only,
+   * time-limited, and every request (allowed or refused) is logged where the operator can see it.
    */
   async inOrg<T>(
     req: FastifyRequest,
@@ -49,14 +68,60 @@ export class RequestScope {
         .select({ role: memberships.role })
         .from(memberships)
         .where(and(eq(memberships.organisationId, orgId), eq(memberships.userId, user.id)));
-      if (!membership) {
+      if (membership) {
+        if (!can(membership.role, permission)) {
+          throw new HttpError(403, 'not_allowed', 'Your role does not allow this.');
+        }
+        return fn(tx, { orgId, userId: user.id, role: membership.role, supportGrantId: null });
+      }
+
+      const grant = await tx.execute(sql`select app.active_support_grant(${orgId}::uuid) as id`);
+      const grantId = (grant.rows[0]?.id as string | null | undefined) ?? null;
+      if (!grantId) {
         throw new HttpError(403, 'not_a_member', 'You are not a member of this workspace.');
       }
-      if (!can(membership.role, permission)) {
-        throw new HttpError(403, 'not_allowed', 'Your role does not allow this.');
+      const allowed = can(SUPPORT_ROLE, permission);
+      await this.logSupportRequest(user.id, grantId, req, allowed);
+      if (!allowed) {
+        throw new HttpError(403, 'support_read_only', 'Support access is read-only.');
       }
-      return fn(tx, { orgId, userId: user.id, role: membership.role });
+      return fn(tx, { orgId, userId: user.id, role: SUPPORT_ROLE, supportGrantId: grantId });
     });
+  }
+
+  /**
+   * Runs `fn` for a V-01 staff member whose role allows `permission`. The console functions in
+   * the database check the role again, so a route that forgets to ask here still gets nothing.
+   */
+  async asStaff<T>(
+    req: FastifyRequest,
+    permission: PlatformPermission,
+    fn: (tx: Tx, ctx: StaffContext) => Promise<T>,
+  ): Promise<T> {
+    const user = await this.user(req);
+    return this.db.withUser(user.id, async (tx) => {
+      const result = await tx.execute(sql`select app.platform_role() as role`);
+      const role = (result.rows[0]?.role as PlatformRole | null | undefined) ?? null;
+      if (!role) throw new HttpError(403, 'not_platform_staff', 'This area is for V-01 staff.');
+      if (!canPlatform(role, permission)) {
+        throw new HttpError(403, 'not_allowed', 'Your V-01 role does not allow this.');
+      }
+      return fn(tx, { userId: user.id, email: user.email, role });
+    });
+  }
+
+  /** In its own transaction, so the record stays even if the request then fails. */
+  private async logSupportRequest(
+    userId: string,
+    grantId: string,
+    req: FastifyRequest,
+    allowed: boolean,
+  ): Promise<void> {
+    await this.db.withUser(userId, (tx) =>
+      tx.execute(
+        sql`select app.log_support_request(${grantId}::uuid, ${req.method}, ${req.url}, ${allowed})`,
+      ),
+    );
   }
 }
 
@@ -77,4 +142,11 @@ export function toIso(value: string): string {
   const date = new Date(normalised);
   if (Number.isNaN(date.getTime())) throw new Error(`Unreadable timestamp: ${value}`);
   return date.toISOString();
+}
+
+/** A timestamp from a raw query, which may arrive as a string or a Date. */
+export function isoOrNull(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value.toISOString();
+  return toIso(String(value));
 }

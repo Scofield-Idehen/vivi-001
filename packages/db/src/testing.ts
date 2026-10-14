@@ -80,6 +80,35 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   };
 }
 
+/**
+ * Adds a V-01 staff member with a sign-in, as the owner, for test setup only. With `linked: false`
+ * the staff entry waits for its first sign-in, the way `pnpm db:staff add` leaves it.
+ */
+export async function seedPlatformStaff(
+  ownerUrl: string,
+  input: { email: string; role: 'owner' | 'support' | 'viewer'; linked?: boolean },
+): Promise<{ userId: string }> {
+  const client = new pg.Client({ connectionString: ownerUrl });
+  await client.connect();
+  try {
+    const email = input.email.toLowerCase();
+    const user = await client.query<{ id: string }>(
+      `insert into app.app_users (id, email) values (gen_random_uuid(), $1)
+       on conflict (email) do update set email = excluded.email returning id`,
+      [email],
+    );
+    const userId = requireRow(user.rows, 'user').id;
+    await client.query('insert into app.platform_staff (email, user_id, role) values ($1, $2, $3)', [
+      email,
+      input.linked === false ? null : userId,
+      input.role,
+    ]);
+    return { userId };
+  } finally {
+    await client.end();
+  }
+}
+
 /** Inserts an operator, a user and a membership as the owner, for test setup only. */
 export async function seedOperator(
   ownerUrl: string,

@@ -13,6 +13,7 @@ import type { TokenVerifier } from './auth.ts';
 import { RequestScope } from './context.ts';
 import type { Env } from './env.ts';
 import { errorBody, HttpError } from './errors.ts';
+import { consoleRoutes } from './routes/console.ts';
 import { meRoutes } from './routes/me.ts';
 import { propertyRoutes } from './routes/properties.ts';
 import { webhookRoutes } from './routes/webhooks.ts';
@@ -91,6 +92,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   meRoutes(app, { db: deps.db, scope });
   workspaceRoutes(app, { scope });
   propertyRoutes(app, { scope });
+  consoleRoutes(app, { scope });
   await webhookRoutes(app, { db: deps.db, channexSecret: deps.env.CHANNEX_WEBHOOK_SECRET });
 
   return app;

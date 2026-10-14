@@ -12,6 +12,8 @@ const NOT_OPERATOR_TABLES: Record<string, string> = {
   organisations: 'the operators themselves; custom policies',
   app_users: 'people can belong to several operators; custom policies',
   webhook_events: 'raw inbox before the operator is known; API insert-only, worker read',
+  platform_staff: "V-01's own staff; no application role can read it, only the console functions",
+  platform_audit: 'V-01 staff activity across operators; written and read only through functions',
 };
 
 const APP_ROLES = ['app_base', 'app_api', 'app_worker', 'app_jobs'];
@@ -99,5 +101,26 @@ describe('security coverage', () => {
               has_schema_privilege('app_jobs', 'app', 'USAGE') as jobs_schema`,
     );
     expect(row).toEqual({ api: false, worker: true, jobs_schema: false });
+  });
+
+  it('lets only the API call the console functions, and nobody read the staff list directly', async () => {
+    const [row] = await rawQuery<Record<string, boolean>>(
+      t.ownerUrl,
+      `select has_function_privilege('app_api', 'app.console_operators()', 'EXECUTE') as api,
+              has_function_privilege('app_worker', 'app.console_operators()', 'EXECUTE') as worker,
+              has_function_privilege('app_api', 'app.require_platform_role(app.platform_role[])', 'EXECUTE')
+                as api_internal,
+              has_table_privilege('app_api', 'app.platform_staff', 'SELECT') as api_staff,
+              has_table_privilege('app_api', 'app.platform_audit', 'SELECT') as api_audit,
+              has_table_privilege('app_api', 'app.support_access_grants', 'INSERT') as api_grant_insert`,
+    );
+    expect(row).toEqual({
+      api: true,
+      worker: false,
+      api_internal: false,
+      api_staff: false,
+      api_audit: false,
+      api_grant_insert: false,
+    });
   });
 });

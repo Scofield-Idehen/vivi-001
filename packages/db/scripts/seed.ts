@@ -1,9 +1,11 @@
 import pg from 'pg';
 
 /**
- * Sets up operators by hand until the V-01 console exists (design phase D8).
+ * Sets up the first operators by hand. The V-01 console lists operators; adding them from the
+ * console comes later (design phase D8).
  *
- *   pnpm db:seed          Vivistays as the first operator, plus an admin invitation.
+ *   pnpm db:seed          Vivistays as the first operator. SEED_ADMIN_EMAIL gets an admin invitation
+ *                         to Vivistays and becomes a V-01 owner (console access) on first sign-in.
  *   pnpm db:seed --demo   Also a fictional operator with invented properties, for local development.
  *
  * Runs as the owner. Real guest or property data never goes in a seed.
@@ -67,6 +69,12 @@ try {
     accentHex: '#1E4D4F',
   });
   if (adminEmail) await invite(vivistays, adminEmail, 'admin');
+  if (adminEmail) {
+    await client.query(
+      `insert into app.platform_staff (email, role) values ($1, 'owner') on conflict (email) do nothing`,
+      [adminEmail],
+    );
+  }
 
   if (demo) {
     const demoOrg = await upsertOperator({
@@ -109,7 +117,9 @@ try {
   await client.query('commit');
   console.log(
     `Seeded Vivistays${demo ? ' and the Northwind Stays demo operator' : ''}.` +
-      (adminEmail ? ` Invitation for ${adminEmail} is waiting; it is accepted on first sign-in.` : ''),
+      (adminEmail
+        ? ` ${adminEmail} is a V-01 owner, and their invitation is accepted on first sign-in.`
+        : ''),
   );
 } catch (error) {
   await client.query('rollback');

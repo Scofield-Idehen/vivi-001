@@ -6,6 +6,7 @@ import {
   MEMBER_ROLES,
   OUTBOX_KINDS,
   OUTBOX_STATUSES,
+  PLATFORM_ROLES,
   PRICE_OWNERS,
   RESERVATION_STATUSES,
 } from '@v01/shared';
@@ -26,6 +27,7 @@ export const managedBy = app.enum('managed_by', MANAGED_BY);
 export const priceOwner = app.enum('price_owner', PRICE_OWNERS);
 export const outboxKind = app.enum('outbox_kind', OUTBOX_KINDS);
 export const outboxStatus = app.enum('outbox_status', OUTBOX_STATUSES);
+export const platformRole = app.enum('platform_role', PLATFORM_ROLES);
 
 /** Postgres daterange, read back as text such as "[2026-11-13,2026-11-15)". */
 export const daterange = customType<{ data: string; driverData: string }>({

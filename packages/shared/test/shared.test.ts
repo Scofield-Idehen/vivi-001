@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   addDays,
   can,
+  canPlatform,
   eachNight,
   formatMoney,
   isIsoDate,
   minorToMajorString,
   nightsBetween,
+  PERMISSIONS,
   PropertyCreateSchema,
   parseMajorToMinor,
+  SupportAccessStartSchema,
   staysOverlap,
   todayIn,
 } from '../src/index.ts';
@@ -71,6 +74,30 @@ describe('permissions', () => {
     expect(can('operations', 'workspace.manage')).toBe(false);
     expect(can('field', 'properties.read')).toBe(false);
     expect(can('admin', 'members.manage')).toBe(true);
+  });
+
+  it('lets V-01 support read a workspace but never change anything in it', () => {
+    for (const [permission, roles] of Object.entries(PERMISSIONS)) {
+      const allowed = (roles as readonly string[]).includes('v01_support');
+      expect(allowed, permission).toBe(permission.endsWith('.read'));
+    }
+  });
+
+  it('keeps the console to V-01 staff, and support access to owners and support', () => {
+    expect(canPlatform(null, 'console.read')).toBe(false);
+    expect(canPlatform('viewer', 'console.read')).toBe(true);
+    expect(canPlatform('viewer', 'support.open')).toBe(false);
+    expect(canPlatform('viewer', 'console.team.read')).toBe(false);
+    expect(canPlatform('support', 'support.open')).toBe(true);
+  });
+
+  it('asks for a reason and a sensible length of time before support access opens', () => {
+    expect(SupportAccessStartSchema.safeParse({ reason: '  hi ', minutes: 30 }).success).toBe(false);
+    expect(SupportAccessStartSchema.safeParse({ reason: 'Ticket 12', minutes: 300 }).success).toBe(false);
+    expect(SupportAccessStartSchema.parse({ reason: ' Ticket 12 ', minutes: 30 })).toEqual({
+      reason: 'Ticket 12',
+      minutes: 30,
+    });
   });
 });
 

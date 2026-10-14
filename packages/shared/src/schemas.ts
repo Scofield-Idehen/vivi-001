@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { isIsoDate } from './dates.ts';
-import { MANAGED_BY, MEMBER_ROLES, PRICE_OWNERS } from './enums.ts';
+import { MANAGED_BY, MEMBER_ROLES, PLATFORM_ROLES, PRICE_OWNERS, WORKSPACE_ROLES } from './enums.ts';
 
 /** API request and response shapes, shared by the API (validation) and the web app (types). */
 
@@ -14,10 +14,19 @@ export const ApiErrorSchema = z.object({
 });
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 
+export const WorkspaceRoleSchema = z.enum(WORKSPACE_ROLES);
+export const PlatformRoleSchema = z.enum(PLATFORM_ROLES);
+
 export const MeSchema = z.object({
   user: z.object({ id: Uuid, email: z.string(), fullName: z.string().nullable() }),
   memberships: z.array(
     z.object({ organisationId: Uuid, organisationName: z.string(), role: MemberRoleSchema }),
+  ),
+  /** The person's role at V-01 itself, if they are V-01 staff. Opens the console. */
+  platformRole: PlatformRoleSchema.nullable(),
+  /** Operator workspaces this V-01 staff member has open on a support grant right now. */
+  supportAccess: z.array(
+    z.object({ grantId: Uuid, organisationId: Uuid, organisationName: z.string(), expiresAt: z.string() }),
   ),
 });
 export type Me = z.infer<typeof MeSchema>;
@@ -43,7 +52,7 @@ export const WorkspaceSchema = z.object({
     senderName: z.string().nullable(),
     emailDomain: z.string().nullable(),
   }),
-  role: MemberRoleSchema,
+  role: WorkspaceRoleSchema,
 });
 export type Workspace = z.infer<typeof WorkspaceSchema>;
 

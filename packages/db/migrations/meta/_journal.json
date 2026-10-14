@@ -15,6 +15,20 @@
       "when": 1791986278383,
       "tag": "0001_security",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791994552508,
+      "tag": "0002_console",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791994558591,
+      "tag": "0003_console_security",
+      "breakpoints": true
     }
   ]
 }

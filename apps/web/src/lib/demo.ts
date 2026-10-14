@@ -180,6 +180,8 @@ export async function demoFetch<T>(
         organisationName: o.workspace.organisation.name,
         role: o.role,
       })),
+      platformRole: null,
+      supportAccess: [],
     };
     return me as T;
   }

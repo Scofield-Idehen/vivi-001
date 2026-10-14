@@ -14,7 +14,8 @@
     "generate": "drizzle-kit generate",
     "migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
     "roles": "tsx --env-file-if-exists=.env scripts/roles.ts",
-    "seed": "tsx --env-file-if-exists=.env scripts/seed.ts"
+    "seed": "tsx --env-file-if-exists=.env scripts/seed.ts",
+    "staff": "tsx --env-file-if-exists=.env scripts/staff.ts"
   },
   "dependencies": {
     "@v01/shared": "workspace:*",
