@@ -116,7 +116,7 @@ export function AppShell() {
 
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[244px_minmax(0,1fr)]">
-      <aside className="sticky top-0 hidden h-dvh flex-col gap-7 overflow-y-auto border-r border-hairline px-4 py-6 md:flex">
+      <aside className="sticky top-0 hidden h-dvh flex-col gap-7 overflow-y-auto border-r border-hairline bg-paper px-4 py-6 md:flex">
         <div className="px-2.5">
           <BrandMark />
         </div>
@@ -131,7 +131,7 @@ export function AppShell() {
 
       <div className="min-w-0">
         <DemoBanner />
-        <div className="gutter flex items-center justify-between border-b border-hairline py-3 md:hidden">
+        <div className="gutter flex items-center justify-between border-b border-hairline bg-paper py-3 md:hidden">
           <BrandMark />
           <Button
             variant="secondary"
@@ -145,7 +145,7 @@ export function AppShell() {
         {menuOpen ? (
           <div
             id="mobile-menu"
-            className="gutter flex flex-col gap-6 border-b border-hairline py-5 md:hidden"
+            className="gutter flex flex-col gap-6 border-b border-hairline bg-paper py-5 md:hidden"
           >
             <WorkspaceSwitcher />
             <Navigation onNavigate={() => setMenuOpen(false)} />

@@ -4,14 +4,16 @@
 @import "@fontsource-variable/geist-mono/wght.css";
 
 /*
- * Design tokens from the design roadmap (v1.3): Vivistays' palette for now.
+ * Design tokens from the design roadmap (v1.3): Vivistays' palette for now, with the page
+ * lifted to soft white (canvas) on 14 Oct 2026. Paper is the sidebar, card and panel colour.
  * The values below are defaults; src/lib/brand.ts applies packages/brand/app-brand.json
  * at start-up, so a rebrand changes the JSON, not this file.
  */
 :root {
+  --brand-canvas: #fcfbf8;
   --brand-paper: #f5f2ec;
   --brand-linen: #ece6dc;
-  --brand-hairline: #d6cfc3;
+  --brand-hairline: #e7e1d7;
   --brand-ink: #15181b;
   --brand-slate: #4a4f55;
   --brand-mist: #646a6f;
@@ -27,6 +29,7 @@
 }
 
 @theme inline {
+  --color-canvas: var(--brand-canvas);
   --color-paper: var(--brand-paper);
   --color-linen: var(--brand-linen);
   --color-hairline: var(--brand-hairline);
@@ -66,7 +69,7 @@
   }
 
   body {
-    background: var(--color-paper);
+    background: var(--color-canvas);
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-feature-settings: "ss01";

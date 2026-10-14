@@ -5,6 +5,13 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-14
 
+- **The page background is soft white (`canvas`, #FCFBF8).** Approved by Alpha; Alessio to confirm.
+  The roadmap's paper (#F5F2EC) is now the sidebar, card and panel colour, and hairlines are lighter
+  (#E7E1D7, was #D6CFC3). Teal, plum, ink and the status colours are unchanged; every text colour
+  still passes 4.5:1 on both canvas and paper (`packages/brand/test`). Three livelier palettes were
+  compared first; the roadmap palette was kept.
+- **V-01's company console is the top level.** It tracks every operator; Vivistays and later
+  operators are tenants with their own workspaces.
 - **Base build delivered.** Phase 0 foundations plus integration steps 1 and 2.
 - **The app wears Vivistays' logo and design for now.** The look lives in
   `packages/brand/app-brand.json`, so a future V-01 brand replaces it without code changes.

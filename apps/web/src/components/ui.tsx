@@ -19,7 +19,7 @@ export function Button({
       {...props}
       className={cx(
         'inline-flex items-center justify-center gap-2 rounded-md text-[13.5px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-        variant === 'primary' && 'h-9 bg-ink px-4 text-paper hover:bg-ink/88',
+        variant === 'primary' && 'h-9 bg-ink px-4 text-canvas hover:bg-ink/88',
         variant === 'secondary' && 'h-9 border border-hairline px-4 text-ink hover:bg-linen',
         variant === 'quiet' && 'text-accent underline-offset-4 hover:underline',
         className,
@@ -47,7 +47,7 @@ export function Field({
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
         {...input}
-        className="h-9 rounded-md border border-edge bg-white/70 px-3 text-[14px] text-ink placeholder:text-mist focus:border-accent focus:outline-none aria-invalid:border-urgent"
+        className="h-9 rounded-md border border-edge bg-white px-3 text-[14px] text-ink placeholder:text-mist focus:border-accent focus:outline-none aria-invalid:border-urgent"
       />
       {error ? (
         <p id={`${id}-error`} className="text-[12.5px] text-urgent">

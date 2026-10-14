@@ -8,7 +8,11 @@ export const AppBrandSchema = z.object({
   wordmark: z.string().min(1),
   logo: z.object({ light: z.string().nullable(), dark: z.string().nullable() }),
   tokens: z.object({
+    /** Page background (soft white). */
+    canvas: Hex,
+    /** Sidebar, cards and panels: one step darker than the page. */
     paper: Hex,
+    /** Hover, selected rows and chips. */
     linen: Hex,
     hairline: Hex,
     ink: Hex,
