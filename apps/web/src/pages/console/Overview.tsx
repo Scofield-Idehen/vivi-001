@@ -164,19 +164,26 @@ export function ConsoleOverview() {
               <li key={op.id}>
                 <Link
                   to={`/console/operators/${op.id}`}
-                  className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-center gap-x-4 gap-y-1 py-3 text-[13.5px] hover:bg-linen/50 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1fr)]"
+                  className="flex flex-col gap-1 py-3 text-[13.5px] hover:bg-linen/50"
                 >
-                  <span className="min-w-0 truncate font-medium text-ink">{op.name}</span>
-                  <span>
-                    <OperatorStatusDot status={op.status} />
+                  <span className="flex items-baseline justify-between gap-4">
+                    <span className="min-w-0 truncate font-medium text-ink">{op.name}</span>
+                    <span className="shrink-0 whitespace-nowrap">
+                      <OperatorStatusDot status={op.status} />
+                    </span>
                   </span>
-                  <span className="tnum whitespace-nowrap text-slate">
-                    {op.properties === 0
-                      ? 'No properties yet'
-                      : `${op.propertiesOnV01} of ${op.properties} on ${V01}`}
-                  </span>
-                  <span>
-                    <SyncStateDot {...op} />
+                  <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-slate">
+                    <span className="tnum whitespace-nowrap">
+                      {op.properties === 0
+                        ? 'No properties yet'
+                        : `${op.propertiesOnV01} of ${plural(op.properties, 'property', 'properties')} on ${V01}`}
+                    </span>
+                    <span aria-hidden className="text-mist">
+                      ·
+                    </span>
+                    <span className="whitespace-nowrap">
+                      <SyncStateDot {...op} />
+                    </span>
                   </span>
                 </Link>
               </li>
