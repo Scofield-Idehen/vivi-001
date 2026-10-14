@@ -1,10 +1,11 @@
 # V-01
 
-The property management platform replacing Guesty. V-01 is its own company; Vivistays is the first
-operator, and for now the product wears Vivistays' logo and design. Built from the V-01 Build Playbook
-(v1.2) and the V-01 Design Roadmap (v1.3).
+The property management platform replacing Guesty. V-01 is its own company: its console sits above every
+operator, and Vivistays is the first operator, with its own workspace. The product uses the Vivistays
+palette for now, with a soft white page. Built from the V-01 Build Playbook (v1.2) and the V-01 Design
+Roadmap (v1.3).
 
-This is the **base**: Phase 0 plus integration steps 1 and 2. It is the foundation every module is built on.
+This is the **base** (Phase 0 plus integration steps 1 and 2) and the **first V-01 console**.
 
 | What | Where | State |
 | --- | --- | --- |
@@ -15,6 +16,8 @@ This is the **base**: Phase 0 plus integration steps 1 and 2. It is the foundati
 | Worker: outbox sender, webhook handling, feed sweep, nightly full sync | `apps/worker` | Done (availability only) |
 | Channel swap layer and Channex adapter | `packages/channels` | Built, not yet certified |
 | Web app: sign-in, shell, Today, Properties, Workspace | `apps/web` | Done |
+| V-01 console: overview, operators, sync health, support log | `apps/web/src/pages/console`, `apps/api/src/routes/console.ts` | Done |
+| V-01 staff and read-only support access, logged and visible to the operator | `packages/db/migrations/0003_console_security.sql` | Done |
 | Booking import into reservations, then acknowledgement | `apps/worker/src/bookings.ts` | Phase 1, step 5 |
 | Prices and restrictions out | `apps/worker/src/outbox.ts` | Phase 1, step 4 |
 
@@ -24,7 +27,7 @@ This is the **base**: Phase 0 plus integration steps 1 and 2. It is the foundati
 apps/
   api/          Node API (Fastify): sign-in, workspaces, properties, webhooks
   worker/       Outbox sender, webhook handling, booking feed sweep, nightly jobs (pg-boss)
-  web/          React app (Vite): staff workspace
+  web/          React app (Vite): the V-01 console and each operator's workspace
 packages/
   db/           Drizzle schema, migrations, row-level security, roles, seeds, test helpers
   shared/       Zod schemas, enums, money and date helpers used everywhere
@@ -43,7 +46,11 @@ docs/           Decision log and runbooks
    fails the lint.
 4. The few operations that must cross operators (claiming queued work, routing a webhook) are narrow
    `sys_*` functions that only the worker role may call.
-5. Tests in `packages/db/test/security-coverage.test.ts` fail if a new table or function skips these rules.
+5. The V-01 console reads across operators only through `console_*` functions. Each checks the caller is
+   V-01 staff and returns totals, statuses and operator metadata, never guests' details.
+6. To look inside an operator's workspace, V-01 staff open a support grant: it needs a reason, is
+   read-only, lasts at most four hours, logs every request, and the operator sees it on their Workspace page.
+7. Tests in `packages/db/test/security-coverage.test.ts` fail if a new table or function skips these rules.
 
 ## Local setup
 
@@ -62,7 +69,9 @@ pnpm db:seed:demo      # Vivistays, plus a fictional demo operator with invented
 pnpm dev               # API on :3001, worker, web on :5173
 ```
 
-Sign in with the email in `SEED_ADMIN_EMAIL`; the invitation turns into a membership on first sign-in.
+Sign in with the email in `SEED_ADMIN_EMAIL`; the invitation turns into a membership on first sign-in,
+and the same email is a V-01 owner, so you land in the console. Add other V-01 staff with
+`pnpm db:staff add <email> <owner|support|viewer>` (see `docs/runbooks/v01-staff.md`).
 
 ## See it without a backend
 
@@ -72,7 +81,9 @@ pnpm demo              # opens the web app at http://localhost:5173 with sample 
 ```
 
 Demo mode runs the real screens against sample data kept in your browser: no database, API or
-sign-in. `pnpm --filter @v01/web build:demo` builds the same thing as static files in `apps/web/dist-demo`.
+sign-in. You are a V-01 owner and a Vivistays admin; Northwind Stays and Brightwater Lets are invented
+operators you can open with support access. `pnpm --filter @v01/web build:demo` builds the same thing as
+static files in `apps/web/dist-demo`.
 
 ## Checks
 

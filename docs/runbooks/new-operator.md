@@ -1,7 +1,9 @@
 # Adding an operator by hand
 
-Until the V-01 console exists (design phase D8), V-01 sets up each operator from a trusted machine
-with the owner connection. `packages/db/scripts/seed.ts` shows the same steps in code.
+The V-01 console lists every operator and tracks their onboarding, but adding one from the console
+comes later (design phase D8). Until then, V-01 sets up each operator from a trusted machine with the
+owner connection. `packages/db/scripts/seed.ts` shows the same steps in code. The new operator appears
+in the console at once, as Onboarding, and turns Live when its first property moves to V-01.
 
 ```sql
 begin;

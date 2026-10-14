@@ -12,6 +12,18 @@ V-01 Build Playbook and Design Roadmap.
   compared first; the roadmap palette was kept.
 - **V-01's company console is the top level.** It tracks every operator; Vivistays and later
   operators are tenants with their own workspaces.
+- **The console reads across operators only through `console_*` functions.** Each checks the caller's
+  V-01 role in the database, not just in the API, and returns totals, statuses and operator metadata.
+  Guests' details never reach the console.
+- **Three V-01 staff roles:** owner, support (both can open support access) and viewer (totals only,
+  no names or emails). Staff are added by email with `pnpm db:staff` and linked on first sign-in.
+- **Support access is the only way V-01 staff see inside a workspace.** It needs a reason the operator
+  can read, is read-only, lasts 5 minutes to 4 hours, and logs every request, allowed or refused, in its
+  own transaction so a failed request is still recorded. Removing someone from staff closes it at once.
+  The operator sees every visit on their Workspace page.
+- **The console has a dark teal sidebar; workspaces have a light one,** so nobody mistakes one for the
+  other. Both use the same palette.
+- **An operator is Live once one property's channels run through V-01;** until then it is Onboarding.
 - **Base build delivered.** Phase 0 foundations plus integration steps 1 and 2.
 - **The app wears Vivistays' logo and design for now.** The look lives in
   `packages/brand/app-brand.json`, so a future V-01 brand replaces it without code changes.
