@@ -103,6 +103,9 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
             ...(input.priceOwner ? { priceOwner: input.priceOwner } : {}),
             minPriceMinor: input.minPriceMinor ?? null,
             maxPriceMinor: input.maxPriceMinor ?? null,
+            // Added here, so no channel listings are connected yet. V-01 sends nothing for it until
+            // the move-over step, which the database keeps out of the API's reach.
+            managedBy: 'none',
           })
           .returning()
           .catch((error: unknown) => {

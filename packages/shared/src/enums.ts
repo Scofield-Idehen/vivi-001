@@ -55,9 +55,22 @@ export type ListingStatus = (typeof LISTING_STATUSES)[number];
 export const CHANNEL_ACCOUNT_STATUSES = ['pending', 'connected', 'error', 'disconnected'] as const;
 export type ChannelAccountStatus = (typeof CHANNEL_ACCOUNT_STATUSES)[number];
 
-/** During migration only `v01` properties send anything to Channex (playbook, Section 19). */
-export const MANAGED_BY = ['guesty', 'v01'] as const;
+/**
+ * Who runs a property's channel listings during the move from Guesty.
+ * `guesty`: came across from Guesty, which still runs its listings.
+ * `none`: added in V-01, with no listings connected yet.
+ * `v01`: moved over; V-01 runs its listings.
+ * Only `v01` properties send anything to Channex (playbook, Section 19), so a listing never has two
+ * managers. The database refuses `v01` from the API and worker: only the move-over step may set it.
+ */
+export const MANAGED_BY = ['guesty', 'v01', 'none'] as const;
 export type ManagedBy = (typeof MANAGED_BY)[number];
+
+export const MANAGED_BY_LABELS: Record<ManagedBy, string> = {
+  guesty: 'Still on Guesty',
+  v01: 'Moved here',
+  none: 'Not connected yet',
+};
 
 /** What kind of place a property is. Stored as text, so the list can grow without a migration. */
 export const PROPERTY_TYPES = [

@@ -1,0 +1,1 @@
+ALTER TYPE "app"."managed_by" ADD VALUE 'none';

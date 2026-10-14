@@ -100,7 +100,12 @@ export function useAddProperty(orgId: string | null) {
   return useMutation({
     mutationFn: (input: PropertyCreate) =>
       apiFetch<Property>('/v1/properties', { token: token as string, orgId, method: 'POST', body: input }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['properties', orgId] }),
+    // The console counts properties too, so V-01 staff see the new one at once.
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['properties', orgId] }),
+        queryClient.invalidateQueries({ queryKey: ['console'] }),
+      ]),
   });
 }
 

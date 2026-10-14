@@ -504,6 +504,10 @@ function onV01(o: DemoOperator): number {
   return o.properties.filter((p) => p.managedBy === 'v01').length;
 }
 
+function onGuesty(o: DemoOperator): number {
+  return o.properties.filter((p) => p.managedBy === 'guesty').length;
+}
+
 function lastActivity(o: DemoOperator): string | null {
   const times = [
     ...(o.live.lastActivityMinutes === null ? [] : [Date.now() - o.live.lastActivityMinutes * MINUTE]),
@@ -523,6 +527,7 @@ function toConsoleOperator(o: DemoOperator): ConsoleOperator {
     status: onV01(o) > 0 ? 'live' : 'onboarding',
     properties: o.properties.length,
     propertiesOnV01: onV01(o),
+    propertiesOnGuesty: onGuesty(o),
     members: o.team.filter((m) => m.status === 'active').length,
     channelAccounts: o.channelAccounts.length,
     channelAccountsConnected: connected.length,
@@ -558,6 +563,7 @@ function overview(): ConsoleOverview {
     operatorsLive: s.operators.filter((o) => onV01(o) > 0).length,
     properties: s.operators.reduce((n, o) => n + o.properties.length, 0),
     propertiesOnV01: s.operators.reduce((n, o) => n + onV01(o), 0),
+    propertiesOnGuesty: s.operators.reduce((n, o) => n + onGuesty(o), 0),
     arrivalsToday: sum((l) => l.arrivalsToday),
     departuresToday: sum((l) => l.departuresToday),
     bookingsLast7Days: sum((l) => l.bookingsLast7Days),
@@ -737,7 +743,8 @@ export async function demoFetch<T>(
       maxGuests: input.maxGuests,
       checkInTime: input.checkInTime ?? '15:00',
       checkOutTime: input.checkOutTime ?? '10:00',
-      managedBy: 'guesty',
+      // Added in V-01, so nothing is connected yet (the API does the same).
+      managedBy: 'none',
       priceOwner: input.priceOwner ?? 'v01',
       minPriceMinor: input.minPriceMinor ?? null,
       maxPriceMinor: input.maxPriceMinor ?? null,

@@ -11,7 +11,7 @@ import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } fr
 import { useNavigate } from 'react-router';
 import { Badge, Button, Notice, type Status, StatusDot } from '../../components/ui.tsx';
 import { ApiError, useStartSupportAccess } from '../../lib/api.ts';
-import { clockTime } from '../../lib/format.ts';
+import { clockTime, number, V01 } from '../../lib/format.ts';
 import { useWorkspaces } from '../../lib/workspace.tsx';
 
 export function cx(...classes: (string | false | null | undefined)[]): string {
@@ -34,6 +34,25 @@ export function OperatorStatusDot({ status }: { status: OperatorStatus }) {
   return (
     <StatusDot status={status === 'live' ? 'done' : 'pending'}>{OPERATOR_STATUS_LABELS[status]}</StatusDot>
   );
+}
+
+/** "3 run by V-01 · 9 still on Guesty · 1 not connected yet", leaving out anything at zero. */
+export function propertySplit(o: {
+  properties: number;
+  propertiesOnV01: number;
+  propertiesOnGuesty: number;
+}) {
+  if (o.properties === 0) return 'None yet';
+  const notConnected = o.properties - o.propertiesOnV01 - o.propertiesOnGuesty;
+  const parts: [number, string][] = [
+    [o.propertiesOnV01, `run by ${V01}`],
+    [o.propertiesOnGuesty, 'still on Guesty'],
+    [notConnected, 'not connected yet'],
+  ];
+  return parts
+    .filter(([n]) => n > 0)
+    .map(([n, words]) => `${number(n)} ${words}`)
+    .join(' · ');
 }
 
 /** One line about an operator's channel sync, coloured only when something needs a person. */

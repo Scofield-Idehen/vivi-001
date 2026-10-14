@@ -5,6 +5,14 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-14
 
+- **A property on Guesty is never run by V-01 at the same time (Alpha).** Two managers on one listing
+  means the same home can be listed or booked twice. V-01 sends nothing to Airbnb, Booking.com or Vrbo
+  for a property until `managed_by` is `v01`, and a trigger (migration 0007) stops the API and worker
+  from ever setting that. Only the Phase 1 move-over step may, acting as the database owner, and it must
+  first confirm the property's listings are off Guesty.
+- **A property added in V-01 starts as "not connected"** (`managed_by = none`), not "still on Guesty".
+  It sends nothing either. The console now counts properties on Guesty separately (migration 0006), so
+  its "still on Guesty" figure is exact.
 - **Adding a property is a panel from the right that asks one thing at a time.** It replaces the
   six-field sheet, which was thinner than Guesty's wizard. Five steps: the place, name and address,
   guests and rooms, pricing, then check and add. The step list on the left fills with each answer, and

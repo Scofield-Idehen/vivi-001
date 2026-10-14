@@ -26,6 +26,8 @@ export const ConsoleOverviewSchema = z.object({
   operatorsLive: Count,
   properties: Count,
   propertiesOnV01: Count,
+  /** Still on Guesty. The rest of `properties` were added in V-01 and aren't connected yet. */
+  propertiesOnGuesty: Count,
   arrivalsToday: Count,
   departuresToday: Count,
   bookingsLast7Days: Count,
@@ -47,6 +49,8 @@ export const ConsoleOperatorSchema = z.object({
   status: z.enum(OPERATOR_STATUSES),
   properties: Count,
   propertiesOnV01: Count,
+  /** Still on Guesty. The rest of `properties` were added in V-01 and aren't connected yet. */
+  propertiesOnGuesty: Count,
   members: Count,
   channelAccounts: Count,
   channelAccountsConnected: Count,

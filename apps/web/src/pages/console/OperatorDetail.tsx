@@ -22,6 +22,7 @@ import {
   LoadError,
   Loading,
   OperatorStatusDot,
+  propertySplit,
   SupportAccessDialog,
   syncState,
   tableHead,
@@ -113,11 +114,7 @@ export function ConsoleOperatorDetail() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          label="Properties"
-          value={number(op.properties)}
-          foot={`${number(op.propertiesOnV01)} run by ${V01} · ${number(op.properties - op.propertiesOnV01)} still on Guesty`}
-        />
+        <Stat label="Properties" value={number(op.properties)} foot={propertySplit(op)} />
         <Stat label="Team" value={number(op.members)} foot={teamFoot} />
         <Stat
           label="Channel accounts"

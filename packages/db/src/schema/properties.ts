@@ -41,7 +41,11 @@ export const properties = app.table(
     checkInTime: time('check_in_time').notNull().default('15:00'),
     checkOutTime: time('check_out_time').notNull().default('10:00'),
     slackChannel: text('slack_channel'),
-    /** During migration only `v01` properties send anything to Channex. */
+    /**
+     * Who runs the property's channel listings: Guesty, V-01, or nobody yet (`none`, added in V-01).
+     * Only `v01` properties send anything to Channex, and a trigger stops the API and worker from
+     * setting `v01` (migration 0007): only the move-over step may.
+     */
     managedBy: managedBy('managed_by').notNull().default('guesty'),
     priceOwner: priceOwner('price_owner').notNull().default('v01'),
     minPriceMinor: integer('min_price_minor'),

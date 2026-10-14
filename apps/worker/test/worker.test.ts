@@ -24,6 +24,7 @@ let worker: WorkerDatabase;
 let op: { orgId: string; userId: string };
 let mapped: string;
 let onGuesty: string;
+let notConnected: string;
 let provider: FakeChannelProvider;
 let alerts: MemoryAlerts;
 let deps: WorkerDeps;
@@ -38,7 +39,11 @@ async function owner<T extends pg.QueryResultRow>(text: string, values: unknown[
   }
 }
 
-async function addProperty(name: string, managedBy: 'v01' | 'guesty', channexId: string): Promise<string> {
+async function addProperty(
+  name: string,
+  managedBy: 'v01' | 'guesty' | 'none',
+  channexId: string,
+): Promise<string> {
   const [row] = await owner<{ id: string }>(
     `insert into app.properties (organisation_id, name, country_code, max_guests, managed_by)
      values ($1, $2, 'GB', 4, $3) returning id`,
@@ -66,6 +71,7 @@ beforeAll(async () => {
   worker = new WorkerDatabase(t.workerUrl);
   mapped = await addProperty('Harbour View Lodge', 'v01', 'cx-hvl');
   onGuesty = await addProperty('Mill Street Flat', 'guesty', 'cx-msf');
+  notConnected = await addProperty('Quay Studio', 'none', 'cx-qst');
   await owner(
     `insert into app.reservations (organisation_id, property_id, channel, status, check_in, check_out)
      values ($1, $2, 'airbnb', 'confirmed', '2026-11-13', '2026-11-15')`,
@@ -156,10 +162,24 @@ describe('outbox sender', () => {
     expect(row?.status).toBe('failed');
     expect(row?.last_error).toContain('Guesty');
   });
+
+  it('never sends anything for a property added in V-01 and not yet moved over', async () => {
+    await queueAvailability(notConnected, '2026-11-01', '2026-11-30');
+    await processOutbox(deps);
+    expect(provider.availabilityCalls).toEqual([]);
+    const [row] = await owner<{ status: string; last_error: string }>(
+      `select status, last_error from app.ari_outbox where property_id = $1`,
+      [notConnected],
+    );
+    expect(row).toEqual({
+      status: 'failed',
+      last_error: "Skipped: this property's listings are not connected to V-01 yet.",
+    });
+  });
 });
 
 describe('full sync', () => {
-  it('queues 500 days for properties V-01 manages, and none for Guesty ones', async () => {
+  it('queues 500 days for properties V-01 manages, and none for any other', async () => {
     await owner(`update app.ari_outbox set status = 'sent'`);
     const queued = await enqueueFullSync(deps, new Date('2026-10-14T12:00:00Z'));
     expect(queued).toBe(1);

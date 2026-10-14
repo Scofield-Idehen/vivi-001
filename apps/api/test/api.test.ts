@@ -156,7 +156,7 @@ describe('properties', () => {
       name: 'Harbour View Lodge',
       countryCode: 'GB',
       checkInTime: '15:00',
-      managedBy: 'guesty',
+      managedBy: 'none',
     });
     propertyA = body.id as string;
     const audit = await owner<{ actor_user_id: string }>(

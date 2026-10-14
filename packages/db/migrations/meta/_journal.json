@@ -36,6 +36,27 @@
       "when": 1792009928329,
       "tag": "0004_property_details",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792011494369,
+      "tag": "0005_not_connected",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792011504023,
+      "tag": "0006_console_guesty_counts",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792011505279,
+      "tag": "0007_move_over_guard",
+      "breakpoints": true
     }
   ]
 }

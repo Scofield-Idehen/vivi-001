@@ -142,8 +142,16 @@ describe('console reads', () => {
     const { status, body } = await call('GET', '/v1/console/operators', 'viewer');
     expect(status).toBe(200);
     expect(body.operators).toMatchObject([
-      { name: 'Operator A', status: 'live', properties: 1, propertiesOnV01: 1, members: 1, channels: [] },
-      { name: 'Operator B', status: 'onboarding', properties: 1, propertiesOnV01: 0, members: 1 },
+      {
+        name: 'Operator A',
+        status: 'live',
+        properties: 1,
+        propertiesOnV01: 1,
+        propertiesOnGuesty: 0,
+        members: 1,
+        channels: [],
+      },
+      { name: 'Operator B', status: 'onboarding', properties: 1, propertiesOnV01: 0, propertiesOnGuesty: 1 },
     ]);
   });
 
@@ -154,6 +162,7 @@ describe('console reads', () => {
       operatorsLive: 1,
       properties: 2,
       propertiesOnV01: 1,
+      propertiesOnGuesty: 1,
       outboxFailed: 0,
     });
   });

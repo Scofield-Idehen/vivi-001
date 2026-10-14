@@ -87,8 +87,14 @@ async function processGroup(
 
   if (!context.property) return fail('Property not found.', true);
   // During migration only properties switched to V-01 send anything (playbook, Section 13).
-  if (context.property.managedBy !== 'v01')
-    return fail('Skipped: this property is still managed by Guesty.', false);
+  if (context.property.managedBy !== 'v01') {
+    return fail(
+      context.property.managedBy === 'guesty'
+        ? 'Skipped: this property is still managed by Guesty.'
+        : "Skipped: this property's listings are not connected to V-01 yet.",
+      false,
+    );
+  }
   if (!context.mapping?.channexRoomTypeId || !context.mapping.channexRatePlanId) {
     return fail('This property is not mapped to the channel manager yet.', true);
   }

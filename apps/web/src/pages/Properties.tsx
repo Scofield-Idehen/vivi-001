@@ -1,4 +1,4 @@
-import { can, formatMoney, PROPERTY_TYPE_LABELS, type Property } from '@v01/shared';
+import { can, formatMoney, MANAGED_BY_LABELS, PROPERTY_TYPE_LABELS, type Property } from '@v01/shared';
 import { Outlet, useNavigate } from 'react-router';
 import { Badge, Button, EmptyState, Notice, PageHeader } from '../components/ui.tsx';
 import { ApiError, useProperties, useWorkspace } from '../lib/api.ts';
@@ -100,7 +100,7 @@ export function Properties() {
                   <td className="tnum py-2 pr-10 text-right">{p.bedrooms ?? ''}</td>
                   <td className="tnum py-2 pr-4 text-slate">{priceLimits(p, currency, locale)}</td>
                   <td className="py-2">
-                    <Badge>{p.managedBy === 'guesty' ? 'Still on Guesty' : 'Moved here'}</Badge>
+                    <Badge>{MANAGED_BY_LABELS[p.managedBy]}</Badge>
                   </td>
                 </tr>
               ))}

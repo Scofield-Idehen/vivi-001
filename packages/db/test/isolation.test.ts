@@ -1,6 +1,13 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ApiDatabase, appUsers, memberships, organisations, properties } from '../src/index.ts';
+import {
+  ApiDatabase,
+  appUsers,
+  memberships,
+  organisations,
+  properties,
+  WorkerDatabase,
+} from '../src/index.ts';
 import { createTestDatabase, seedOperator, type TestDatabase } from '../src/testing.ts';
 import { expectPgError, insertProperty, PG, rawQuery } from './helpers.ts';
 
@@ -120,6 +127,47 @@ describe('privileges', () => {
       payload: { event: 'booking' },
     });
     await expectPgError(rawQuery(t.apiUrl, 'select * from app.webhook_events'), PG.insufficientPrivilege);
+  });
+
+  it("never lets the API or worker hand a property's channels to V-01", async () => {
+    const scope = { orgId: a.orgId, userId: a.userId };
+    const setManagedBy = (db: ApiDatabase | WorkerDatabase, value: 'v01' | 'guesty' | 'none') =>
+      db.withOrg(scope, (tx) =>
+        tx
+          .update(properties)
+          .set({ managedBy: value })
+          .where(eq(properties.id, propertyA))
+          .returning({ id: properties.id }),
+      );
+    const worker = new WorkerDatabase(t.workerUrl);
+    try {
+      // Not on a new property...
+      await expectPgError(
+        api.withOrg(scope, (tx) =>
+          tx.insert(properties).values({
+            organisationId: a.orgId,
+            name: 'Quay Studio',
+            countryCode: 'GB',
+            maxGuests: 2,
+            managedBy: 'v01',
+          }),
+        ),
+        PG.insufficientPrivilege,
+      );
+      // ...and not by switching one over.
+      await expectPgError(setManagedBy(api, 'v01'), PG.insufficientPrivilege);
+      await expectPgError(setManagedBy(worker, 'v01'), PG.insufficientPrivilege);
+      // Moving between the states that send nothing is fine.
+      expect(await setManagedBy(api, 'none')).toEqual([{ id: propertyA }]);
+      expect(await setManagedBy(api, 'guesty')).toEqual([{ id: propertyA }]);
+      // The database owner, which the move-over step will act as, can.
+      await rawQuery(t.ownerUrl, `update app.properties set managed_by = 'v01' where id = $1`, [propertyA]);
+      await rawQuery(t.ownerUrl, `update app.properties set managed_by = 'guesty' where id = $1`, [
+        propertyA,
+      ]);
+    } finally {
+      await worker.close();
+    }
   });
 
   it('stops anyone deleting a booking', async () => {

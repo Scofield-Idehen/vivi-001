@@ -5,7 +5,7 @@ import { Link } from 'react-router';
 import { PageHeader, SectionHeading, Stat, type Status, StatusDot } from '../../components/ui.tsx';
 import { useConsoleOperators, useConsoleOverview, useConsoleSync } from '../../lib/api.ts';
 import { number, plural, relativeTime, useNow, V01 } from '../../lib/format.ts';
-import { LoadError, Loading, OperatorStatusDot, SyncStateDot } from './parts.tsx';
+import { LoadError, Loading, OperatorStatusDot, propertySplit, SyncStateDot } from './parts.tsx';
 
 interface Attention {
   key: string;
@@ -97,11 +97,7 @@ export function ConsoleOverview() {
           value={number(o.operators)}
           foot={`${o.operatorsLive} live · ${o.operators - o.operatorsLive} onboarding`}
         />
-        <Stat
-          label="Properties"
-          value={number(o.properties)}
-          foot={`${number(o.propertiesOnV01)} run by ${V01} · ${number(o.properties - o.propertiesOnV01)} still on Guesty`}
-        />
+        <Stat label="Properties" value={number(o.properties)} foot={propertySplit(o)} />
         <Stat
           label="Arrivals today"
           value={number(o.arrivalsToday)}

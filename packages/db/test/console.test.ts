@@ -65,6 +65,7 @@ beforeAll(async () => {
     `insert into app.properties (organisation_id, name, country_code, max_guests, managed_by) values
        ($1, 'Harbour View Lodge', 'GB', 6, 'v01'),
        ($1, 'Mill Street Flat', 'GB', 2, 'guesty'),
+       ($1, 'Quay Studio', 'GB', 2, 'none'),
        ($2, 'Orchard Cottage', 'GB', 4, 'guesty')`,
     [a.orgId, b.orgId],
   );
@@ -118,16 +119,39 @@ describe('console reads', () => {
   });
 
   it('counts every operator, without returning their properties or guests', async () => {
-    const rows = await as<{ name: string; properties: number; properties_on_v01: number; members: number }>(
+    const rows = await as<{
+      name: string;
+      properties: number;
+      properties_on_v01: number;
+      properties_on_guesty: number;
+      members: number;
+    }>(
       viewer,
-      sql`select name, properties, properties_on_v01, members from app.console_operators()`,
+      sql`select name, properties, properties_on_v01, properties_on_guesty, members from app.console_operators()`,
     );
+    // Quay Studio was added in V-01 and isn't connected: it is neither run by V-01 nor on Guesty.
     expect(rows).toEqual([
-      { name: 'Operator A', properties: 2, properties_on_v01: 1, members: 1 },
-      { name: 'Operator B', properties: 1, properties_on_v01: 0, members: 1 },
+      { name: 'Operator A', properties: 3, properties_on_v01: 1, properties_on_guesty: 1, members: 1 },
+      { name: 'Operator B', properties: 1, properties_on_v01: 0, properties_on_guesty: 1, members: 1 },
     ]);
     const [overview] = await as<Record<string, unknown>>(viewer, sql`select * from app.console_overview()`);
-    expect(overview).toMatchObject({ operators: 2, operators_live: 1, properties: 3, properties_on_v01: 1 });
+    expect(overview).toMatchObject({
+      operators: 2,
+      operators_live: 1,
+      properties: 4,
+      properties_on_v01: 1,
+      properties_on_guesty: 2,
+    });
+    const [one] = await as<Record<string, unknown>>(
+      owner,
+      sql`select * from app.console_operator(${a.orgId}::uuid)`,
+    );
+    expect(one).toMatchObject({
+      name: 'Operator A',
+      properties: 3,
+      properties_on_v01: 1,
+      properties_on_guesty: 1,
+    });
   });
 
   it('logs a look at one operator', async () => {
