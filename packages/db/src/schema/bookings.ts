@@ -1,0 +1,167 @@
+import { sql } from 'drizzle-orm';
+import {
+  bigint,
+  char,
+  check,
+  date,
+  index,
+  integer,
+  jsonb,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import { channelAccounts } from './channels.ts';
+import { app, channel, createdAt, daterange, reservationStatus, updatedAt } from './common.ts';
+import { appUsers, organisations } from './operators.ts';
+import { properties } from './properties.ts';
+
+export const guests = app.table(
+  'guests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    fullName: text('full_name'),
+    email: text('email'),
+    phone: text('phone'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('guests_org_idx').on(t.organisationId)],
+);
+
+export const reservations = app.table(
+  'reservations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    propertyId: uuid('property_id')
+      .notNull()
+      .references(() => properties.id, { onDelete: 'restrict' }),
+    channel: channel('channel').notNull(),
+    channelAccountId: uuid('channel_account_id').references(() => channelAccounts.id, {
+      onDelete: 'restrict',
+    }),
+    /** The channel's own confirmation code, e.g. an Airbnb reservation code. */
+    channelReference: text('channel_reference'),
+    status: reservationStatus('status').notNull(),
+    checkIn: date('check_in', { mode: 'string' }).notNull(),
+    checkOut: date('check_out', { mode: 'string' }).notNull(),
+    guestId: uuid('guest_id').references(() => guests.id, { onDelete: 'set null' }),
+    adults: integer('adults').notNull().default(1),
+    children: integer('children').notNull().default(0),
+    infants: integer('infants').notNull().default(0),
+    currency: char('currency', { length: 3 }),
+    totalMinor: bigint('total_minor', { mode: 'number' }),
+    payoutMinor: bigint('payout_minor', { mode: 'number' }),
+    notes: text('notes'),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true, mode: 'string' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('reservations_org_idx').on(t.organisationId),
+    index('reservations_property_dates_idx').on(t.propertyId, t.checkIn),
+    unique('reservations_channel_reference_key').on(t.organisationId, t.channel, t.channelReference),
+    check('reservations_dates_order', sql`${t.checkOut} > ${t.checkIn}`),
+  ],
+);
+
+/** Channex's booking id for a reservation. Kept out of the core table on purpose. */
+export const channexBookings = app.table(
+  'channex_bookings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    reservationId: uuid('reservation_id')
+      .notNull()
+      .references(() => reservations.id, { onDelete: 'restrict' }),
+    channexBookingId: text('channex_booking_id').notNull(),
+    lastRevisionId: text('last_revision_id'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('channex_bookings_org_idx').on(t.organisationId),
+    unique('channex_bookings_reservation_key').on(t.reservationId),
+    unique('channex_bookings_channex_key').on(t.channexBookingId),
+  ],
+);
+
+/** Every booking revision exactly as received, stored before it is processed so it can be replayed. */
+export const reservationRevisions = app.table(
+  'reservation_revisions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    reservationId: uuid('reservation_id').references(() => reservations.id, { onDelete: 'set null' }),
+    provider: text('provider').notNull().default('channex'),
+    externalRevisionId: text('external_revision_id').notNull(),
+    revisionStatus: text('revision_status'),
+    payload: jsonb('payload').notNull(),
+    receivedAt: timestamp('received_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: true, mode: 'string' }),
+    ackedAt: timestamp('acked_at', { withTimezone: true, mode: 'string' }),
+  },
+  (t) => [
+    index('reservation_revisions_org_idx').on(t.organisationId),
+    unique('reservation_revisions_external_key').on(t.provider, t.externalRevisionId),
+  ],
+);
+
+export const blocks = app.table(
+  'blocks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    propertyId: uuid('property_id')
+      .notNull()
+      .references(() => properties.id, { onDelete: 'restrict' }),
+    startsOn: date('starts_on', { mode: 'string' }).notNull(),
+    /** First night that is free again (exclusive), like a check-out date. */
+    endsOn: date('ends_on', { mode: 'string' }).notNull(),
+    reason: text('reason'),
+    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('blocks_org_idx').on(t.organisationId),
+    index('blocks_property_idx').on(t.propertyId, t.startsOn),
+    check('blocks_dates_order', sql`${t.endsOn} > ${t.startsOn}`),
+  ],
+);
+
+/**
+ * Nights held on the calendar, one row per confirmed reservation or block.
+ * Written only by database triggers. An exclusion constraint (see the security
+ * migration) makes Postgres refuse any two rows for the same property whose nights overlap.
+ */
+export const occupancies = app.table(
+  'occupancies',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    propertyId: uuid('property_id')
+      .notNull()
+      .references(() => properties.id, { onDelete: 'restrict' }),
+    nights: daterange('nights').notNull(),
+    sourceType: text('source_type').notNull(),
+    sourceId: uuid('source_id').notNull(),
+  },
+  (t) => [
+    index('occupancies_org_idx').on(t.organisationId),
+    unique('occupancies_source_key').on(t.sourceType, t.sourceId),
+    check('occupancies_source_type', sql`${t.sourceType} in ('reservation', 'block')`),
+  ],
+);

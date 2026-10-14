@@ -1,0 +1,29 @@
+{
+  "name": "@v01/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./migrate": "./src/migrate.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "generate": "drizzle-kit generate",
+    "migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
+    "roles": "tsx --env-file-if-exists=.env scripts/roles.ts",
+    "seed": "tsx --env-file-if-exists=.env scripts/seed.ts"
+  },
+  "dependencies": {
+    "@v01/shared": "workspace:*",
+    "drizzle-orm": "0.45.4",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "@types/pg": "8.23.1",
+    "drizzle-kit": "0.31.11",
+    "tsx": "4.23.15"
+  }
+}
