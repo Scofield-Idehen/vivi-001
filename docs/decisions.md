@@ -5,6 +5,29 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-14
 
+- **Channex carries prices, availability, stay lengths and bookings to Airbnb, Booking.com and Vrbo;
+  it does not create listings or carry photos, descriptions or amenities** (Channex's own documentation,
+  checked 14 Oct 2026). It connects to listings that already exist on each channel, and for Airbnb it
+  also sets pricing rules (cleaning and extra-guest fees, deposit), booking rules (instant book,
+  check-in times, cancellation policy, pets, smoking, events, children) and publishing. So V-01 keeps
+  the master copy of every listing, everything Channex can carry syncs, and the rest is set on each
+  channel from the property page's copy buttons. Full content sync would need each channel's partner
+  API or a channel manager that carries content: **a decision for Alpha and Alessio.**
+- **Every property has its own page with the whole listing,** editable part by part after it is added:
+  photos, the place, rooms and beds, amenities, title and description, address, arriving, house rules,
+  booking rules, prices and fees, licence and channels. A checklist shows what the channels still need
+  (five photos, title, description, amenities, beds, full address, check-in method, a nightly price).
+- **Listing photos live in a public Supabase Storage bucket** (`property-photos`), under
+  `{operator}/{property}/`. Browsers upload straight to it with a short-lived ticket from the API, after
+  resizing to 2,560 pixels; the API registers only paths under the property's own folder. Up to 50 a
+  property; the first is the cover. Nothing private ever goes in that bucket.
+- **Amenities are V-01's own list** (about 90, 18 of them standout features such as a hot tub or sea
+  view), stored as codes so the list can grow, and mapped down to each channel's nearest equivalents.
+- **Beds are recorded room by room;** the bedroom and bed counts the channels show follow the rooms.
+- **New listing tables carry a composite key to their property's operator** (migration 0008), so a
+  room, amenity or photo can never point at another operator's property, even by mistake.
+- **The sidebar folds down to icons,** in workspaces and the console, and remembers the choice per
+  browser. It is icons by default between 560 and 1024 pixels wide; phones keep a top bar.
 - **A property on Guesty is never run by V-01 at the same time (Alpha).** Two managers on one listing
   means the same home can be listed or booked twice. V-01 sends nothing to Airbnb, Booking.com or Vrbo
   for a property until `managed_by` is `v01`, and a trigger (migration 0007) stops the API and worker

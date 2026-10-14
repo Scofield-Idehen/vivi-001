@@ -13,6 +13,7 @@ import type { TokenVerifier } from './auth.ts';
 import { RequestScope } from './context.ts';
 import type { Env } from './env.ts';
 import { errorBody, HttpError } from './errors.ts';
+import { NO_PHOTO_STORE, type PhotoStore, SupabasePhotoStore } from './photos.ts';
 import { consoleRoutes } from './routes/console.ts';
 import { meRoutes } from './routes/me.ts';
 import { propertyRoutes } from './routes/properties.ts';
@@ -23,6 +24,17 @@ export interface AppDeps {
   env: Env;
   db: ApiDatabase;
   verifyToken: TokenVerifier;
+  /** Defaults to Supabase Storage when it is configured. */
+  photos?: PhotoStore;
+}
+
+function photoStoreFrom(env: Env): PhotoStore {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return NO_PHOTO_STORE;
+  return new SupabasePhotoStore({
+    supabaseUrl: env.SUPABASE_URL,
+    serviceKey: env.SUPABASE_SERVICE_ROLE_KEY,
+    bucket: env.PHOTO_BUCKET,
+  });
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
@@ -49,7 +61,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(cors, {
     origin: deps.env.CORS_ORIGINS.split(',').map((o) => o.trim()),
     allowedHeaders: ['authorization', 'content-type', 'x-org-id', 'x-request-id'],
-    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   });
 
   app.addHook('onSend', async (req, reply) => {
@@ -91,7 +103,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const scope = new RequestScope(deps.db, deps.verifyToken);
   meRoutes(app, { db: deps.db, scope });
   workspaceRoutes(app, { scope });
-  propertyRoutes(app, { scope });
+  propertyRoutes(app, { scope, photos: deps.photos ?? photoStoreFrom(deps.env) });
   consoleRoutes(app, { scope });
   await webhookRoutes(app, { db: deps.db, channexSecret: deps.env.CHANNEX_WEBHOOK_SECRET });
 

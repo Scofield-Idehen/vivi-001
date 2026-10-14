@@ -136,6 +136,17 @@ export function pgErrorCode(error: unknown): string | undefined {
   return undefined;
 }
 
+/** The constraint a Postgres error names, if any, whether or not Drizzle wrapped it. */
+export function pgConstraint(error: unknown): string | undefined {
+  let current: unknown = error;
+  for (let i = 0; i < 5 && current; i++) {
+    const constraint = (current as { constraint?: unknown }).constraint;
+    if (typeof constraint === 'string') return constraint;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return undefined;
+}
+
 /** Postgres timestamps come back as "2026-10-14 14:02:52.12+00"; the API speaks ISO 8601. */
 export function toIso(value: string): string {
   const normalised = value.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00');

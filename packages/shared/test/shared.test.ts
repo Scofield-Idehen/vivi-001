@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AMENITIES,
+  AmenityCodesSchema,
   addDays,
   can,
   canPlatform,
+  countBeds,
+  countSleeps,
   eachNight,
   formatMoney,
   isIsoDate,
+  listingChecklist,
   minorToMajorString,
   nightsBetween,
   PERMISSIONS,
   PropertyCreateSchema,
+  PropertyUpdateSchema,
   parseMajorToMinor,
   SupportAccessStartSchema,
   staysOverlap,
@@ -136,5 +142,79 @@ describe('property input', () => {
   it('normalises the country code', () => {
     const result = PropertyCreateSchema.parse({ name: 'Mill Street Flat', countryCode: 'gb', maxGuests: 2 });
     expect(result.countryCode).toBe('GB');
+  });
+});
+
+describe('the listing', () => {
+  it('keeps every amenity code unique, and refuses ones not on the list', () => {
+    const codes = AMENITIES.map((a) => a.code);
+    expect(new Set(codes).size).toBe(codes.length);
+    expect(AmenityCodesSchema.parse(['wifi', 'hot_tub', 'wifi'])).toEqual(['wifi', 'hot_tub']);
+    expect(AmenityCodesSchema.safeParse(['wifi', 'moat']).success).toBe(false);
+  });
+
+  it('counts beds the way channels show them, and how many they sleep', () => {
+    const rooms = [
+      { beds: [{ type: 'king' as const, count: 1 }] },
+      {
+        beds: [
+          { type: 'bunk_bed' as const, count: 1 },
+          { type: 'cot' as const, count: 1 },
+        ],
+      },
+      {
+        beds: [
+          { type: 'sofa_bed' as const, count: 1 },
+          { type: 'single' as const, count: 2 },
+        ],
+      },
+    ];
+    expect(countBeds(rooms)).toBe(5);
+    expect(countSleeps(rooms)).toBe(8);
+  });
+
+  it('lists what a listing still needs before it goes on a channel', () => {
+    const empty = listingChecklist({
+      photos: [],
+      title: null,
+      summary: null,
+      amenities: [],
+      rooms: [],
+      addressLine1: null,
+      city: 'Port Seton',
+      postcode: null,
+      checkInMethod: null,
+      priceOwner: 'v01',
+      basePriceMinor: null,
+    });
+    expect(empty.filter((c) => c.done)).toEqual([]);
+    expect(empty[0]).toMatchObject({ section: 'photos', note: 'Add 5 more, at least 5 in all' });
+
+    const ready = listingChecklist({
+      photos: [1, 2, 3, 4, 5, 6],
+      title: 'Seaside house with a hot tub',
+      summary: 'Two minutes from the beach.',
+      amenities: ['wifi', 'hot_tub', 'garden'],
+      rooms: [{ beds: [{ type: 'double', count: 1 }] }],
+      addressLine1: '3 Carnoustie Drive',
+      city: 'Port Seton',
+      postcode: 'EH32 0TB',
+      checkInMethod: 'keypad',
+      priceOwner: 'pricelabs',
+      basePriceMinor: null,
+    });
+    expect(ready.every((c) => c.done)).toBe(true);
+  });
+
+  it('takes a change to any part of a listing, but nothing contradictory', () => {
+    expect(PropertyUpdateSchema.safeParse({ title: 'x'.repeat(51) }).success).toBe(false);
+    expect(PropertyUpdateSchema.safeParse({ minNights: 7, maxNights: 3 }).success).toBe(false);
+    expect(PropertyUpdateSchema.safeParse({ quietHoursStart: '22:00', quietHoursEnd: null }).success).toBe(
+      false,
+    );
+    expect(PropertyUpdateSchema.safeParse({}).success).toBe(false);
+    expect(PropertyUpdateSchema.parse({ licenceNumber: ' EL00123F ' })).toEqual({
+      licenceNumber: 'EL00123F',
+    });
   });
 });

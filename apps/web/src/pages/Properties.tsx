@@ -1,8 +1,10 @@
+import { IconHome } from '@tabler/icons-react';
 import { can, formatMoney, MANAGED_BY_LABELS, PROPERTY_TYPE_LABELS, type Property } from '@v01/shared';
-import { Outlet, useNavigate } from 'react-router';
+import { Link, Outlet, useNavigate } from 'react-router';
 import { Badge, Button, EmptyState, Notice, PageHeader } from '../components/ui.tsx';
 import { ApiError, useProperties, useWorkspace } from '../lib/api.ts';
 import { useCurrentWorkspace } from '../lib/workspace.tsx';
+import { PROPERTY_TYPE_ICONS } from './properties/icons.ts';
 
 function priceLimits(p: Property, currency: string, locale: string): string {
   // Whole amounts drop the pennies, as they do in the new-property panel: "£120 to £340".
@@ -11,6 +13,23 @@ function priceLimits(p: Property, currency: string, locale: string): string {
   if (p.minPriceMinor) return `From ${fmt(p.minPriceMinor)}`;
   if (p.maxPriceMinor) return `Up to ${fmt(p.maxPriceMinor)}`;
   return 'Not set';
+}
+
+/** The cover photo, or the kind of place as a picture until there is one. */
+function Thumbnail({ property }: { property: Property }) {
+  const Icon = property.propertyType ? PROPERTY_TYPE_ICONS[property.propertyType] : IconHome;
+  return property.coverPhotoUrl ? (
+    <img
+      src={property.coverPhotoUrl}
+      alt=""
+      loading="lazy"
+      className="h-[42px] w-[56px] shrink-0 rounded-md object-cover"
+    />
+  ) : (
+    <span aria-hidden className="grid h-[42px] w-[56px] shrink-0 place-items-center rounded-md bg-paper">
+      <Icon size={20} stroke={1.3} className="text-edge" />
+    </span>
+  );
 }
 
 /** "Cottage in Riverside", "Cottage" or "Riverside". */
@@ -90,10 +109,26 @@ export function Properties() {
             </thead>
             <tbody className="divide-y divide-hairline">
               {properties.map((p) => (
-                <tr key={p.id} className="h-12 hover:bg-linen/60">
+                <tr
+                  key={p.id}
+                  // The name is the link for keyboards and screen readers; the whole row works for a mouse.
+                  onClick={() => navigate(`/properties/${p.id}`)}
+                  className="h-16 cursor-pointer hover:bg-linen/60"
+                >
                   <td className="py-2 pr-4">
-                    <div className="font-serif text-[16px]">{p.name}</div>
-                    {placeLine(p) ? <div className="text-[12.5px] text-mist">{placeLine(p)}</div> : null}
+                    <div className="flex items-center gap-3.5">
+                      <Thumbnail property={p} />
+                      <div className="min-w-0">
+                        <Link
+                          to={`/properties/${p.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-serif text-[16px] text-ink underline-offset-4 hover:underline"
+                        >
+                          {p.name}
+                        </Link>
+                        {placeLine(p) ? <div className="text-[12.5px] text-mist">{placeLine(p)}</div> : null}
+                      </div>
+                    </div>
                   </td>
                   <td className="py-2 pr-4 font-mono text-[12.5px] text-slate">{p.internalCode ?? ''}</td>
                   <td className="tnum py-2 pr-10 text-right">{p.maxGuests}</td>

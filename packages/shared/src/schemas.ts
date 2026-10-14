@@ -9,6 +9,16 @@ import {
   SPACE_TYPES,
   WORKSPACE_ROLES,
 } from './enums.ts';
+import {
+  AmenityCodesSchema,
+  CANCELLATION_POLICIES,
+  CHECK_IN_METHODS,
+  PhotoSchema,
+  RoomSchema,
+  SECTION_MAX,
+  SUMMARY_MAX,
+  TITLE_MAX,
+} from './listing.ts';
 
 /** API request and response shapes, shared by the API (validation) and the web app (types). */
 
@@ -85,9 +95,57 @@ export const PropertySchema = z.object({
   priceOwner: z.enum(PRICE_OWNERS),
   minPriceMinor: z.number().int().nullable(),
   maxPriceMinor: z.number().int().nullable(),
+  /** The first photo, shown on the property list. */
+  coverPhotoUrl: z.string().nullable(),
+  photoCount: z.number().int(),
   createdAt: z.string(),
 });
 export type Property = z.infer<typeof PropertySchema>;
+
+/** Everything about one property: the basics above plus the whole listing. */
+export const PropertyDetailSchema = PropertySchema.extend({
+  addressLine2: z.string().nullable(),
+  // What guests read.
+  title: z.string().nullable(),
+  summary: z.string().nullable(),
+  theSpace: z.string().nullable(),
+  guestAccess: z.string().nullable(),
+  neighbourhood: z.string().nullable(),
+  gettingAround: z.string().nullable(),
+  otherNotes: z.string().nullable(),
+  // Arriving.
+  checkInMethod: z.enum(CHECK_IN_METHODS).nullable(),
+  // House rules.
+  petsAllowed: z.boolean(),
+  smokingAllowed: z.boolean(),
+  eventsAllowed: z.boolean(),
+  childrenAllowed: z.boolean(),
+  quietHoursStart: z.string().nullable(),
+  quietHoursEnd: z.string().nullable(),
+  houseRules: z.string().nullable(),
+  // Booking rules.
+  minNights: z.number().int(),
+  maxNights: z.number().int().nullable(),
+  instantBook: z.boolean(),
+  advanceNoticeHours: z.number().int(),
+  bookingWindowDays: z.number().int().nullable(),
+  preparationDays: z.number().int(),
+  cancellationPolicy: z.enum(CANCELLATION_POLICIES),
+  // Prices and fees, in minor units of the operator's currency.
+  basePriceMinor: z.number().int().nullable(),
+  weekendPriceMinor: z.number().int().nullable(),
+  cleaningFeeMinor: z.number().int().nullable(),
+  extraGuestFeeMinor: z.number().int().nullable(),
+  extraGuestFrom: z.number().int().nullable(),
+  securityDepositMinor: z.number().int().nullable(),
+  // Legal.
+  licenceNumber: z.string().nullable(),
+  rooms: z.array(RoomSchema),
+  amenities: z.array(z.string()),
+  photos: z.array(PhotoSchema),
+  updatedAt: z.string(),
+});
+export type PropertyDetail = z.infer<typeof PropertyDetailSchema>;
 
 export const PropertyListSchema = z.object({ properties: z.array(PropertySchema) });
 export type PropertyList = z.infer<typeof PropertyListSchema>;
@@ -120,6 +178,11 @@ export const PropertyCreateSchema = z
     priceOwner: z.enum(PRICE_OWNERS).optional(),
     minPriceMinor: z.number().int().positive().optional(),
     maxPriceMinor: z.number().int().positive().optional(),
+    basePriceMinor: z.number().int().positive().max(100_000_000).optional(),
+    cleaningFeeMinor: z.number().int().positive().max(100_000_000).optional(),
+    title: z.string().trim().min(1).max(TITLE_MAX).optional(),
+    summary: z.string().trim().min(1).max(SUMMARY_MAX).optional(),
+    amenities: AmenityCodesSchema.optional(),
   })
   .refine(
     (p) =>
@@ -127,6 +190,91 @@ export const PropertyCreateSchema = z
     { message: 'Minimum price must not be above maximum price', path: ['minPriceMinor'] },
   );
 export type PropertyCreate = z.input<typeof PropertyCreateSchema>;
+
+const Text = (max: number) => z.string().trim().max(max).nullable().optional();
+const Minor = z.number().int().positive().max(100_000_000).nullable().optional();
+const Halves = z
+  .number()
+  .min(0)
+  .max(50)
+  .refine((n) => Number.isInteger(n * 2), 'Bathrooms go in halves, like 1 or 1.5');
+
+/**
+ * A change to any part of a property. Only the fields sent change; null clears a field.
+ * Who runs the property's channels is not here: only the move-over step changes that.
+ */
+export const PropertyUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    internalCode: Text(40),
+    addressLine1: Text(200),
+    addressLine2: Text(200),
+    city: Text(100),
+    postcode: Text(20),
+    countryCode: z
+      .string()
+      .length(2)
+      .transform((v) => v.toUpperCase())
+      .optional(),
+    area: Text(100),
+    propertyType: z.enum(PROPERTY_TYPES).nullable().optional(),
+    spaceType: z.enum(SPACE_TYPES).optional(),
+    maxGuests: z.number().int().min(1).max(50).optional(),
+    bedrooms: z.number().int().min(0).max(50).nullable().optional(),
+    beds: z.number().int().min(0).max(100).nullable().optional(),
+    bathrooms: Halves.nullable().optional(),
+    checkInTime: ClockTime.optional(),
+    checkOutTime: ClockTime.optional(),
+    priceOwner: z.enum(PRICE_OWNERS).optional(),
+    minPriceMinor: Minor,
+    maxPriceMinor: Minor,
+    title: Text(TITLE_MAX),
+    summary: Text(SUMMARY_MAX),
+    theSpace: Text(SECTION_MAX),
+    guestAccess: Text(SECTION_MAX),
+    neighbourhood: Text(SECTION_MAX),
+    gettingAround: Text(SECTION_MAX),
+    otherNotes: Text(SECTION_MAX),
+    checkInMethod: z.enum(CHECK_IN_METHODS).nullable().optional(),
+    petsAllowed: z.boolean().optional(),
+    smokingAllowed: z.boolean().optional(),
+    eventsAllowed: z.boolean().optional(),
+    childrenAllowed: z.boolean().optional(),
+    quietHoursStart: ClockTime.nullable().optional(),
+    quietHoursEnd: ClockTime.nullable().optional(),
+    houseRules: Text(SECTION_MAX),
+    minNights: z.number().int().min(1).max(365).optional(),
+    maxNights: z.number().int().min(1).max(1125).nullable().optional(),
+    instantBook: z.boolean().optional(),
+    advanceNoticeHours: z.number().int().min(0).max(168).optional(),
+    bookingWindowDays: z.number().int().min(1).max(730).nullable().optional(),
+    preparationDays: z.number().int().min(0).max(7).optional(),
+    cancellationPolicy: z.enum(CANCELLATION_POLICIES).optional(),
+    basePriceMinor: Minor,
+    weekendPriceMinor: Minor,
+    cleaningFeeMinor: Minor,
+    extraGuestFeeMinor: Minor,
+    extraGuestFrom: z.number().int().min(1).max(50).nullable().optional(),
+    securityDepositMinor: Minor,
+    licenceNumber: Text(80),
+  })
+  .refine((p) => Object.keys(p).length > 0, 'Nothing to change')
+  .refine((p) => !p.minPriceMinor || !p.maxPriceMinor || p.minPriceMinor <= p.maxPriceMinor, {
+    message: 'The lowest price is above the highest',
+    path: ['minPriceMinor'],
+  })
+  .refine((p) => !p.minNights || !p.maxNights || p.minNights <= p.maxNights, {
+    message: 'The shortest stay is longer than the longest',
+    path: ['minNights'],
+  })
+  .refine(
+    (p) =>
+      p.quietHoursStart === undefined ||
+      p.quietHoursEnd === undefined ||
+      (p.quietHoursStart === null) === (p.quietHoursEnd === null),
+    { message: 'Give quiet hours a start and an end', path: ['quietHoursStart'] },
+  );
+export type PropertyUpdate = z.input<typeof PropertyUpdateSchema>;
 
 const LEADING_WORDS = new Set(['the', 'a', 'an']);
 

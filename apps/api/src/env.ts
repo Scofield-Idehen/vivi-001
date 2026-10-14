@@ -16,6 +16,10 @@ const EnvSchema = z
     CORS_ORIGINS: z.string().default('http://localhost:5173'),
     /** The signing secret set on the Channex webhook. Webhooks are refused until it is set. */
     CHANNEX_WEBHOOK_SECRET: z.string().min(16).optional(),
+    /** Server-side only: lets the API issue photo upload tickets. Photo uploads wait until it is set. */
+    SUPABASE_SERVICE_ROLE_KEY: z.string().min(20).optional(),
+    /** A public Supabase Storage bucket for listing photos, and nothing else. */
+    PHOTO_BUCKET: z.string().default('property-photos'),
   })
   .refine((env) => env.SUPABASE_URL || env.SUPABASE_JWT_SECRET, {
     message: 'Set SUPABASE_URL (recommended) or SUPABASE_JWT_SECRET so sign-in tokens can be verified',

@@ -1,5 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import {
+  AmenitiesUpdateSchema,
+  AmenityCodesSchema,
   type Channel,
   type ConsoleOperator,
   type ConsoleOperatorDetail,
@@ -8,13 +10,21 @@ import {
   type ConsoleSync,
   type ConsoleSyncRow,
   can,
+  countBeds,
   type Me,
   type MemberRole,
   type Permission,
+  PHOTO_MAX_COUNT,
+  PhotoOrderSchema,
+  PhotoUpdateSchema,
   type Property,
   PropertyCreateSchema,
+  type PropertyDetail,
   type PropertyList,
+  PropertySchema,
   type PropertyType,
+  PropertyUpdateSchema,
+  RoomsUpdateSchema,
   SUPPORT_ROLE,
   SupportAccessStartSchema,
   type SupportGrant,
@@ -23,6 +33,7 @@ import {
   type Workspace,
   type WorkspaceRole,
 } from '@v01/shared';
+import { clearDemoPhotos, deleteDemoPhoto, demoPhotoUrl, putDemoPhoto } from './demo-photos.ts';
 import { ApiError } from './errors.ts';
 
 /**
@@ -69,7 +80,8 @@ interface DemoOperator {
   workspace: Omit<Workspace, 'role'>;
   /** The demo user's own role here; null where they can only get in with support access. */
   role: MemberRole | null;
-  properties: Property[];
+  /** Full listings. Photo addresses are "demo-photo:{id}", resolved from this browser's storage. */
+  properties: PropertyDetail[];
   createdAt: string;
   team: DemoTeamMember[];
   channelAccounts: { channel: Channel; connected: boolean }[];
@@ -97,7 +109,7 @@ interface DemoSyncError {
 
 interface DemoState {
   /** Raised whenever the shape changes, so a browser holding older sample data starts fresh. */
-  version: 3;
+  version: 4;
   operators: DemoOperator[];
   grants: DemoGrant[];
   unmatchedWebhooks: { waiting: number; failed: number; lastMinutes: number | null };
@@ -127,6 +139,45 @@ const NO_ACTIVITY: DemoLive = {
   lastActivityMinutes: null,
 };
 
+/** What a listing starts with before anyone fills it in; the API's column defaults. */
+function listingDefaults(): Omit<PropertyDetail, keyof Property | 'updatedAt'> {
+  return {
+    addressLine2: null,
+    title: null,
+    summary: null,
+    theSpace: null,
+    guestAccess: null,
+    neighbourhood: null,
+    gettingAround: null,
+    otherNotes: null,
+    checkInMethod: null,
+    petsAllowed: false,
+    smokingAllowed: false,
+    eventsAllowed: false,
+    childrenAllowed: true,
+    quietHoursStart: null,
+    quietHoursEnd: null,
+    houseRules: null,
+    minNights: 1,
+    maxNights: null,
+    instantBook: true,
+    advanceNoticeHours: 0,
+    bookingWindowDays: 365,
+    preparationDays: 0,
+    cancellationPolicy: 'moderate',
+    basePriceMinor: null,
+    weekendPriceMinor: null,
+    cleaningFeeMinor: null,
+    extraGuestFeeMinor: null,
+    extraGuestFrom: null,
+    securityDepositMinor: null,
+    licenceNumber: null,
+    rooms: [],
+    amenities: [],
+    photos: [],
+  };
+}
+
 function sampleProperty(p: {
   name: string;
   code: string;
@@ -138,7 +189,10 @@ function sampleProperty(p: {
   guests: number;
   prices: [number, number] | null;
   managedBy: Property['managedBy'];
-}): Property {
+  title?: string;
+  amenities?: string[];
+}): PropertyDetail {
+  const createdAt = new Date('2026-10-14T09:00:00Z').toISOString();
   return {
     id: crypto.randomUUID(),
     name: p.name,
@@ -160,7 +214,13 @@ function sampleProperty(p: {
     priceOwner: 'v01',
     minPriceMinor: p.prices ? p.prices[0] : null,
     maxPriceMinor: p.prices ? p.prices[1] : null,
-    createdAt: new Date('2026-10-14T09:00:00Z').toISOString(),
+    coverPhotoUrl: null,
+    photoCount: 0,
+    createdAt,
+    ...listingDefaults(),
+    title: p.title ?? null,
+    amenities: p.amenities ?? [],
+    updatedAt: createdAt,
   };
 }
 
@@ -188,7 +248,7 @@ function operatorWorkspace(
 function seed(): DemoState {
   const pastVisit = Date.now() - (2 * 24 * 60 + 190) * MINUTE;
   return {
-    version: 3,
+    version: 4,
     operators: [
       {
         role: 'admin',
@@ -230,6 +290,8 @@ function seed(): DemoState {
             guests: 6,
             prices: [12_000, 34_000],
             managedBy: 'v01',
+            title: 'Harbourside house with sea views',
+            amenities: ['sea_view', 'log_burner', 'wifi', 'kitchen', 'washing_machine', 'free_parking'],
           }),
           sampleProperty({
             name: 'Mill Street Flat',
@@ -437,7 +499,7 @@ function load(): DemoState {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved) as DemoState;
-      if (parsed.version === 3) {
+      if (parsed.version === 4) {
         state = parsed;
         return parsed;
       }
@@ -461,6 +523,7 @@ function save(): void {
 export function resetDemoData(): void {
   state = seed();
   save();
+  void clearDemoPhotos();
 }
 
 // Access ----------------------------------------------------------------------------------------
@@ -649,16 +712,96 @@ function operatorDetail(orgId: string): ConsoleOperatorDetail {
   };
 }
 
+// Properties ---------------------------------------------------------------------------------------
+
+function findProperty(operator: DemoOperator, id: string): PropertyDetail {
+  const property = operator.properties.find((p) => p.id === id);
+  if (!property) {
+    throw new ApiError(404, 'property_not_found', 'That property does not exist in this workspace.');
+  }
+  return property;
+}
+
+/** Photo addresses point into this browser's storage; photos it no longer has are left out. */
+async function resolved(detail: PropertyDetail): Promise<PropertyDetail> {
+  const photos: PropertyDetail['photos'] = [];
+  for (const photo of detail.photos) {
+    const url = photo.url.startsWith('demo-photo:') ? await demoPhotoUrl(photo.url.slice(11)) : photo.url;
+    if (url) photos.push({ ...photo, url, position: photos.length });
+  }
+  return { ...detail, photos, coverPhotoUrl: photos[0]?.url ?? null, photoCount: photos.length };
+}
+
+const PROPERTY_KEYS = Object.keys(PropertySchema.shape) as (keyof Property)[];
+
+function summary(detail: PropertyDetail): Property {
+  return Object.fromEntries(PROPERTY_KEYS.map((key) => [key, detail[key]])) as Property;
+}
+
+function invalid(issues: { path: PropertyKey[]; message: string }[]): never {
+  const issue = issues[0];
+  throw new ApiError(400, 'invalid_request', `${issue?.path.join('.') || 'request'}: ${issue?.message}`);
+}
+
+/** The database's own rules, so the demo refuses what the real API would. */
+function checkListing(d: PropertyDetail): void {
+  const refuse = (message: string) => {
+    throw new ApiError(400, 'invalid_request', message);
+  };
+  if (d.minPriceMinor && d.maxPriceMinor && d.minPriceMinor > d.maxPriceMinor) {
+    refuse('The lowest price is above the highest.');
+  }
+  if (d.maxNights !== null && d.maxNights < d.minNights)
+    refuse('The shortest stay is longer than the longest.');
+  if ((d.quietHoursStart === null) !== (d.quietHoursEnd === null))
+    refuse('Give quiet hours a start and an end.');
+}
+
+function renumber(photos: PropertyDetail['photos']): void {
+  photos.forEach((photo, position) => {
+    photo.position = position;
+  });
+}
+
+/** Demo mode's photo upload: the file stays in this browser instead of going to storage. */
+export async function demoAddPhoto(
+  orgId: string | null,
+  propertyId: string,
+  photo: { blob: Blob; width: number; height: number },
+): Promise<PropertyDetail> {
+  const { operator } = access(orgId, 'properties.write');
+  const property = findProperty(operator, propertyId);
+  if (property.photos.length >= PHOTO_MAX_COUNT) {
+    throw new ApiError(409, 'too_many_photos', `A property can have up to ${PHOTO_MAX_COUNT} photos.`);
+  }
+  const id = crypto.randomUUID();
+  await putDemoPhoto(id, photo.blob);
+  property.photos.push({
+    id,
+    url: `demo-photo:${id}`,
+    caption: null,
+    position: property.photos.length,
+    roomId: null,
+    width: photo.width,
+    height: photo.height,
+  });
+  property.updatedAt = new Date().toISOString();
+  save();
+  return resolved(property);
+}
+
 // Routes ---------------------------------------------------------------------------------------
 
 const pause = () => new Promise((resolve) => setTimeout(resolve, 120));
 const OPERATOR_PATH = /^\/v1\/console\/operators\/([0-9a-f-]{36})$/;
 const START_PATH = /^\/v1\/console\/operators\/([0-9a-f-]{36})\/support-access$/;
 const END_PATH = /^\/v1\/console\/support-access\/([0-9a-f-]{36})\/end$/;
+const PROPERTY_PATH = /^\/v1\/properties\/([0-9a-f-]{36})(\/rooms|\/amenities|\/photos\/order)?$/;
+const PHOTO_PATH = /^\/v1\/properties\/([0-9a-f-]{36})\/photos\/([0-9a-f-]{36})$/;
 
 export async function demoFetch<T>(
   path: string,
-  options: { orgId?: string | null; method?: 'GET' | 'POST'; body?: unknown },
+  options: { orgId?: string | null; method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'; body?: unknown },
 ): Promise<T> {
   await pause();
   const method = options.method ?? 'GET';
@@ -709,24 +852,22 @@ export async function demoFetch<T>(
 
   if (method === 'GET' && path === '/v1/properties') {
     const { operator } = access(options.orgId, 'properties.read');
-    const list: PropertyList = {
-      properties: [...operator.properties].sort((a, b) => a.name.localeCompare(b.name)),
-    };
+    const sorted = [...operator.properties].sort((a, b) => a.name.localeCompare(b.name));
+    const list: PropertyList = { properties: [] };
+    for (const property of sorted) list.properties.push(summary(await resolved(property)));
     return list as T;
   }
 
   if (method === 'POST' && path === '/v1/properties') {
     const { operator } = access(options.orgId, 'properties.write');
     const parsed = PropertyCreateSchema.safeParse(options.body);
-    if (!parsed.success) {
-      const issue = parsed.error.issues[0];
-      throw new ApiError(400, 'invalid_request', `${issue?.path.join('.') || 'request'}: ${issue?.message}`);
-    }
+    if (!parsed.success) invalid(parsed.error.issues);
     const input = parsed.data;
     if (input.internalCode && operator.properties.some((p) => p.internalCode === input.internalCode)) {
       throw new ApiError(409, 'code_in_use', `Another property already uses ${input.internalCode}.`);
     }
-    const created: Property = {
+    const now = new Date().toISOString();
+    const created: PropertyDetail = {
       id: crypto.randomUUID(),
       name: input.name,
       internalCode: input.internalCode ?? null,
@@ -748,11 +889,131 @@ export async function demoFetch<T>(
       priceOwner: input.priceOwner ?? 'v01',
       minPriceMinor: input.minPriceMinor ?? null,
       maxPriceMinor: input.maxPriceMinor ?? null,
-      createdAt: new Date().toISOString(),
+      coverPhotoUrl: null,
+      photoCount: 0,
+      createdAt: now,
+      ...listingDefaults(),
+      title: input.title ?? null,
+      summary: input.summary ?? null,
+      basePriceMinor: input.basePriceMinor ?? null,
+      cleaningFeeMinor: input.cleaningFeeMinor ?? null,
+      amenities: [...(input.amenities ?? [])].sort(),
+      updatedAt: now,
     };
     operator.properties.push(created);
     save();
-    return created as T;
+    return (await resolved(created)) as T;
+  }
+
+  const propertyMatch = PROPERTY_PATH.exec(path);
+  if (propertyMatch?.[1]) {
+    const [, id, part] = propertyMatch;
+    if (method === 'GET' && !part) {
+      const { operator } = access(options.orgId, 'properties.read');
+      return (await resolved(findProperty(operator, id))) as T;
+    }
+    const { operator } = access(options.orgId, 'properties.write');
+    const property = findProperty(operator, id);
+
+    if (method === 'PATCH' && !part) {
+      const parsed = PropertyUpdateSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      const changes: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(parsed.data)) {
+        if (value === undefined) continue;
+        changes[key] = typeof value === 'string' && value.trim() === '' ? null : value;
+      }
+      if (changes.name === null) throw new ApiError(400, 'invalid_request', 'A property needs a name.');
+      const code = changes.internalCode;
+      if (
+        typeof code === 'string' &&
+        operator.properties.some((p) => p.id !== id && p.internalCode === code)
+      ) {
+        throw new ApiError(409, 'code_in_use', `Another property already uses ${code}.`);
+      }
+      const next = { ...property, ...changes } as PropertyDetail;
+      checkListing(next);
+      Object.assign(property, changes, { updatedAt: new Date().toISOString() });
+    } else if (method === 'PUT' && part === '/rooms') {
+      const parsed = RoomsUpdateSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      const known = new Set(property.rooms.map((r) => r.id));
+      const used = new Set<string>();
+      property.rooms = parsed.data.rooms.map((room) => {
+        const keep = room.id && known.has(room.id) && !used.has(room.id) ? room.id : crypto.randomUUID();
+        used.add(keep);
+        return {
+          id: keep,
+          kind: room.kind,
+          name: room.name?.trim() || null,
+          beds: room.beds,
+          privateBathroom: room.privateBathroom,
+        };
+      });
+      for (const photo of property.photos) {
+        if (photo.roomId && !used.has(photo.roomId)) photo.roomId = null;
+      }
+      if (property.rooms.length > 0) {
+        property.bedrooms = property.rooms.filter((r) => r.kind === 'bedroom').length;
+        property.beds = countBeds(property.rooms);
+      }
+      property.updatedAt = new Date().toISOString();
+    } else if (method === 'PUT' && part === '/amenities') {
+      const parsed = AmenitiesUpdateSchema.safeParse(options.body);
+      const codes = parsed.success ? AmenityCodesSchema.safeParse(parsed.data.amenities) : null;
+      if (!codes?.success) {
+        throw new ApiError(400, 'invalid_request', 'One of those amenities is not on the list.');
+      }
+      property.amenities = [...codes.data].sort();
+      property.updatedAt = new Date().toISOString();
+    } else if (method === 'PUT' && part === '/photos/order') {
+      const parsed = PhotoOrderSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      const wanted = parsed.data.photoIds;
+      const byId = new Map(property.photos.map((photo) => [photo.id, photo]));
+      if (wanted.length !== property.photos.length || wanted.some((photoId) => !byId.has(photoId))) {
+        throw new ApiError(
+          409,
+          'photos_changed',
+          'The photos changed while you were ordering them. Try again.',
+        );
+      }
+      property.photos = wanted.map((photoId) => byId.get(photoId) as PropertyDetail['photos'][number]);
+      renumber(property.photos);
+      property.updatedAt = new Date().toISOString();
+    } else {
+      throw new ApiError(404, 'not_found', 'No such endpoint.');
+    }
+    save();
+    return (await resolved(property)) as T;
+  }
+
+  const photoMatch = PHOTO_PATH.exec(path);
+  if (photoMatch?.[1] && photoMatch[2]) {
+    const [, id, photoId] = photoMatch;
+    const { operator } = access(options.orgId, 'properties.write');
+    const property = findProperty(operator, id);
+    const photo = property.photos.find((p) => p.id === photoId);
+    if (!photo) throw new ApiError(404, 'photo_not_found', 'That photo is not on this property.');
+    if (method === 'PATCH') {
+      const parsed = PhotoUpdateSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      const { caption, roomId } = parsed.data;
+      if (roomId && !property.rooms.some((r) => r.id === roomId)) {
+        throw new ApiError(400, 'invalid_request', 'That room is not in this property.');
+      }
+      if (caption !== undefined) photo.caption = caption?.trim() || null;
+      if (roomId !== undefined) photo.roomId = roomId;
+    } else if (method === 'DELETE') {
+      property.photos = property.photos.filter((p) => p.id !== photoId);
+      renumber(property.photos);
+      void deleteDemoPhoto(photoId);
+    } else {
+      throw new ApiError(404, 'not_found', 'No such endpoint.');
+    }
+    property.updatedAt = new Date().toISOString();
+    save();
+    return (await resolved(property)) as T;
   }
 
   // The V-01 console: the demo user is a V-01 owner.

@@ -111,6 +111,9 @@ Not set up yet. These are the steps for when the staging and production accounts
    `app_api.<project-ref>`: the API through the transaction pooler (port 6543), the worker and pg-boss
    through the session pooler (port 5432 on the pooler host).
 5. Create the Render services from `render.yaml` and fill in the secrets in the dashboard.
+6. For listing photos, create a **public** Storage bucket named `property-photos` and give the API
+   `SUPABASE_SERVICE_ROLE_KEY` (server side only, never in the web app). Browsers upload straight to
+   the bucket with a short-lived ticket from the API; the bucket holds listing photos and nothing else.
 
 ## Next (Phase 1)
 

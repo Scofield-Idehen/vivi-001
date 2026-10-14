@@ -1,6 +1,8 @@
 import {
+  CANCELLATION_POLICIES,
   CHANNEL_ACCOUNT_STATUSES,
   CHANNELS,
+  CHECK_IN_METHODS,
   LISTING_STATUSES,
   MANAGED_BY,
   MEMBER_ROLES,
@@ -9,6 +11,7 @@ import {
   PLATFORM_ROLES,
   PRICE_OWNERS,
   RESERVATION_STATUSES,
+  ROOM_KINDS,
   SPACE_TYPES,
 } from '@v01/shared';
 import { customType, pgSchema, timestamp } from 'drizzle-orm/pg-core';
@@ -30,6 +33,9 @@ export const outboxKind = app.enum('outbox_kind', OUTBOX_KINDS);
 export const outboxStatus = app.enum('outbox_status', OUTBOX_STATUSES);
 export const platformRole = app.enum('platform_role', PLATFORM_ROLES);
 export const spaceType = app.enum('space_type', SPACE_TYPES);
+export const checkInMethod = app.enum('check_in_method', CHECK_IN_METHODS);
+export const cancellationPolicy = app.enum('cancellation_policy', CANCELLATION_POLICIES);
+export const roomKind = app.enum('room_kind', ROOM_KINDS);
 
 /** Postgres daterange, read back as text such as "[2026-11-13,2026-11-15)". */
 export const daterange = customType<{ data: string; driverData: string }>({

@@ -16,6 +16,7 @@ import { ConsoleSync } from './pages/console/Sync.tsx';
 import { About, ModuleToCome, NotFound, NoWorkspace } from './pages/misc.tsx';
 import { Properties } from './pages/Properties.tsx';
 import { NewPropertyPanel } from './pages/properties/NewPropertyPanel.tsx';
+import { PropertyPage } from './pages/properties/PropertyPage.tsx';
 import { SignIn } from './pages/SignIn.tsx';
 import { Today } from './pages/Today.tsx';
 import { WorkspacePage } from './pages/WorkspacePage.tsx';
@@ -95,6 +96,7 @@ const routes = [
             element: <Properties />,
             children: [{ path: 'new', element: <NewPropertyPanel /> }],
           },
+          { path: 'properties/:id', element: <PropertyPage /> },
           { path: 'workspace', element: <WorkspacePage /> },
           { path: 'about', element: <About /> },
           ...PENDING_MODULES.map((module) => ({
