@@ -1,0 +1,93 @@
+@import "tailwindcss";
+@import "@fontsource-variable/fraunces/opsz.css";
+@import "@fontsource-variable/geist/wght.css";
+@import "@fontsource-variable/geist-mono/wght.css";
+
+/*
+ * Design tokens from the design roadmap (v1.3): Vivistays' palette for now.
+ * The values below are defaults; src/lib/brand.ts applies packages/brand/app-brand.json
+ * at start-up, so a rebrand changes the JSON, not this file.
+ */
+:root {
+  --brand-paper: #f5f2ec;
+  --brand-linen: #ece6dc;
+  --brand-hairline: #d6cfc3;
+  --brand-ink: #15181b;
+  --brand-slate: #4a4f55;
+  --brand-mist: #646a6f;
+  --brand-edge: #958b7b;
+  --brand-accent: #1e4d4f;
+  --brand-accent-tint: #dce7e4;
+  --brand-plum: #6e5674;
+  --brand-urgent: #a9412f;
+  --brand-pending: #b07d2c;
+  --brand-pending-text: #856020;
+  --brand-done: #3d7556;
+  --brand-done-text: #356b4e;
+}
+
+@theme inline {
+  --color-paper: var(--brand-paper);
+  --color-linen: var(--brand-linen);
+  --color-hairline: var(--brand-hairline);
+  --color-ink: var(--brand-ink);
+  --color-slate: var(--brand-slate);
+  --color-mist: var(--brand-mist);
+  --color-edge: var(--brand-edge);
+  --color-accent: var(--brand-accent);
+  --color-accent-tint: var(--brand-accent-tint);
+  --color-plum: var(--brand-plum);
+  --color-urgent: var(--brand-urgent);
+  --color-pending: var(--brand-pending);
+  --color-pending-text: var(--brand-pending-text);
+  --color-done: var(--brand-done);
+  --color-done-text: var(--brand-done-text);
+
+  /* The serif speaks for the property; the grotesk for the operation. */
+  --font-serif: "Fraunces Variable", Georgia, serif;
+  --font-sans: "Geist Variable", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    font-size: 15px;
+  }
+
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--color-accent-tint);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must override every component's transition */
+    transition-duration: 0ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must override every component's animation */
+    animation-duration: 0ms !important;
+  }
+}
+
+dialog::backdrop {
+  background: rgb(21 24 27 / 0.28);
+}
