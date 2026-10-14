@@ -1,0 +1,35 @@
+import { z } from 'zod';
+
+const EnvSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    HOST: z.string().default('0.0.0.0'),
+    PORT: z.coerce.number().int().positive().default(3001),
+    LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+    /** Connects as app_api, through the Supabase pooler. Never the owner. */
+    DATABASE_URL: z.string().min(1),
+    /** Used to verify sign-in tokens against the project's published keys (JWKS). */
+    SUPABASE_URL: z.url().optional(),
+    /** Only for projects still on the legacy shared secret, and for tests. */
+    SUPABASE_JWT_SECRET: z.string().min(16).optional(),
+    /** Comma-separated origins allowed to call the API from a browser. */
+    CORS_ORIGINS: z.string().default('http://localhost:5173'),
+    /** The signing secret set on the Channex webhook. Webhooks are refused until it is set. */
+    CHANNEX_WEBHOOK_SECRET: z.string().min(16).optional(),
+  })
+  .refine((env) => env.SUPABASE_URL || env.SUPABASE_JWT_SECRET, {
+    message: 'Set SUPABASE_URL (recommended) or SUPABASE_JWT_SECRET so sign-in tokens can be verified',
+  });
+
+export type Env = z.infer<typeof EnvSchema>;
+
+export function loadEnv(source: Record<string, string | undefined> = process.env): Env {
+  const result = EnvSchema.safeParse(source);
+  if (!result.success) {
+    const problems = result.error.issues
+      .map((i) => `  ${i.path.join('.') || 'env'}: ${i.message}`)
+      .join('\n');
+    throw new Error(`Invalid API configuration:\n${problems}`);
+  }
+  return result.data;
+}

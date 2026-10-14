@@ -1,0 +1,31 @@
+{
+  "name": "@v01/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
+    "build": "node ../../scripts/build-node.mjs src/server.ts dist/server.js",
+    "start": "node --enable-source-maps dist/server.js",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/cors": "11.3.1",
+    "@fastify/helmet": "13.2.0",
+    "@v01/brand": "workspace:*",
+    "@v01/channels": "workspace:*",
+    "@v01/db": "workspace:*",
+    "@v01/shared": "workspace:*",
+    "drizzle-orm": "0.45.4",
+    "fastify": "5.12.7",
+    "fastify-type-provider-zod": "7.0.0",
+    "jose": "6.2.12",
+    "pg": "8.23.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/pg": "8.23.1",
+    "tsx": "4.23.15"
+  }
+}
