@@ -1,0 +1,26 @@
+{
+  "$comment": "The look of the staff app and field team app. Vivistays' logo and design for now (decided 14 October 2026). Rebranding means editing this file and the logo files, not the code. Each operator's outside brand lives in its workspace settings instead.",
+  "name": "Vivistays",
+  "wordmark": "VIVISTAYS",
+  "logo": {
+    "light": null,
+    "dark": null
+  },
+  "tokens": {
+    "paper": "#F5F2EC",
+    "linen": "#ECE6DC",
+    "hairline": "#D6CFC3",
+    "ink": "#15181B",
+    "slate": "#4A4F55",
+    "mist": "#646A6F",
+    "edge": "#958B7B",
+    "accent": "#1E4D4F",
+    "accentTint": "#DCE7E4",
+    "plum": "#6E5674",
+    "urgent": "#A9412F",
+    "pending": "#B07D2C",
+    "pendingText": "#856020",
+    "done": "#3D7556",
+    "doneText": "#356B4E"
+  }
+}

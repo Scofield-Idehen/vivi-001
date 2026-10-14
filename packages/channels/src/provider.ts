@@ -1,0 +1,90 @@
+/**
+ * The swap layer (playbook, Fear 14). All channel code sits behind this interface,
+ * so moving from Channex to another channel manager means writing one new adapter,
+ * not touching the rest of the system. Nothing outside packages/channels imports Channex code.
+ */
+
+/** Identifies a property at the channel manager. For Channex: property, room type and rate plan ids. */
+export interface ExternalPropertyRef {
+  externalPropertyId: string;
+  externalRoomTypeId: string;
+  externalRatePlanId: string;
+}
+
+/** A date range is inclusive at both ends, as channel managers expect: [dateFrom, dateTo]. */
+export interface AvailabilityUpdate {
+  ref: ExternalPropertyRef;
+  dateFrom: string;
+  dateTo: string;
+  /** Units available. A single holiday home is 1 (open) or 0 (closed). */
+  available: number;
+}
+
+export interface RestrictionUpdate {
+  ref: ExternalPropertyRef;
+  dateFrom: string;
+  dateTo: string;
+  /** Nightly price in minor units of the property's currency. */
+  rateMinor?: number;
+  minStayArrival?: number;
+  maxStay?: number;
+  closedToArrival?: boolean;
+  closedToDeparture?: boolean;
+  stopSell?: boolean;
+}
+
+export interface PushResult {
+  /** The provider's task id, stored in the sync log so any change can be traced. */
+  taskId: string | null;
+  /** Items the provider accepted the call for but rejected individually. Never ignore these. */
+  warnings: string[];
+}
+
+export type RevisionStatus = 'new' | 'modified' | 'cancelled';
+
+export interface BookingRevision {
+  id: string;
+  bookingId: string;
+  externalPropertyId: string;
+  status: RevisionStatus;
+  arrivalDate: string;
+  departureDate: string;
+  otaName: string | null;
+  otaReservationCode: string | null;
+  amount: string | null;
+  currency: string | null;
+  /** The full payload exactly as received, stored before processing so it can be replayed. */
+  raw: unknown;
+}
+
+export interface ChannelProvider {
+  readonly name: string;
+  pushAvailability(updates: AvailabilityUpdate[]): Promise<PushResult>;
+  pushRestrictions(updates: RestrictionUpdate[]): Promise<PushResult>;
+  /** Unacknowledged booking revisions, oldest first. */
+  fetchBookingRevisionFeed(options?: {
+    externalPropertyId?: string;
+    page?: number;
+  }): Promise<BookingRevision[]>;
+  /** Only call this after the revision is saved in our database (playbook rule 3). */
+  acknowledgeBookingRevision(revisionId: string): Promise<void>;
+}
+
+export type ChannelErrorKind = 'rate_limited' | 'server' | 'auth' | 'validation' | 'network';
+
+export class ChannelError extends Error {
+  constructor(
+    message: string,
+    readonly kind: ChannelErrorKind,
+    readonly status?: number,
+    readonly retryAfterMs?: number,
+  ) {
+    super(message);
+    this.name = 'ChannelError';
+  }
+
+  /** Rate limits, server errors and network failures are worth retrying; the rest need a person. */
+  get retryable(): boolean {
+    return this.kind === 'rate_limited' || this.kind === 'server' || this.kind === 'network';
+  }
+}
