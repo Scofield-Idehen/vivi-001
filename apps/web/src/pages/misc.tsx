@@ -23,28 +23,30 @@ export function ModuleToCome({ module }: { module: ModuleEntry }) {
   );
 }
 
-export function NotFound() {
+export function NotFound({ home = '/today' }: { home?: string }) {
   return (
     <>
       <PageHeader title="Page not found" description="This page doesn't exist or has moved." />
-      <Link to="/today" className="text-[14px] text-accent underline-offset-4 hover:underline">
-        Go to Today
+      <Link to={home} className="text-[14px] text-accent underline-offset-4 hover:underline">
+        {home === '/today' ? 'Go to Today' : 'Go to the overview'}
       </Link>
     </>
   );
 }
 
-/** V-01 is named here and in the terms only; the rest of the app wears the operator's look. */
+/** Operators' workspaces wear the operator's look; V-01 is named here, in the console and in the terms. */
 export function About() {
   return (
     <>
       <PageHeader title="About" />
       <div className="max-w-[60ch] space-y-4 text-[14px] leading-relaxed text-slate">
-        <p>This workspace runs on V-01, a property management platform for short-stay operators.</p>
+        <p>V-01 is a property management platform for short-stay operators.</p>
         <p>
-          Your company's data is kept separate from every other company on the platform, and stays in the UK.
+          Each company's data is kept separate from every other company on the platform, and stays in the UK.
+          V-01 staff can open a company's workspace only with a reason, read-only and for a limited time, and
+          the company sees every visit.
         </p>
-        <p className="text-mist">Version 0.1, the base build.</p>
+        <p className="text-mist">Version 0.2: the base build and the first V-01 console.</p>
       </div>
     </>
   );

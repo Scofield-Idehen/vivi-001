@@ -1,3 +1,19 @@
+import {
+  IconArrowsExchange,
+  IconCalendarMonth,
+  IconChartBar,
+  IconChecklist,
+  IconClipboardText,
+  IconFileAlert,
+  IconFileInvoice,
+  IconHome,
+  IconInbox,
+  IconSettings,
+  IconStar,
+  IconSun,
+  type TablerIcon,
+} from '@tabler/icons-react';
+
 /**
  * The module map from the design roadmap (page 12). Built modules have a page;
  * the rest show when they arrive, so the team can see the whole shape from day one.
@@ -5,6 +21,7 @@
 export interface ModuleEntry {
   path: string;
   label: string;
+  icon: TablerIcon;
   built: boolean;
   design?: string;
   phase?: string;
@@ -20,10 +37,11 @@ export const MODULE_GROUPS: ModuleGroup[] = [
   {
     label: 'Run the day',
     items: [
-      { path: 'today', label: 'Today', built: true },
+      { path: 'today', label: 'Today', icon: IconSun, built: true },
       {
         path: 'calendar',
         label: 'Calendar',
+        icon: IconCalendarMonth,
         built: false,
         design: 'D1',
         phase: 'Phase 1',
@@ -33,6 +51,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
       {
         path: 'reservations',
         label: 'Reservations',
+        icon: IconClipboardText,
         built: false,
         design: 'D1',
         phase: 'Phase 1',
@@ -41,6 +60,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
       {
         path: 'inbox',
         label: 'Inbox',
+        icon: IconInbox,
         built: false,
         design: 'D2',
         phase: 'Phase 2',
@@ -50,6 +70,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
       {
         path: 'tasks',
         label: 'Tasks',
+        icon: IconChecklist,
         built: false,
         design: 'D3',
         phase: 'Phase 3',
@@ -60,10 +81,11 @@ export const MODULE_GROUPS: ModuleGroup[] = [
   {
     label: 'Portfolio',
     items: [
-      { path: 'properties', label: 'Properties', built: true },
+      { path: 'properties', label: 'Properties', icon: IconHome, built: true },
       {
         path: 'channels',
         label: 'Channels & sync',
+        icon: IconArrowsExchange,
         built: false,
         design: 'D1',
         phase: 'Phase 1',
@@ -72,6 +94,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
       {
         path: 'reviews',
         label: 'Reviews',
+        icon: IconStar,
         built: false,
         design: 'D2',
         phase: 'Phase 2',
@@ -81,6 +104,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
       {
         path: 'claims',
         label: 'Claims',
+        icon: IconFileAlert,
         built: false,
         design: 'D3',
         phase: 'Phase 3',
@@ -94,6 +118,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
       {
         path: 'bookings',
         label: 'Bookings & invoices',
+        icon: IconFileInvoice,
         built: false,
         design: 'D4',
         phase: 'Phase 4',
@@ -102,6 +127,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
       {
         path: 'insights',
         label: 'Insights',
+        icon: IconChartBar,
         built: false,
         design: 'D4',
         phase: 'Phase 4',
@@ -111,7 +137,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
   },
   {
     label: 'Settings',
-    items: [{ path: 'workspace', label: 'Workspace', built: true }],
+    items: [{ path: 'workspace', label: 'Workspace', icon: IconSettings, built: true }],
   },
 ];
 

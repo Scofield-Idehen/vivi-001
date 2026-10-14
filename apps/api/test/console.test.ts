@@ -20,8 +20,12 @@ let db: ApiDatabase;
 let app: FastifyInstance;
 let a: { orgId: string; userId: string };
 let b: { orgId: string; userId: string };
-const people: Record<'adminA' | 'owner' | 'support' | 'viewer', { userId: string; email: string }> = {
+const people: Record<
+  'adminA' | 'adminB' | 'owner' | 'support' | 'viewer',
+  { userId: string; email: string }
+> = {
   adminA: { userId: '', email: 'admin-a@example.test' },
+  adminB: { userId: '', email: 'admin-b@example.test' },
   owner: { userId: '', email: 'owner@v01.test' },
   support: { userId: '', email: 'support@v01.test' },
   viewer: { userId: '', email: 'viewer@v01.test' },
@@ -74,6 +78,7 @@ beforeAll(async () => {
     userEmail: 'admin-b@example.test',
   });
   people.adminA.userId = a.userId;
+  people.adminB.userId = b.userId;
   // The owner is added by email only, as `pnpm db:staff add` does, and linked on first sign-in.
   people.owner.userId = (
     await seedPlatformStaff(t.ownerUrl, { email: people.owner.email, role: 'owner', linked: false })
@@ -251,6 +256,21 @@ describe('support access', () => {
       `select count(*)::int as n from app.properties where name = 'Planted'`,
     );
     expect(row?.n).toBe(0);
+  });
+
+  it('shows the visit to the operator it opened, and to no other', async () => {
+    const mine = await call('GET', '/v1/workspace/support-visits', 'adminA', { org: a.orgId });
+    expect(mine.status).toBe(200);
+    expect(mine.body.visits).toEqual([
+      expect.objectContaining({
+        id: grantId,
+        staffEmail: 'support@v01.test',
+        reason: 'Ticket 12: guest says the booking is missing',
+        endedAt: null,
+      }),
+    ]);
+    const theirs = await call('GET', '/v1/workspace/support-visits', 'adminB', { org: b.orgId });
+    expect(theirs.body.visits).toEqual([]);
   });
 
   it('does not open any other operator', async () => {

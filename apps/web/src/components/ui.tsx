@@ -90,6 +90,54 @@ export function StatusDot({ status, children }: { status: Status; children: Reac
   );
 }
 
+/** A soft panel in the paper colour, for figures and groups of facts. */
+export function Card({ className, children }: { className?: string; children: ReactNode }) {
+  return <div className={cx('rounded-xl bg-paper p-5', className)}>{children}</div>;
+}
+
+/** One figure with its label and a line of context underneath. */
+export function Stat({
+  label,
+  value,
+  foot,
+  status,
+}: {
+  label: string;
+  value: ReactNode;
+  foot?: ReactNode;
+  status?: Status;
+}) {
+  return (
+    <Card className="flex min-w-0 flex-col gap-2">
+      <p className="text-[13px] text-slate">{label}</p>
+      <p className="tnum flex items-center gap-2.5 text-[28px] leading-none font-medium tracking-[-0.015em] text-ink">
+        {status ? <span aria-hidden className={cx('size-[9px] shrink-0 rounded-full', DOT[status])} /> : null}
+        {value}
+      </p>
+      {foot ? <p className="text-[13px] leading-snug text-slate">{foot}</p> : null}
+    </Card>
+  );
+}
+
+export function SectionHeading({
+  id,
+  children,
+  action,
+}: {
+  id: string;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="mb-3 flex items-baseline justify-between gap-4">
+      <h2 id={id} className="text-[15px] font-medium text-ink">
+        {children}
+      </h2>
+      {action}
+    </div>
+  );
+}
+
 export function PageHeader({
   title,
   description,

@@ -1,21 +1,29 @@
-import { createBrowserRouter, createMemoryRouter, Navigate, RouterProvider } from 'react-router';
+import { useMemo } from 'react';
+import { createBrowserRouter, createMemoryRouter, Navigate, Outlet, RouterProvider } from 'react-router';
 import { AppShell } from './components/AppShell.tsx';
+import { ConsoleShell } from './components/ConsoleShell.tsx';
 import { Button, Notice, Splash } from './components/ui.tsx';
 import { ApiError, useMe } from './lib/api.ts';
 import { config } from './lib/config.ts';
 import { PENDING_MODULES } from './lib/modules.ts';
 import { signOut, useSession } from './lib/session.tsx';
-import { WorkspaceProvider } from './lib/workspace.tsx';
+import { WorkspaceProvider, workspaceEntries } from './lib/workspace.tsx';
+import { ConsoleOperatorDetail } from './pages/console/OperatorDetail.tsx';
+import { ConsoleOperators } from './pages/console/Operators.tsx';
+import { ConsoleOverview } from './pages/console/Overview.tsx';
+import { ConsoleSupportLog } from './pages/console/SupportLog.tsx';
+import { ConsoleSync } from './pages/console/Sync.tsx';
 import { About, ModuleToCome, NotFound, NoWorkspace } from './pages/misc.tsx';
 import { Properties } from './pages/Properties.tsx';
 import { SignIn } from './pages/SignIn.tsx';
 import { Today } from './pages/Today.tsx';
 import { WorkspacePage } from './pages/WorkspacePage.tsx';
 
-/** Signed in, known to the API, and a member of at least one operator. */
+/** Signed in, known to the API, and either V-01 staff or able to open at least one workspace. */
 function Gate() {
   const { session, loading } = useSession();
   const me = useMe();
+  const entries = useMemo(() => (me.data ? workspaceEntries(me.data) : []), [me.data]);
 
   if (loading) return <Splash>Loading</Splash>;
   if (!session) return <Navigate to="/sign-in" replace />;
@@ -37,12 +45,24 @@ function Gate() {
       </Splash>
     );
   }
-  if (me.data.memberships.length === 0) return <NoWorkspace />;
+  if (!me.data.platformRole && entries.length === 0) return <NoWorkspace />;
   return (
-    <WorkspaceProvider memberships={me.data.memberships}>
-      <AppShell />
+    <WorkspaceProvider entries={entries}>
+      <Outlet />
     </WorkspaceProvider>
   );
+}
+
+/** V-01 staff start in the console; everyone else in their workspace. */
+function Home() {
+  const platformRole = useMe().data?.platformRole;
+  return <Navigate to={platformRole ? '/console' : '/today'} replace />;
+}
+
+function StaffOnly() {
+  const platformRole = useMe().data?.platformRole;
+  if (!platformRole) return <Navigate to="/today" replace />;
+  return <ConsoleShell />;
 }
 
 const routes = [
@@ -51,20 +71,41 @@ const routes = [
     path: '/',
     element: <Gate />,
     children: [
-      { index: true, element: <Navigate to="/today" replace /> },
-      { path: 'today', element: <Today /> },
-      { path: 'properties', element: <Properties /> },
-      { path: 'workspace', element: <WorkspacePage /> },
-      { path: 'about', element: <About /> },
-      ...PENDING_MODULES.map((module) => ({ path: module.path, element: <ModuleToCome module={module} /> })),
-      { path: '*', element: <NotFound /> },
+      { index: true, element: <Home /> },
+      {
+        path: 'console',
+        element: <StaffOnly />,
+        children: [
+          { index: true, element: <ConsoleOverview /> },
+          { path: 'operators', element: <ConsoleOperators /> },
+          { path: 'operators/:orgId', element: <ConsoleOperatorDetail /> },
+          { path: 'sync', element: <ConsoleSync /> },
+          { path: 'support', element: <ConsoleSupportLog /> },
+          { path: 'about', element: <About /> },
+          { path: '*', element: <NotFound home="/console" /> },
+        ],
+      },
+      {
+        element: <AppShell />,
+        children: [
+          { path: 'today', element: <Today /> },
+          { path: 'properties', element: <Properties /> },
+          { path: 'workspace', element: <WorkspacePage /> },
+          { path: 'about', element: <About /> },
+          ...PENDING_MODULES.map((module) => ({
+            path: module.path,
+            element: <ModuleToCome module={module} />,
+          })),
+          { path: '*', element: <NotFound /> },
+        ],
+      },
     ],
   },
 ];
 
 // The demo keeps navigation in memory so it works anywhere it is hosted, including inside a preview frame.
 const router = config.demo
-  ? createMemoryRouter(routes, { initialEntries: ['/today'] })
+  ? createMemoryRouter(routes, { initialEntries: ['/'] })
   : createBrowserRouter(routes);
 
 export function App() {

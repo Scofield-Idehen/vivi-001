@@ -136,6 +136,20 @@ export const ConsoleSyncSchema = z.object({
 });
 export type ConsoleSync = z.infer<typeof ConsoleSyncSchema>;
 
+/** What an operator sees about V-01 support visits to their own workspace. */
+export const SupportVisitSchema = z.object({
+  id: Uuid,
+  staffEmail: z.string(),
+  reason: z.string(),
+  startedAt: Timestamp,
+  expiresAt: Timestamp,
+  endedAt: Timestamp.nullable(),
+});
+export type SupportVisit = z.infer<typeof SupportVisitSchema>;
+
+export const SupportVisitListSchema = z.object({ visits: z.array(SupportVisitSchema) });
+export type SupportVisitList = z.infer<typeof SupportVisitListSchema>;
+
 /** Support access lasts between 5 minutes and 4 hours, and always needs a reason the operator can read. */
 export const SupportAccessStartSchema = z.object({
   reason: z.string().trim().min(5, 'Give a reason of at least 5 characters').max(500),

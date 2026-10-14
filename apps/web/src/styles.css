@@ -45,6 +45,8 @@
   --color-pending-text: var(--brand-pending-text);
   --color-done: var(--brand-done);
   --color-done-text: var(--brand-done-text);
+  /* The V-01 console's sidebar sits on the accent; its quieter text is mixed from the accent tint. */
+  --color-console-muted: color-mix(in srgb, var(--brand-accent-tint) 75%, var(--brand-accent));
 
   /* The serif speaks for the property; the grotesk for the operation. */
   --font-serif: "Fraunces Variable", Georgia, serif;

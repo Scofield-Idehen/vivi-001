@@ -1,9 +1,9 @@
-import { organisationBrand, organisationSettings, organisations } from '@v01/db';
-import { WorkspaceSchema } from '@v01/shared';
-import { eq } from 'drizzle-orm';
+import { organisationBrand, organisationSettings, organisations, supportAccessGrants } from '@v01/db';
+import { SupportVisitListSchema, WorkspaceSchema } from '@v01/shared';
+import { desc, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import type { RequestScope } from '../context.ts';
+import { type RequestScope, toIso } from '../context.ts';
 import { HttpError } from '../errors.ts';
 
 /** The chosen operator: its name, settings and outside brand, and the person's role in it. */
@@ -43,5 +43,32 @@ export function workspaceRoutes(app: FastifyInstance, deps: { scope: RequestScop
           role: ctx.role,
         };
       }),
+    );
+
+  // Every time V-01 staff opened this workspace on support access: who, why and for how long.
+  // Row-level security limits the grants to this operator's own.
+  app
+    .withTypeProvider<ZodTypeProvider>()
+    .get(
+      '/v1/workspace/support-visits',
+      { schema: { response: { 200: SupportVisitListSchema } } },
+      async (req) =>
+        deps.scope.inOrg(req, 'workspace.read', async (tx) => {
+          const rows = await tx
+            .select()
+            .from(supportAccessGrants)
+            .orderBy(desc(supportAccessGrants.startedAt))
+            .limit(50);
+          return {
+            visits: rows.map((g) => ({
+              id: g.id,
+              staffEmail: g.staffEmail,
+              reason: g.reason,
+              startedAt: toIso(g.startedAt),
+              expiresAt: toIso(g.expiresAt),
+              endedAt: g.endedAt ? toIso(g.endedAt) : null,
+            })),
+          };
+        }),
     );
 }

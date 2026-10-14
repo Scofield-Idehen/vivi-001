@@ -13,7 +13,7 @@ export function SignIn() {
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  if (session) return <Navigate to="/today" replace />;
+  if (session) return <Navigate to="/" replace />;
 
   async function submit(event: FormEvent) {
     event.preventDefault();

@@ -12,9 +12,9 @@ interface Milestone {
 }
 
 export function Today() {
-  const { orgId, membership } = useCurrentWorkspace();
+  const { orgId, entry } = useCurrentWorkspace();
   const workspace = useWorkspace(orgId);
-  const canSeeProperties = can(membership.role, 'properties.read');
+  const canSeeProperties = can(entry.role, 'properties.read');
   const properties = useProperties(canSeeProperties ? orgId : null);
 
   const timeZone = workspace.data?.settings.timeZone ?? 'Europe/London';
@@ -30,7 +30,7 @@ export function Today() {
     {
       id: 'workspace',
       status: 'done',
-      label: `Workspace set up for ${membership.organisationName}`,
+      label: `Workspace set up for ${entry.organisationName}`,
       when: 'Phase 0',
     },
     canSeeProperties && count > 0
@@ -71,7 +71,7 @@ export function Today() {
     <>
       <PageHeader
         title={today}
-        description={`${membership.organisationName}. Arrivals, departures, cleans due, unanswered messages and sync problems will show here once bookings flow in.`}
+        description={`${entry.organisationName}. Arrivals, departures, cleans due, unanswered messages and sync problems will show here once bookings flow in.`}
       />
       <section aria-labelledby="switch-off">
         <h2 id="switch-off" className="mb-3 text-[15px] font-medium">

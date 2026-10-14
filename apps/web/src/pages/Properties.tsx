@@ -13,12 +13,12 @@ function priceLimits(p: Property, currency: string, locale: string): string {
 }
 
 export function Properties() {
-  const { orgId, membership } = useCurrentWorkspace();
+  const { orgId, entry } = useCurrentWorkspace();
   const workspace = useWorkspace(orgId);
   const list = useProperties(orgId);
   const [adding, setAdding] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const canAdd = can(membership.role, 'properties.write');
+  const canAdd = can(entry.role, 'properties.write');
   const currency = workspace.data?.settings.currency ?? 'GBP';
   const locale = workspace.data?.settings.locale ?? 'en-GB';
 
@@ -41,7 +41,7 @@ export function Properties() {
         title="Properties"
         description={
           list.data
-            ? `${properties.length} ${properties.length === 1 ? 'property' : 'properties'} in ${membership.organisationName}.`
+            ? `${properties.length} ${properties.length === 1 ? 'property' : 'properties'} in ${entry.organisationName}.`
             : undefined
         }
         action={properties.length > 0 ? addButton : undefined}
