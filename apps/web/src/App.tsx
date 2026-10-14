@@ -15,6 +15,7 @@ import { ConsoleSupportLog } from './pages/console/SupportLog.tsx';
 import { ConsoleSync } from './pages/console/Sync.tsx';
 import { About, ModuleToCome, NotFound, NoWorkspace } from './pages/misc.tsx';
 import { Properties } from './pages/Properties.tsx';
+import { NewPropertyPanel } from './pages/properties/NewPropertyPanel.tsx';
 import { SignIn } from './pages/SignIn.tsx';
 import { Today } from './pages/Today.tsx';
 import { WorkspacePage } from './pages/WorkspacePage.tsx';
@@ -89,7 +90,11 @@ const routes = [
         element: <AppShell />,
         children: [
           { path: 'today', element: <Today /> },
-          { path: 'properties', element: <Properties /> },
+          {
+            path: 'properties',
+            element: <Properties />,
+            children: [{ path: 'new', element: <NewPropertyPanel /> }],
+          },
           { path: 'workspace', element: <WorkspacePage /> },
           { path: 'about', element: <About /> },
           ...PENDING_MODULES.map((module) => ({

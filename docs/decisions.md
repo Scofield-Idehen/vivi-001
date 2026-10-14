@@ -5,6 +5,17 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-14
 
+- **Adding a property is a panel from the right that asks one thing at a time.** It replaces the
+  six-field sheet, which was thinner than Guesty's wizard. Five steps: the place, name and address,
+  guests and rooms, pricing, then check and add. The step list on the left fills with each answer, and
+  any step is one click away. On wide screens a preview shows the property as it's described.
+  Only the name is required; everything else starts with a sensible answer, and the short code is
+  made from the name until someone types their own. Close, Escape or a click beside the panel closes
+  it, and the draft stays in that browser until the property is added. It lives at `/properties/new`.
+  Awaiting design sign-off from Alpha and Alessio.
+- **Properties record what kind of place they are, what guests get, beds and bathrooms.** Guests get
+  the whole place, a private room or a shared room. Bathrooms count in halves (a toilet and basin is a
+  half). The kind of place is stored as text, so the list can grow without a migration (migration 0004).
 - **The page background is soft white (`canvas`, #FCFBF8).** Approved by Alpha; Alessio to confirm.
   The roadmap's paper (#F5F2EC) is now the sidebar, card and panel colour, and hairlines are lighter
   (#E7E1D7, was #D6CFC3). Teal, plum, ink and the status colours are unchanged; every text colour

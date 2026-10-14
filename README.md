@@ -35,6 +35,8 @@ across from Guesty. Northwind Stays and Brightwater Lets are made-up companies.
   - The company sees every visit.
 - **A company's workspace**
   - Today, Properties and Workspace settings.
+  - Adding a property: a panel slides in from the right and asks one thing at a time, in five short
+    steps. Only a name is required, and closing it keeps the draft.
   - The other modules are in the menu and arrive in later phases.
 
 ![The V-01 console overview](docs/images/console-overview.png)
@@ -45,6 +47,9 @@ across from Guesty. Northwind Stays and Brightwater Lets are made-up companies.
 
 ![An operator's workspace opened with support access](docs/images/support-access.png)
 *Support access: the company's workspace, read-only, with a banner showing when access ends.*
+
+![Adding a property](docs/images/add-property.png)
+*Adding a property: the steps fill with your answers, and the preview shows what you're making.*
 
 ## Coming next
 
