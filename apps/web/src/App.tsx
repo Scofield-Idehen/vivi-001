@@ -1,7 +1,8 @@
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
+import { createBrowserRouter, createMemoryRouter, Navigate, RouterProvider } from 'react-router';
 import { AppShell } from './components/AppShell.tsx';
 import { Button, Notice, Splash } from './components/ui.tsx';
 import { ApiError, useMe } from './lib/api.ts';
+import { config } from './lib/config.ts';
 import { PENDING_MODULES } from './lib/modules.ts';
 import { signOut, useSession } from './lib/session.tsx';
 import { WorkspaceProvider } from './lib/workspace.tsx';
@@ -44,7 +45,7 @@ function Gate() {
   );
 }
 
-const router = createBrowserRouter([
+const routes = [
   { path: '/sign-in', element: <SignIn /> },
   {
     path: '/',
@@ -59,7 +60,12 @@ const router = createBrowserRouter([
       { path: '*', element: <NotFound /> },
     ],
   },
-]);
+];
+
+// The demo keeps navigation in memory so it works anywhere it is hosted, including inside a preview frame.
+const router = config.demo
+  ? createMemoryRouter(routes, { initialEntries: ['/today'] })
+  : createBrowserRouter(routes);
 
 export function App() {
   return <RouterProvider router={router} />;

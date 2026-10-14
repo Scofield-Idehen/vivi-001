@@ -3,7 +3,8 @@ import { Navigate } from 'react-router';
 import { BrandMark } from '../components/BrandMark.tsx';
 import { Button, Field, Notice } from '../components/ui.tsx';
 import { appBrand } from '../lib/brand.ts';
-import { useSession } from '../lib/session.tsx';
+import { config } from '../lib/config.ts';
+import { signInToDemo, useSession } from '../lib/session.tsx';
 import { supabase } from '../lib/supabase.ts';
 
 export function SignIn() {
@@ -32,7 +33,7 @@ export function SignIn() {
   }
 
   return (
-    <div className="grid min-h-dvh grid-rows-[auto_1fr] px-6 py-6 md:px-10">
+    <div className="gutter md:gutter-wide grid min-h-dvh grid-rows-[auto_1fr] py-6">
       <BrandMark />
       <main className="flex items-center">
         <div className="w-full max-w-[380px] md:ml-[12vw]">
@@ -55,9 +56,15 @@ export function SignIn() {
                 Sign in to {appBrand.name}
               </h1>
               <p className="mt-4 text-[15px] leading-relaxed text-slate">
-                We'll email you a link. There's no password to remember.
+                {config.demo
+                  ? 'This is a demo with sample data. No email or password needed.'
+                  : "We'll email you a link. There's no password to remember."}
               </p>
-              {supabase ? (
+              {config.demo ? (
+                <Button variant="primary" className="mt-8 w-full" onClick={signInToDemo}>
+                  Open the demo
+                </Button>
+              ) : supabase ? (
                 <form onSubmit={submit} className="mt-8 flex flex-col gap-4">
                   <Field
                     label="Work email"

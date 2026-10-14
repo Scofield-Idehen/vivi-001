@@ -1,6 +1,9 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { ROLE_LABELS } from '@v01/shared';
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
+import { config } from '../lib/config.ts';
+import { resetDemoData } from '../lib/demo.ts';
 import { MODULE_GROUPS } from '../lib/modules.ts';
 import { signOut, useSession } from '../lib/session.tsx';
 import { useCurrentWorkspace } from '../lib/workspace.tsx';
@@ -87,6 +90,26 @@ function AccountFooter() {
   );
 }
 
+function DemoBanner() {
+  const queryClient = useQueryClient();
+  if (!config.demo) return null;
+  return (
+    <div className="gutter flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-hairline bg-accent-tint py-2 text-[12.5px] text-ink">
+      <p>Demo with sample data. Changes stay in this browser only.</p>
+      <Button
+        variant="quiet"
+        className="text-[12.5px]"
+        onClick={() => {
+          resetDemoData();
+          void queryClient.invalidateQueries();
+        }}
+      >
+        Reset sample data
+      </Button>
+    </div>
+  );
+}
+
 export function AppShell() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
@@ -107,7 +130,8 @@ export function AppShell() {
       </aside>
 
       <div className="min-w-0">
-        <div className="flex items-center justify-between border-b border-hairline px-5 py-3 md:hidden">
+        <DemoBanner />
+        <div className="gutter flex items-center justify-between border-b border-hairline py-3 md:hidden">
           <BrandMark />
           <Button
             variant="secondary"
@@ -119,13 +143,19 @@ export function AppShell() {
           </Button>
         </div>
         {menuOpen ? (
-          <div id="mobile-menu" className="flex flex-col gap-6 border-b border-hairline px-5 py-5 md:hidden">
+          <div
+            id="mobile-menu"
+            className="gutter flex flex-col gap-6 border-b border-hairline py-5 md:hidden"
+          >
             <WorkspaceSwitcher />
             <Navigation onNavigate={() => setMenuOpen(false)} />
             <AccountFooter />
           </div>
         ) : null}
-        <main key={location.pathname} className="mx-auto w-full max-w-[1200px] px-5 py-8 md:px-10 md:py-10">
+        <main
+          key={location.pathname}
+          className="gutter md:gutter-wide mx-auto w-full max-w-[1200px] py-8 md:py-10"
+        >
           <Outlet />
         </main>
       </div>

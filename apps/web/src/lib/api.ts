@@ -1,22 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Me, Property, PropertyCreate, PropertyList, Workspace } from '@v01/shared';
 import { config } from './config.ts';
+import { demoFetch } from './demo.ts';
+import { ApiError } from './errors.ts';
 import { useSession } from './session.tsx';
 
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+export { ApiError };
 
 async function apiFetch<T>(
   path: string,
   options: { token: string; orgId?: string | null; method?: 'GET' | 'POST'; body?: unknown },
 ): Promise<T> {
+  if (config.demo) return demoFetch<T>(path, options);
   const headers: Record<string, string> = { authorization: `Bearer ${options.token}` };
   if (options.orgId) headers['x-org-id'] = options.orgId;
   if (options.body !== undefined) headers['content-type'] = 'application/json';

@@ -127,7 +127,7 @@ export function Properties() {
       <div
         role="status"
         aria-live="polite"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 md:left-auto md:right-8 md:translate-x-0"
+        className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2 md:left-auto md:right-[calc(2rem+env(safe-area-inset-right,0px))] md:translate-x-0"
       >
         {toast ? <p className="rounded-md bg-ink px-4 py-2.5 text-[13.5px] text-paper">{toast}</p> : null}
       </div>
@@ -202,7 +202,7 @@ function AddPropertySheet(props: {
       ref={dialog}
       onClose={props.onClose}
       aria-labelledby="add-property-title"
-      className="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-dvh w-full max-w-[460px] border-l border-hairline bg-paper p-0 text-ink"
+      className="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-dvh w-full max-w-[460px] border-l border-hairline bg-paper p-0 pr-[env(safe-area-inset-right,0px)] pb-[env(safe-area-inset-bottom,0px)] text-ink"
     >
       <form onSubmit={submit} className="flex h-full flex-col" noValidate>
         <div className="flex items-start justify-between gap-4 border-b border-hairline px-6 py-5">

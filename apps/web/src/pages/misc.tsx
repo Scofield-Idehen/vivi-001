@@ -53,7 +53,7 @@ export function About() {
 export function NoWorkspace() {
   const { session } = useSession();
   return (
-    <div className="grid min-h-dvh grid-rows-[auto_1fr] px-6 py-6 md:px-10">
+    <div className="gutter md:gutter-wide grid min-h-dvh grid-rows-[auto_1fr] py-6">
       <BrandMark />
       <main className="flex items-center">
         <div className="max-w-[440px] md:ml-[12vw]">

@@ -64,6 +64,16 @@ pnpm dev               # API on :3001, worker, web on :5173
 
 Sign in with the email in `SEED_ADMIN_EMAIL`; the invitation turns into a membership on first sign-in.
 
+## See it without a backend
+
+```bash
+pnpm install
+pnpm demo              # opens the web app at http://localhost:5173 with sample data
+```
+
+Demo mode runs the real screens against sample data kept in your browser: no database, API or
+sign-in. `pnpm --filter @v01/web build:demo` builds the same thing as static files in `apps/web/dist-demo`.
+
 ## Checks
 
 ```bash
