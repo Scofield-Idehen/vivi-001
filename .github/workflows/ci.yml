@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        # Supabase runs Postgres 17 for new projects; the tests need a real server, not a mock.
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Type check
+        run: pnpm typecheck
+      - name: Every schema change has a migration
+        run: |
+          pnpm --filter @v01/db generate
+          if [ -n "$(git status --porcelain packages/db/migrations)" ]; then
+            echo "The schema changed without a migration. Run 'pnpm db:generate' and commit the result."
+            git status --porcelain packages/db/migrations
+            exit 1
+          fi
+      - name: Tests (including operator isolation and the double-booking guard)
+        run: pnpm test
+      - name: Build
+        run: pnpm build

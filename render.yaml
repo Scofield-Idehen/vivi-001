@@ -1,0 +1,79 @@
+# Render Blueprint: the API and worker run in Frankfurt (EU); the web app is a static site.
+# Secrets are entered in the Render dashboard (sync: false) and never live in this file.
+# Database migrations are not run here: they run from the "Migrate" GitHub Action,
+# so no runtime service ever holds the database owner's credentials.
+#
+# Plans follow the playbook's cost table (1 CPU, 2 GB each at 400 properties). Check the
+# build commands on the first deploy.
+
+services:
+  - type: web
+    name: v01-api
+    runtime: node
+    region: frankfurt
+    plan: standard
+    buildCommand: npx --yes pnpm@10.28.0 install --frozen-lockfile && npx --yes pnpm@10.28.0 --filter @v01/api build
+    startCommand: node --enable-source-maps apps/api/dist/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: '22'
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CHANNEX_WEBHOOK_SECRET
+        sync: false
+
+  - type: worker
+    name: v01-worker
+    runtime: node
+    region: frankfurt
+    plan: standard
+    buildCommand: npx --yes pnpm@10.28.0 install --frozen-lockfile && npx --yes pnpm@10.28.0 --filter @v01/worker build
+    startCommand: node --enable-source-maps apps/worker/dist/main.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: '22'
+      - key: DATABASE_URL
+        sync: false
+      - key: JOBS_DATABASE_URL
+        sync: false
+      - key: CHANNEL_PROVIDER
+        value: channex
+      - key: CHANNEX_BASE_URL
+        sync: false
+      - key: CHANNEX_API_KEY
+        sync: false
+      - key: SLACK_ALERTS_WEBHOOK_URL
+        sync: false
+
+  - type: web
+    name: v01-web
+    runtime: static
+    buildCommand: npx --yes pnpm@10.28.0 install --frozen-lockfile && npx --yes pnpm@10.28.0 --filter @v01/web build
+    staticPublishPath: apps/web/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false

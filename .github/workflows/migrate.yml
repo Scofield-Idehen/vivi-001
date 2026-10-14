@@ -1,0 +1,31 @@
+name: Migrate
+
+# Applies database migrations to staging or production. Run by hand, migrations first,
+# before promoting a deploy. The owner connection lives only in the GitHub environment's
+# secrets, never on Render.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which database
+        type: choice
+        options: [staging, production]
+        required: true
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply migrations
+        env:
+          DATABASE_OWNER_URL: ${{ secrets.DATABASE_OWNER_URL }}
+        run: pnpm db:migrate
