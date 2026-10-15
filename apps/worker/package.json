@@ -7,6 +7,7 @@
     "dev": "tsx watch --env-file-if-exists=.env src/main.ts",
     "build": "node ../../scripts/build-node.mjs src/main.ts dist/main.js",
     "start": "node --enable-source-maps dist/main.js",
+    "channex:check": "tsx --env-file-if-exists=.env scripts/channex-check.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },

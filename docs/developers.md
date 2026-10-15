@@ -97,6 +97,23 @@ pnpm build
 Tests create and drop their own databases. CI runs all of this on every pull request against Postgres 17,
 and also fails if the schema changed without a migration (`pnpm db:generate`).
 
+## Checking a Channex key
+
+Put the key in `apps/worker/.env`, which git ignores. Never put it in `.env.example`: git tracks that
+file, and a test fails if it holds a key.
+
+```bash
+CHANNEX_API_KEY=<the key>
+```
+
+`pnpm channex:check` then says which Channex server knows the key (staging or live), lists the
+properties in the account with their room types, rate plans and channels, and counts the booking changes
+waiting in the feed. It only reads, never prints the key, and never acknowledges a booking.
+
+On staging, `pnpm channex:check --round-trip <Channex property id>` sends one test price, minimum stay
+and closed night, about 300 days ahead, through V-01's own adapter, reads them back, then puts the night
+back as it was. That proves the adapter's requests before certification.
+
 ## Supabase and Render
 
 Not set up yet. These are the steps for when the staging and production accounts exist.

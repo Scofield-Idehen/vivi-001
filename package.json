@@ -19,7 +19,8 @@
     "db:roles": "pnpm --filter @v01/db roles",
     "db:seed": "pnpm --filter @v01/db seed",
     "db:seed:demo": "pnpm --filter @v01/db seed --demo",
-    "db:staff": "pnpm --filter @v01/db staff"
+    "db:staff": "pnpm --filter @v01/db staff",
+    "channex:check": "pnpm --silent --filter @v01/worker channex:check"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

@@ -49,7 +49,9 @@ export class ChannexClient {
         signal: AbortSignal.timeout(this.config.timeoutMs ?? 30_000),
       });
     } catch (error) {
-      throw new ChannelError(`Channex request failed: ${String(error)}`, 'network');
+      // fetch says only "fetch failed"; the reason (no DNS, refused, timed out) is in its cause.
+      const cause = error instanceof Error && error.cause instanceof Error ? ` (${error.cause.message})` : '';
+      throw new ChannelError(`Channex request failed: ${String(error)}${cause}`, 'network');
     }
 
     const text = await response.text();
