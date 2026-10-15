@@ -8,6 +8,7 @@ import { config } from './lib/config.ts';
 import { PENDING_MODULES } from './lib/modules.ts';
 import { signOut, useSession } from './lib/session.tsx';
 import { WorkspaceProvider, workspaceEntries } from './lib/workspace.tsx';
+import { CalendarPage } from './pages/calendar/CalendarPage.tsx';
 import { ConsoleOperatorDetail } from './pages/console/OperatorDetail.tsx';
 import { ConsoleOperators } from './pages/console/Operators.tsx';
 import { ConsoleOverview } from './pages/console/Overview.tsx';
@@ -91,6 +92,7 @@ const routes = [
         element: <AppShell />,
         children: [
           { path: 'today', element: <Today /> },
+          { path: 'calendar', element: <CalendarPage /> },
           {
             path: 'properties',
             element: <Properties />,

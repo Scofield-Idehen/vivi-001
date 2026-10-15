@@ -24,7 +24,9 @@ code, run `pnpm install` again before `pnpm demo`.
 ## What you'll see
 
 You're signed in as a V-01 owner and a Vivistays admin. Vivistays is empty until its properties come
-across from Guesty. Northwind Stays and Brightwater Lets are made-up companies.
+across from Guesty. Northwind Stays and Brightwater Lets are made-up companies: you belong to Northwind
+Stays too, so its sample bookings can be tried in the Calendar, and you open Brightwater Lets with support
+access.
 
 - **The V-01 console**
   - Every operator in one place: their properties, their team, and whether prices and bookings are
@@ -34,8 +36,11 @@ across from Guesty. Northwind Stays and Brightwater Lets are made-up companies.
   - V-01 staff open a company's workspace with a reason and a time limit, and can't change anything.
   - The company sees every visit.
 - **A company's workspace**
-  - Today, Properties and Workspace settings. The sidebar is a row of icons that opens when your mouse
-    rests on it.
+  - Today, Calendar, Properties and Workspace settings. The sidebar is a row of icons that opens when
+    your mouse rests on it.
+  - The Calendar: every property by night, with prices, minimum stays, bookings and blocks. Drag across
+    nights (and down across properties) to change their price or minimum stay, close them to arrivals
+    or departures, or block them. Prices stay within each property's limits.
   - Adding a property: a panel slides in from the right and asks one thing at a time, in Airbnb's three
     stages: about the place; make it stand out (amenities, photos, title and description); then
     pricing. Only a name is required, and closing it keeps the draft.
@@ -59,12 +64,15 @@ across from Guesty. Northwind Stays and Brightwater Lets are made-up companies.
 ![A property's page](docs/images/property-page.png)
 *A property's page: the whole listing, every part editable, with what the channels still need.*
 
+![The calendar](docs/images/calendar.png)
+*The Calendar: bookings meet on turnover days, and dragging across nights chooses them to change.*
+
 ## Coming next
 
 Phase 1 connects V-01 to Airbnb, Booking.com and Vrbo through Channex: prices and availability out,
 bookings in. Channex can't send photos, descriptions or amenities to the channels yet, so for now those
-are copied across from each property's page. Phase 1 also adds the Calendar, Reservations and
-Channels & sync screens.
+are copied across from each property's page. Phase 1 also adds the Reservations and Channels & sync
+screens.
 
 ---
 

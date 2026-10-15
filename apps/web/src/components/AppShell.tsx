@@ -178,6 +178,8 @@ function WorkspaceFrame() {
   const { entry } = useCurrentWorkspace();
   const now = useNow();
   const ended = entry.support !== null && Date.parse(entry.support.expiresAt) <= now;
+  // The calendar uses the whole width: every extra column is another night on screen.
+  const wide = location.pathname.startsWith('/calendar');
 
   return (
     <RailFrame
@@ -217,7 +219,7 @@ function WorkspaceFrame() {
       ) : null}
       <main
         key={location.pathname}
-        className="gutter md:gutter-wide mx-auto w-full max-w-[1200px] py-8 md:py-10"
+        className={`gutter mx-auto w-full py-8 md:py-10 ${wide ? 'max-w-none md:px-8' : 'md:gutter-wide max-w-[1200px]'}`}
       >
         {ended ? <SupportEnded /> : <Outlet />}
       </main>

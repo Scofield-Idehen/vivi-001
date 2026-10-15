@@ -2,6 +2,15 @@ import type { Session } from '@supabase/supabase-js';
 import {
   AmenitiesUpdateSchema,
   AmenityCodesSchema,
+  addDays,
+  CALENDAR_DAYS_AHEAD,
+  type Calendar,
+  type CalendarBlock,
+  type CalendarChangeResult,
+  CalendarChangeSchema,
+  type CalendarNight,
+  CalendarQuerySchema,
+  type CalendarStay,
   type Channel,
   type ConsoleOperator,
   type ConsoleOperatorDetail,
@@ -11,8 +20,11 @@ import {
   type ConsoleSyncRow,
   can,
   countBeds,
+  eachNight,
+  formatMoney,
   type Me,
   type MemberRole,
+  nightsBetween,
   type Permission,
   PHOTO_MAX_COUNT,
   PhotoOrderSchema,
@@ -30,6 +42,8 @@ import {
   type SupportGrant,
   type SupportGrantList,
   type SupportVisitList,
+  selectedNights,
+  todayIn,
   type Workspace,
   type WorkspaceRole,
 } from '@v01/shared';
@@ -40,8 +54,10 @@ import { ApiError } from './errors.ts';
  * Demo mode's stand-in for the API. It answers the same routes with the same shapes and
  * error messages, using sample data kept in this browser, so the real screens can be tried
  * without a database or sign-in. Vivistays is the real first operator, empty until its
- * Guesty import; Northwind Stays and Brightwater Lets are invented, as are their people
- * and properties. The demo user is a V-01 owner and a Vivistays admin.
+ * Guesty import; Northwind Stays and Brightwater Lets are invented, as are their people,
+ * properties and guests. The demo user is a V-01 owner, a Vivistays admin, and an admin of
+ * Northwind Stays, so its sample bookings can be tried in the Calendar; Brightwater Lets is
+ * reached only through support access.
  */
 
 const DEMO_USER = { id: '0b0c4a9e-1f6d-4c3e-9a8b-7d6e5f4a3b2c', email: 'demo@example.com' };
@@ -86,6 +102,14 @@ interface DemoOperator {
   team: DemoTeamMember[];
   channelAccounts: { channel: Channel; connected: boolean }[];
   live: DemoLive;
+  calendar: DemoCalendar;
+}
+
+/** The operator's nights with their own rules, bookings and blocks, as the API keeps them. */
+interface DemoCalendar {
+  nights: CalendarNight[];
+  stays: CalendarStay[];
+  blocks: CalendarBlock[];
 }
 
 interface DemoGrant {
@@ -109,7 +133,9 @@ interface DemoSyncError {
 
 interface DemoState {
   /** Raised whenever the shape changes, so a browser holding older sample data starts fresh. */
-  version: 4;
+  version: 5;
+  /** The day the sample bookings were laid out from. They are laid out afresh each week. */
+  calendarFrom: string;
   operators: DemoOperator[];
   grants: DemoGrant[];
   unmatchedWebhooks: { waiting: number; failed: number; lastMinutes: number | null };
@@ -188,6 +214,8 @@ function sampleProperty(p: {
   bathrooms: number;
   guests: number;
   prices: [number, number] | null;
+  /** The usual price, weekend price and minimum stay. */
+  usual?: { base: number | null; weekend?: number; minNights: number };
   managedBy: Property['managedBy'];
   title?: string;
   amenities?: string[];
@@ -220,8 +248,282 @@ function sampleProperty(p: {
     ...listingDefaults(),
     title: p.title ?? null,
     amenities: p.amenities ?? [],
+    basePriceMinor: p.usual?.base ?? null,
+    weekendPriceMinor: p.usual?.weekend ?? null,
+    minNights: p.usual?.minNights ?? 1,
     updatedAt: createdAt,
   };
+}
+
+interface SampleStay {
+  /** Which of the operator's properties, in the order they are listed in the seed. */
+  property: number;
+  /** Days from the day the sample is laid out. */
+  from: number;
+  nights: number;
+  guest: string;
+  guests: number;
+  channel: Channel;
+  reference: string | null;
+  status?: CalendarStay['status'];
+}
+
+interface SampleCalendar {
+  stays: SampleStay[];
+  blocks: { property: number; from: number; nights: number; reason: string }[];
+  nights: {
+    property: number;
+    from: number;
+    nights: number;
+    priceMinor?: number;
+    minNights?: number;
+    closedToArrival?: boolean;
+  }[];
+}
+
+/** Invented guests on invented properties, laid out around today so the calendar always looks current. */
+const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
+  [NORTHWIND]: {
+    stays: [
+      {
+        property: 0,
+        from: -3,
+        nights: 4,
+        guest: 'Priya Shah',
+        guests: 4,
+        channel: 'airbnb',
+        reference: 'HM8KQ2TZ4N',
+      },
+      {
+        property: 0,
+        from: 1,
+        nights: 3,
+        guest: 'Tom Becker',
+        guests: 2,
+        channel: 'booking_com',
+        reference: '4281907733',
+      },
+      {
+        property: 0,
+        from: 6,
+        nights: 3,
+        guest: 'Maria Costa',
+        guests: 5,
+        channel: 'airbnb',
+        reference: 'HMZ4P7Q1RT',
+      },
+      {
+        property: 0,
+        from: 12,
+        nights: 7,
+        guest: 'Daniel Okafor',
+        guests: 6,
+        channel: 'vrbo',
+        reference: 'HA-4X2K9P',
+      },
+      {
+        property: 0,
+        from: 22,
+        nights: 2,
+        guest: 'Lena Fischer',
+        guests: 2,
+        channel: 'direct',
+        reference: null,
+      },
+      {
+        property: 1,
+        from: -1,
+        nights: 3,
+        guest: 'Sofia Romano',
+        guests: 2,
+        channel: 'airbnb',
+        reference: 'HMR2D8W5KC',
+      },
+      {
+        property: 1,
+        from: 2,
+        nights: 1,
+        guest: 'Jamie Clarke',
+        guests: 1,
+        channel: 'booking_com',
+        reference: '4290315518',
+      },
+      {
+        property: 1,
+        from: 5,
+        nights: 2,
+        guest: 'Hannah Lee',
+        guests: 2,
+        channel: 'airbnb',
+        reference: 'HMB6N3T9XE',
+      },
+      {
+        property: 1,
+        from: 9,
+        nights: 5,
+        guest: 'Arjun Mehta',
+        guests: 2,
+        channel: 'booking_com',
+        reference: '4302276641',
+      },
+      {
+        property: 1,
+        from: 19,
+        nights: 3,
+        guest: 'Grace Wilson',
+        guests: 2,
+        channel: 'airbnb',
+        reference: 'HMK1C5V8QA',
+      },
+      {
+        property: 2,
+        from: 0,
+        nights: 3,
+        guest: 'Claire Dubois',
+        guests: 4,
+        channel: 'vrbo',
+        reference: 'HA-7M3R1D',
+      },
+      {
+        property: 2,
+        from: 8,
+        nights: 7,
+        guest: 'Owen Price',
+        guests: 3,
+        channel: 'airbnb',
+        reference: 'HMT9W2E6LB',
+      },
+      // Came in over Owen Price's stay: it holds no nights until someone sorts it out.
+      {
+        property: 2,
+        from: 10,
+        nights: 2,
+        guest: 'Ravi Kumar',
+        guests: 2,
+        channel: 'booking_com',
+        reference: '4311850297',
+        status: 'conflict',
+      },
+      {
+        property: 3,
+        from: -4,
+        nights: 7,
+        guest: 'Ella Martin',
+        guests: 8,
+        channel: 'airbnb',
+        reference: 'HMQ3F7H2NJ',
+      },
+      {
+        property: 3,
+        from: 10,
+        nights: 7,
+        guest: 'Noah Williams',
+        guests: 6,
+        channel: 'direct',
+        reference: null,
+      },
+    ],
+    blocks: [
+      { property: 1, from: 15, nights: 2, reason: 'Maintenance: boiler service' },
+      { property: 2, from: 3, nights: 4, reason: 'Owner staying' },
+    ],
+    nights: [
+      { property: 0, from: 10, nights: 1, closedToArrival: true },
+      { property: 0, from: 26, nights: 2, priceMinor: 22_000 },
+      { property: 0, from: 30, nights: 4, priceMinor: 21_500, minNights: 3 },
+      { property: 3, from: 20, nights: 2, priceMinor: 28_000 },
+    ],
+  },
+  [BRIGHTWATER]: {
+    stays: [
+      {
+        property: 0,
+        from: 2,
+        nights: 3,
+        guest: 'Isla Grant',
+        guests: 4,
+        channel: 'airbnb',
+        reference: 'HMW5J8D2PK',
+      },
+      {
+        property: 0,
+        from: 7,
+        nights: 3,
+        guest: 'Marco Bianchi',
+        guests: 2,
+        channel: 'booking_com',
+        reference: '4318826640',
+      },
+      {
+        property: 1,
+        from: 0,
+        nights: 2,
+        guest: 'Emily Brown',
+        guests: 3,
+        channel: 'airbnb',
+        reference: 'HMC4X9L1QS',
+      },
+      {
+        property: 1,
+        from: 4,
+        nights: 4,
+        guest: 'Yusuf Demir',
+        guests: 2,
+        channel: 'vrbo',
+        reference: 'HA-2P8N4K',
+      },
+      { property: 2, from: 1, nights: 5, guest: 'Anna Novak', guests: 5, channel: 'direct', reference: null },
+    ],
+    blocks: [],
+    nights: [],
+  },
+};
+
+function demoToday(): string {
+  return todayIn('Europe/London');
+}
+
+/** Lays an operator's sample bookings, blocks and nightly prices out from `from`. */
+function sampleCalendar(orgId: string, properties: PropertyDetail[], from: string): DemoCalendar {
+  const sample = SAMPLE_CALENDARS[orgId];
+  const calendar: DemoCalendar = { nights: [], stays: [], blocks: [] };
+  if (!sample) return calendar;
+  const idOf = (index: number) => properties[index]?.id ?? '';
+  for (const s of sample.stays) {
+    calendar.stays.push({
+      id: crypto.randomUUID(),
+      propertyId: idOf(s.property),
+      checkIn: addDays(from, s.from),
+      checkOut: addDays(from, s.from + s.nights),
+      status: s.status ?? 'confirmed',
+      channel: s.channel,
+      channelReference: s.reference,
+      guestName: s.guest,
+      guests: s.guests,
+    });
+  }
+  for (const b of sample.blocks) {
+    calendar.blocks.push({
+      id: crypto.randomUUID(),
+      propertyId: idOf(b.property),
+      startsOn: addDays(from, b.from),
+      endsOn: addDays(from, b.from + b.nights),
+      reason: b.reason,
+    });
+  }
+  for (const n of sample.nights) {
+    for (let i = 0; i < n.nights; i++) {
+      calendar.nights.push({
+        propertyId: idOf(n.property),
+        night: addDays(from, n.from + i),
+        priceMinor: n.priceMinor ?? null,
+        minNights: n.minNights ?? null,
+        closedToArrival: n.closedToArrival ?? false,
+        closedToDeparture: false,
+      });
+    }
+  }
+  return calendar;
 }
 
 function operatorWorkspace(
@@ -247,8 +549,9 @@ function operatorWorkspace(
 
 function seed(): DemoState {
   const pastVisit = Date.now() - (2 * 24 * 60 + 190) * MINUTE;
-  return {
-    version: 4,
+  const state: DemoState = {
+    version: 5,
+    calendarFrom: demoToday(),
     operators: [
       {
         role: 'admin',
@@ -268,9 +571,11 @@ function seed(): DemoState {
         ],
         channelAccounts: [],
         live: NO_ACTIVITY,
+        calendar: { nights: [], stays: [], blocks: [] },
       },
       {
-        role: null,
+        // The demo user belongs to this invented operator too, so the Calendar has bookings to try.
+        role: 'admin',
         workspace: operatorWorkspace(
           NORTHWIND,
           'Northwind Stays',
@@ -289,6 +594,7 @@ function seed(): DemoState {
             bathrooms: 2,
             guests: 6,
             prices: [12_000, 34_000],
+            usual: { base: 16_500, weekend: 19_500, minNights: 2 },
             managedBy: 'v01',
             title: 'Harbourside house with sea views',
             amenities: ['sea_view', 'log_burner', 'wifi', 'kitchen', 'washing_machine', 'free_parking'],
@@ -303,6 +609,7 @@ function seed(): DemoState {
             bathrooms: 1,
             guests: 2,
             prices: [6_500, 15_000],
+            usual: { base: 8_500, weekend: 9_500, minNights: 1 },
             managedBy: 'v01',
           }),
           sampleProperty({
@@ -315,6 +622,7 @@ function seed(): DemoState {
             bathrooms: 1.5,
             guests: 4,
             prices: [9_000, 22_000],
+            usual: { base: 12_000, weekend: 14_500, minNights: 2 },
             managedBy: 'guesty',
           }),
           sampleProperty({
@@ -327,6 +635,7 @@ function seed(): DemoState {
             bathrooms: 2.5,
             guests: 8,
             prices: null,
+            usual: { base: 24_000, minNights: 3 },
             managedBy: 'guesty',
           }),
         ],
@@ -384,6 +693,7 @@ function seed(): DemoState {
           bookingsLast7Days: 9,
           lastActivityMinutes: 5,
         },
+        calendar: { nights: [], stays: [], blocks: [] },
       },
       {
         role: null,
@@ -405,6 +715,7 @@ function seed(): DemoState {
             bathrooms: 2,
             guests: 6,
             prices: [11_000, 28_000],
+            usual: { base: 15_000, weekend: 17_500, minNights: 2 },
             managedBy: 'guesty',
           }),
           sampleProperty({
@@ -417,6 +728,7 @@ function seed(): DemoState {
             bathrooms: 1,
             guests: 4,
             prices: [8_000, 18_000],
+            usual: { base: 10_500, minNights: 1 },
             managedBy: 'guesty',
           }),
           sampleProperty({
@@ -429,6 +741,7 @@ function seed(): DemoState {
             bathrooms: 1.5,
             guests: 5,
             prices: null,
+            usual: { base: null, minNights: 2 },
             managedBy: 'guesty',
           }),
         ],
@@ -456,6 +769,7 @@ function seed(): DemoState {
           { channel: 'booking_com', connected: false },
         ],
         live: { ...NO_ACTIVITY, lastActivityMinutes: 190 },
+        calendar: { nights: [], stays: [], blocks: [] },
       },
     ],
     grants: [
@@ -489,6 +803,17 @@ function seed(): DemoState {
       },
     ],
   };
+  layOutSamples(state);
+  return state;
+}
+
+/** The invented operators' bookings, laid out from today. */
+function layOutSamples(s: DemoState): void {
+  s.calendarFrom = demoToday();
+  for (const operator of s.operators) {
+    const id = operator.workspace.organisation.id;
+    if (SAMPLE_CALENDARS[id]) operator.calendar = sampleCalendar(id, operator.properties, s.calendarFrom);
+  }
 }
 
 let state: DemoState | null = null;
@@ -499,7 +824,13 @@ function load(): DemoState {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved) as DemoState;
-      if (parsed.version === 4) {
+      if (parsed.version === 5) {
+        // A week on, the sample bookings would all be in the past: lay them out again from today.
+        if (parsed.calendarFrom <= addDays(demoToday(), -7)) {
+          layOutSamples(parsed);
+          state = parsed;
+          save();
+        }
         state = parsed;
         return parsed;
       }
@@ -790,6 +1121,209 @@ export async function demoAddPhoto(
   return resolved(property);
 }
 
+// The calendar -----------------------------------------------------------------------------------
+
+async function demoCalendar(operator: DemoOperator, from: string, to: string): Promise<Calendar> {
+  const properties = [...operator.properties].sort((a, b) => a.name.localeCompare(b.name));
+  const ids = new Set(properties.map((p) => p.id));
+  const covers: (string | null)[] = [];
+  for (const property of properties) covers.push((await resolved(property)).coverPhotoUrl);
+  const { nights, stays, blocks } = operator.calendar;
+  return {
+    from,
+    to,
+    today: todayIn(operator.workspace.settings.timeZone),
+    properties: properties.map((p, index) => ({
+      id: p.id,
+      name: p.name,
+      internalCode: p.internalCode,
+      coverPhotoUrl: covers[index] ?? null,
+      managedBy: p.managedBy,
+      priceOwner: p.priceOwner,
+      basePriceMinor: p.basePriceMinor,
+      weekendPriceMinor: p.weekendPriceMinor,
+      minPriceMinor: p.minPriceMinor,
+      maxPriceMinor: p.maxPriceMinor,
+      minNights: p.minNights,
+      maxNights: p.maxNights,
+    })),
+    nights: nights
+      .filter((n) => ids.has(n.propertyId) && n.night >= from && n.night <= to)
+      .sort((a, b) => a.night.localeCompare(b.night)),
+    // Stays leaving on the first day are included, as the API does: that day's turnover shows.
+    stays: stays
+      .filter((x) => ids.has(x.propertyId) && x.checkIn <= to && x.checkOut >= from)
+      .sort((a, b) => a.checkIn.localeCompare(b.checkIn)),
+    blocks: blocks
+      .filter((b) => ids.has(b.propertyId) && b.startsOn <= to && b.endsOn > from)
+      .sort((a, b) => a.startsOn.localeCompare(b.startsOn)),
+  };
+}
+
+/** Consecutive nights as [first night, first free night) runs. Nights must be in order. */
+function runs(nights: string[]): [string, string][] {
+  const out: [string, string][] = [];
+  for (const night of nights) {
+    const last = out.at(-1);
+    if (last && last[1] === night) last[1] = addDays(night, 1);
+    else out.push([night, addDays(night, 1)]);
+  }
+  return out;
+}
+
+function listNames(properties: { name: string }[]): string {
+  const all = properties.map((p) => p.name);
+  if (all.length <= 2) return all.join(' and ');
+  return `${all.slice(0, 2).join(', ')} and ${all.length - 2} more`;
+}
+
+const usualNight = (n: CalendarNight) =>
+  n.priceMinor === null && n.minNights === null && !n.closedToArrival && !n.closedToDeparture;
+
+/** The API's PATCH /v1/calendar, with its rules and messages, on this browser's sample data. */
+function changeDemoCalendar(operator: DemoOperator, body: unknown): CalendarChangeResult {
+  const parsed = CalendarChangeSchema.safeParse(body);
+  if (!parsed.success) invalid(parsed.error.issues);
+  const change = parsed.data;
+  const { currency, locale, timeZone } = operator.workspace.settings;
+  const today = todayIn(timeZone);
+  if (change.firstNight < today) {
+    throw new ApiError(400, 'nights_passed', 'Those nights have passed. Start from tonight or later.');
+  }
+  if (change.lastNight > addDays(today, CALENDAR_DAYS_AHEAD)) {
+    throw new ApiError(400, 'too_far_ahead', 'Nights can be changed up to two years ahead.');
+  }
+  const ids = [...new Set(change.propertyIds)];
+  const chosen = operator.properties
+    .filter((p) => ids.includes(p.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (chosen.length !== ids.length) {
+    throw new ApiError(404, 'property_not_found', "One of those properties isn't in this workspace.");
+  }
+  if (typeof change.priceMinor === 'number') {
+    const price = change.priceMinor;
+    const amount = (minor: number) => formatMoney({ amountMinor: minor, currency }, locale);
+    const elsewhere = chosen.filter((p) => p.priceOwner !== 'v01');
+    if (elsewhere.length) {
+      throw new ApiError(
+        409,
+        'prices_set_in_pricelabs',
+        `PriceLabs sets the prices for ${listNames(elsewhere)}, so they can't be changed here.`,
+      );
+    }
+    for (const p of chosen) {
+      if (p.minPriceMinor && price < p.minPriceMinor) {
+        throw new ApiError(
+          400,
+          'below_lowest_price',
+          `${amount(price)} is below the lowest price for ${p.name}, ${amount(p.minPriceMinor)}.`,
+        );
+      }
+      if (p.maxPriceMinor && price > p.maxPriceMinor) {
+        throw new ApiError(
+          400,
+          'above_highest_price',
+          `${amount(price)} is above the highest price for ${p.name}, ${amount(p.maxPriceMinor)}.`,
+        );
+      }
+    }
+  }
+  const nights = selectedNights(change.firstNight, change.lastNight, change.daysOfWeek);
+  if (nights.length === 0) {
+    throw new ApiError(400, 'no_nights', 'None of those nights fall on the chosen days of the week.');
+  }
+
+  const calendar = operator.calendar;
+  const result: CalendarChangeResult = {
+    changedNights: 0,
+    blockedNights: 0,
+    takenNights: 0,
+    reopenedNights: 0,
+  };
+  const rules = {
+    ...(change.priceMinor !== undefined ? { priceMinor: change.priceMinor } : {}),
+    ...(change.minNights !== undefined ? { minNights: change.minNights } : {}),
+    ...(change.closedToArrival !== undefined ? { closedToArrival: change.closedToArrival } : {}),
+    ...(change.closedToDeparture !== undefined ? { closedToDeparture: change.closedToDeparture } : {}),
+  };
+  if (Object.keys(rules).length) {
+    for (const property of chosen) {
+      for (const night of nights) {
+        const row = calendar.nights.find((n) => n.propertyId === property.id && n.night === night);
+        const next: CalendarNight = {
+          ...(row ?? {
+            propertyId: property.id,
+            night,
+            priceMinor: null,
+            minNights: null,
+            closedToArrival: false,
+            closedToDeparture: false,
+          }),
+          ...rules,
+        };
+        const same = row
+          ? row.priceMinor === next.priceMinor &&
+            row.minNights === next.minNights &&
+            row.closedToArrival === next.closedToArrival &&
+            row.closedToDeparture === next.closedToDeparture
+          : usualNight(next);
+        if (same) continue;
+        result.changedNights += 1;
+        if (row) Object.assign(row, next);
+        else calendar.nights.push(next);
+      }
+    }
+    // A night back on every usual rule keeps no row of its own.
+    calendar.nights = calendar.nights.filter((n) => !usualNight(n));
+  }
+
+  const held = (propertyId: string, night: string) =>
+    calendar.stays.some(
+      (x) =>
+        x.propertyId === propertyId && x.status === 'confirmed' && x.checkIn <= night && night < x.checkOut,
+    ) || calendar.blocks.some((b) => b.propertyId === propertyId && b.startsOn <= night && night < b.endsOn);
+
+  if (change.blocked === true) {
+    for (const property of chosen) {
+      const free = nights.filter((night) => !held(property.id, night));
+      result.takenNights += nights.length - free.length;
+      for (const [startsOn, endsOn] of runs(free)) {
+        result.blockedNights += nightsBetween(startsOn, endsOn);
+        calendar.blocks.push({
+          id: crypto.randomUUID(),
+          propertyId: property.id,
+          startsOn,
+          endsOn,
+          reason: change.blockReason || null,
+        });
+      }
+    }
+  } else if (change.blocked === false) {
+    const opening = new Set(nights);
+    const kept: CalendarBlock[] = [];
+    for (const block of calendar.blocks) {
+      const all = ids.includes(block.propertyId) ? eachNight(block.startsOn, block.endsOn) : [];
+      const reopened = all.filter((night) => opening.has(night)).length;
+      if (reopened === 0) {
+        kept.push(block);
+        continue;
+      }
+      result.reopenedNights += reopened;
+      for (const [startsOn, endsOn] of runs(all.filter((night) => !opening.has(night)))) {
+        kept.push({
+          id: crypto.randomUUID(),
+          propertyId: block.propertyId,
+          startsOn,
+          endsOn,
+          reason: block.reason,
+        });
+      }
+    }
+    calendar.blocks = kept;
+  }
+  return result;
+}
+
 // Routes ---------------------------------------------------------------------------------------
 
 const pause = () => new Promise((resolve) => setTimeout(resolve, 120));
@@ -1014,6 +1548,21 @@ export async function demoFetch<T>(
     property.updatedAt = new Date().toISOString();
     save();
     return (await resolved(property)) as T;
+  }
+
+  if (method === 'GET' && path.startsWith('/v1/calendar?')) {
+    const { operator } = access(options.orgId, 'calendar.read');
+    const query = Object.fromEntries(new URLSearchParams(path.slice(path.indexOf('?') + 1)));
+    const parsed = CalendarQuerySchema.safeParse(query);
+    if (!parsed.success) invalid(parsed.error.issues);
+    return (await demoCalendar(operator, parsed.data.from, parsed.data.to)) as T;
+  }
+
+  if (method === 'PATCH' && path === '/v1/calendar') {
+    const { operator } = access(options.orgId, 'calendar.write');
+    const result = changeDemoCalendar(operator, options.body);
+    save();
+    return result as T;
   }
 
   // The V-01 console: the demo user is a V-01 owner.

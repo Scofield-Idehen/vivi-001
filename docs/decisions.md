@@ -5,6 +5,19 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-15
 
+- **The Calendar screen (design phase D1) is every property by night.** Each night shows the price the
+  channels get, with any minimum stay or closed date of its own; the usual minimum is beside the name.
+  Bookings and blocks are bars from the middle of the arrival day to the middle of the departure day, so
+  a turnover shows as two bars meeting. A booking that came in over another (`conflict`) is outlined in
+  red and holds no nights. Nights fill the width of the screen; phones scroll sideways through two weeks.
+  Awaiting design sign-off from Alpha and Alessio.
+- **Nights are changed by choosing them.** Drag across nights, and down across properties; on a phone,
+  tap a night and stretch it in the panel; on a keyboard, Shift and the arrows. A panel then sets the
+  price, minimum stay, closed arrivals or departures, or blocks or opens the nights, optionally on chosen
+  days of the week. Properties V-01 doesn't run yet say their changes stay in V-01. A role that can't
+  change the calendar sees it read-only.
+- **In the demo, the demo user also belongs to Northwind Stays,** an invented operator with sample
+  bookings laid out around today, so the Calendar can be tried. Brightwater Lets shows support access.
 - **A night's price and stay rules are stored only where they differ from the property's usual ones**
   (`calendar_days`, migrations 0010 and 0011). A night with no row uses the usual price, or the weekend
   price on Friday and Saturday nights, and the usual minimum stay. One `nightRules()` in `@v01/shared`

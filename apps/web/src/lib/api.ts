@@ -1,5 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  Calendar,
+  CalendarChange,
+  CalendarChangeResult,
   ConsoleOperatorDetail,
   ConsoleOperatorList,
   ConsoleOverview,
@@ -268,6 +271,35 @@ export function useAddPhotos(orgId: string | null, id: string) {
         queryClient.invalidateQueries({ queryKey: ['properties', orgId] }),
         queryClient.invalidateQueries({ queryKey: ['console'] }),
       ]),
+  });
+}
+
+// The calendar ----------------------------------------------------------------------------------
+
+/** Every property's nights from `from` to `to`. The last window stays on screen while the next loads. */
+export function useCalendar(orgId: string | null, from: string, to: string) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['calendar', orgId, from, to],
+    enabled: Boolean(token && orgId),
+    placeholderData: keepPreviousData,
+    queryFn: () =>
+      apiFetch<Calendar>(`/v1/calendar?from=${from}&to=${to}`, { token: token as string, orgId }),
+  });
+}
+
+export function useChangeCalendar(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (change: CalendarChange) =>
+      apiFetch<CalendarChangeResult>('/v1/calendar', {
+        token: token as string,
+        orgId,
+        method: 'PATCH',
+        body: change,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['calendar', orgId] }),
   });
 }
 

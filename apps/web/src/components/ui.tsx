@@ -178,13 +178,19 @@ export function EmptyState({
   );
 }
 
-export function Notice({ tone = 'pending', children }: { tone?: 'pending' | 'urgent'; children: ReactNode }) {
+export function Notice({
+  tone = 'pending',
+  children,
+}: {
+  tone?: 'pending' | 'urgent' | 'done';
+  children: ReactNode;
+}) {
   return (
     <div
       role={tone === 'urgent' ? 'alert' : 'status'}
       className={cx(
-        'rounded-md border-l-2 bg-linen px-4 py-3 text-[13.5px] leading-relaxed',
-        tone === 'urgent' ? 'border-urgent text-ink' : 'border-pending text-ink',
+        'rounded-md border-l-2 bg-linen px-4 py-3 text-[13.5px] leading-relaxed text-ink',
+        tone === 'urgent' ? 'border-urgent' : tone === 'done' ? 'border-done' : 'border-pending',
       )}
     >
       {children}

@@ -42,7 +42,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
         path: 'calendar',
         label: 'Calendar',
         icon: IconCalendarMonth,
-        built: false,
+        built: true,
         design: 'D1',
         phase: 'Phase 1',
         summary:

@@ -20,6 +20,7 @@ with a soft white page.
 | V-01 staff and read-only support access, logged and visible to the operator | `packages/db/migrations/0003_console_security.sql` | Done |
 | Booking import into reservations, then acknowledgement | `apps/worker/src/bookings.ts` | Phase 1, step 5 |
 | Calendar: nightly prices, stay rules and blocks | `apps/api/src/routes/calendar.ts`, `packages/shared/src/calendar.ts` | Done |
+| Calendar screen | `apps/web/src/pages/calendar` | Done; awaiting design sign-off |
 | Changes queued for the channels by the database | `packages/db/migrations/0012_channel_queue.sql` | Done |
 | Prices and stay rules out | `apps/worker/src/outbox.ts` | Done, tested against the stand-in |
 
@@ -139,7 +140,7 @@ Not set up yet. These are the steps for when the staging and production accounts
 - Channex staging account in V-01's name; set `CHANNEL_PROVIDER=channex` and the staging key.
 - Property sync into Channex (step 3), prices and restrictions out (step 4), booking import with
   acknowledgement after saving (step 5), auto-availability settings (step 6), mapping screens (step 7).
-- Calendar, Reservations and Channels & sync screens from design phase D1.
+- Reservations and Channels & sync screens from design phase D1 (the Calendar is built).
 - Nightly cross-check.
 
 Design sign-off: Alpha and Alessio, at every design gate.
