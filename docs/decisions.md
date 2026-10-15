@@ -5,6 +5,23 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-15
 
+- **A night's price and stay rules are stored only where they differ from the property's usual ones**
+  (`calendar_days`, migrations 0010 and 0011). A night with no row uses the usual price, or the weekend
+  price on Friday and Saturday nights, and the usual minimum stay. One `nightRules()` in `@v01/shared`
+  works out every night, for the calendar screen and for what the channels get, so the two can't
+  disagree. Changes reach up to two years ahead and never touch nights that have passed.
+- **Prices stay within each property's limits.** The calendar refuses a price outside them, naming
+  the property and the limit; a price that falls outside later, because the limits changed, goes to the
+  channels at the limit. Properties priced by PriceLabs keep PriceLabs' prices: V-01 sends them stay
+  rules only.
+- **Blocking takes only the free nights.** Booked nights are left as they are, and the reply says how
+  many. Reopening part of a block keeps the rest of it blocked.
+- **The database queues every change for the channels** (migration 0012), in the same transaction as
+  the change: a booking or block queues availability for its nights, a change to nightly prices or stay
+  rules queues them once per change however many nights it covers, and a change to the usual price,
+  price limits or stay lengths queues the whole 500-night horizon. Only properties V-01 runs queue
+  anything. The worker sends only nights from today, where the operator is, and the nightly full sync
+  now sends prices and stay rules as well as availability.
 - **V-01 stays on Channex (Alpha).** Vivistays' Airbnb, Booking.com and Vrbo listings are linked into
   Channex as they are, so they keep their reviews, photos and descriptions; Channex carries prices,
   availability, stay rules and bookings. Photos, descriptions and amenities are changed on each channel,

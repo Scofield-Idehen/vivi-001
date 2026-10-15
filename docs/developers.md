@@ -13,13 +13,15 @@ with a soft white page.
 | Double-booking guard in Postgres | `packages/db/migrations/0001_security.sql` | Done |
 | Audit log of who changed what | same | Done |
 | API: sign-in, workspaces, properties, Channex webhook intake | `apps/api` | Done |
-| Worker: outbox sender, webhook handling, feed sweep, nightly full sync | `apps/worker` | Done (availability only) |
+| Worker: outbox sender, webhook handling, feed sweep, nightly full sync | `apps/worker` | Done |
 | Channel swap layer and Channex adapter | `packages/channels` | Built, not yet certified |
 | Web app: sign-in, shell, Today, Properties, Workspace | `apps/web` | Done |
 | V-01 console: overview, operators, sync health, support log | `apps/web/src/pages/console`, `apps/api/src/routes/console.ts` | Done |
 | V-01 staff and read-only support access, logged and visible to the operator | `packages/db/migrations/0003_console_security.sql` | Done |
 | Booking import into reservations, then acknowledgement | `apps/worker/src/bookings.ts` | Phase 1, step 5 |
-| Prices and restrictions out | `apps/worker/src/outbox.ts` | Phase 1, step 4 |
+| Calendar: nightly prices, stay rules and blocks | `apps/api/src/routes/calendar.ts`, `packages/shared/src/calendar.ts` | Done |
+| Changes queued for the channels by the database | `packages/db/migrations/0012_channel_queue.sql` | Done |
+| Prices and stay rules out | `apps/worker/src/outbox.ts` | Done, tested against the stand-in |
 
 ## Layout
 

@@ -144,6 +144,32 @@ describe('Channex adapter', () => {
     });
   });
 
+  it('sends every stay rule, with no longest stay as 0', async () => {
+    const { calls, impl } = mockFetch(200, { data: [{ id: 'task-3', type: 'task' }] });
+    const provider = new ChannexProvider({ baseUrl: 'https://x/api/v1', apiKey: 'key', fetch: impl });
+    await provider.pushRestrictions([
+      {
+        ref: REF,
+        dateFrom: '2026-11-01',
+        dateTo: '2026-11-07',
+        minStayArrival: 3,
+        maxStay: null,
+        closedToArrival: true,
+        closedToDeparture: false,
+      },
+      { ref: REF, dateFrom: '2026-11-08', dateTo: '2026-11-08', minStayArrival: 1, maxStay: 14 },
+    ]);
+    const [closed, open] = JSON.parse(String(calls[0]?.init.body)).values;
+    expect(closed).toMatchObject({
+      min_stay_arrival: 3,
+      max_stay: 0,
+      closed_to_arrival: true,
+      closed_to_departure: false,
+    });
+    expect(closed).not.toHaveProperty('rate');
+    expect(open).toMatchObject({ min_stay_arrival: 1, max_stay: 14 });
+  });
+
   it('turns a 429 into a retryable rate-limit error', async () => {
     const { impl } = mockFetch(
       429,

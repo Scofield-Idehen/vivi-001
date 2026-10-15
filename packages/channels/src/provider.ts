@@ -26,8 +26,10 @@ export interface RestrictionUpdate {
   dateTo: string;
   /** Nightly price in minor units of the property's currency. */
   rateMinor?: number;
+  /** The shortest stay for guests arriving on these dates. */
   minStayArrival?: number;
-  maxStay?: number;
+  /** The longest stay; null means no limit. */
+  maxStay?: number | null;
   closedToArrival?: boolean;
   closedToDeparture?: boolean;
   stopSell?: boolean;

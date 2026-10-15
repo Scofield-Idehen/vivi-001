@@ -57,12 +57,23 @@ async function addProperty(
   return row!.id;
 }
 
-async function queueAvailability(propertyId: string, dateFrom: string, dateTo: string) {
+/** The tests' today, so trimming to the nights ahead gives the same answer whenever they run. */
+const TODAY = '2026-10-15';
+
+async function queue(
+  kind: 'availability' | 'restrictions',
+  propertyId: string,
+  dateFrom: string,
+  dateTo: string,
+) {
   await owner(
-    `insert into app.ari_outbox (organisation_id, property_id, kind, date_from, date_to) values ($1, $2, 'availability', $3, $4)`,
-    [op.orgId, propertyId, dateFrom, dateTo],
+    `insert into app.ari_outbox (organisation_id, property_id, kind, date_from, date_to) values ($1, $2, $3, $4, $5)`,
+    [op.orgId, propertyId, kind, dateFrom, dateTo],
   );
 }
+
+const queueAvailability = (propertyId: string, dateFrom: string, dateTo: string) =>
+  queue('availability', propertyId, dateFrom, dateTo);
 
 beforeAll(async () => {
   t = await createTestDatabase();
@@ -77,12 +88,21 @@ beforeAll(async () => {
      values ($1, $2, 'airbnb', 'confirmed', '2026-11-13', '2026-11-15')`,
     [op.orgId, mapped],
   );
+  // The booking queued its own nights (migration 0012); each test queues what it sends.
+  await owner('delete from app.ari_outbox');
 });
 
 beforeEach(() => {
   provider = new FakeChannelProvider();
   alerts = new MemoryAlerts();
-  deps = { db: worker, provider, limiter: createChannexRateLimiter(), alerts, log: silentLogger };
+  deps = {
+    db: worker,
+    provider,
+    limiter: createChannexRateLimiter(),
+    alerts,
+    log: silentLogger,
+    now: () => new Date(`${TODAY}T12:00:00Z`),
+  };
 });
 
 afterAll(async () => {
@@ -178,15 +198,130 @@ describe('outbox sender', () => {
   });
 });
 
+describe('nights that have passed', () => {
+  it('sends only the nights from today, and marks a range already past as done', async () => {
+    await owner(`update app.ari_outbox set status = 'sent'`);
+    await queueAvailability(mapped, '2026-10-01', '2026-10-10');
+    await queueAvailability(mapped, '2026-10-13', '2026-10-17');
+    expect(await processOutbox(deps)).toMatchObject({ claimed: 2, sent: 2 });
+    expect(provider.availabilityCalls).toHaveLength(1);
+    expect(provider.availabilityCalls[0]?.map((u) => [u.dateFrom, u.dateTo])).toEqual([
+      [TODAY, '2026-10-17'],
+    ]);
+  });
+});
+
+describe('prices and stay rules', () => {
+  beforeEach(async () => {
+    await owner(`update app.ari_outbox set status = 'sent'`);
+  });
+
+  async function setUsual(changes: string, values: unknown[] = []) {
+    await owner(`update app.properties set ${changes} where id = $1`, [mapped, ...values]);
+    // Changing the usual rules queues the whole horizon; these tests queue only what they check.
+    await owner(`delete from app.ari_outbox where status = 'pending'`);
+  }
+
+  it('sends the usual, weekend and nightly prices in runs, with the stay rules', async () => {
+    await setUsual(
+      'base_price_minor = 15000, weekend_price_minor = 19000, min_nights = 2, max_nights = 14, min_price_minor = 9500, max_price_minor = 40000',
+    );
+    await owner(
+      `insert into app.calendar_days (organisation_id, property_id, night, price_minor, min_nights, closed_to_arrival)
+       values ($1, $2, '2026-11-18', 21000, 3, true)`,
+      [op.orgId, mapped],
+    );
+    // The night's own price queued itself. Add Monday 16 to Sunday 22 November 2026: one call for both.
+    await queue('restrictions', mapped, '2026-11-16', '2026-11-22');
+    expect(await processOutbox(deps)).toMatchObject({ claimed: 2, sent: 2 });
+    const ref = {
+      externalPropertyId: 'cx-hvl',
+      externalRoomTypeId: 'cx-hvl-room',
+      externalRatePlanId: 'cx-hvl-rate',
+    };
+    const rules = { maxStay: 14, closedToArrival: false, closedToDeparture: false };
+    expect(provider.restrictionCalls).toEqual([
+      [
+        { ref, dateFrom: '2026-11-16', dateTo: '2026-11-17', rateMinor: 15_000, minStayArrival: 2, ...rules },
+        {
+          ref,
+          dateFrom: '2026-11-18',
+          dateTo: '2026-11-18',
+          rateMinor: 21_000,
+          minStayArrival: 3,
+          ...rules,
+          closedToArrival: true,
+        },
+        { ref, dateFrom: '2026-11-19', dateTo: '2026-11-19', rateMinor: 15_000, minStayArrival: 2, ...rules },
+        { ref, dateFrom: '2026-11-20', dateTo: '2026-11-21', rateMinor: 19_000, minStayArrival: 2, ...rules },
+        { ref, dateFrom: '2026-11-22', dateTo: '2026-11-22', rateMinor: 15_000, minStayArrival: 2, ...rules },
+      ],
+    ]);
+    const [log] = await owner<{
+      kind: string;
+      status: string;
+      detail: { ranges: number; heldAtLimit: number };
+    }>(`select kind, status, detail from app.sync_log where kind = 'restrictions' order by id desc limit 1`);
+    expect(log).toMatchObject({ kind: 'restrictions', status: 'ok', detail: { ranges: 5, heldAtLimit: 0 } });
+  });
+
+  it('never sends a price outside the limits', async () => {
+    await setUsual('base_price_minor = 8000, weekend_price_minor = null, max_nights = null');
+    await queue('restrictions', mapped, '2026-11-23', '2026-11-24');
+    await processOutbox(deps);
+    expect(provider.restrictionCalls[0]).toEqual([
+      expect.objectContaining({
+        dateFrom: '2026-11-23',
+        dateTo: '2026-11-24',
+        rateMinor: 9_500,
+        maxStay: null,
+      }),
+    ]);
+    const [log] = await owner<{ detail: { heldAtLimit: number } }>(
+      `select detail from app.sync_log where kind = 'restrictions' order by id desc limit 1`,
+    );
+    expect(log?.detail.heldAtLimit).toBe(2);
+  });
+
+  it('leaves prices to PriceLabs when it sets them, and still sends the stay rules', async () => {
+    await setUsual(`price_owner = 'pricelabs'`);
+    await queue('restrictions', mapped, '2026-11-23', '2026-11-23');
+    await processOutbox(deps);
+    const [update] = provider.restrictionCalls[0] ?? [];
+    expect(update).not.toHaveProperty('rateMinor');
+    expect(update).toMatchObject({ minStayArrival: 2, closedToArrival: false });
+    await setUsual(`price_owner = 'v01'`);
+  });
+
+  it('sends prices and availability as separate calls, each batched for the property', async () => {
+    await queue('restrictions', mapped, '2026-11-23', '2026-11-24');
+    await queue('restrictions', mapped, '2026-11-26', '2026-11-27');
+    await queueAvailability(mapped, '2026-11-23', '2026-11-27');
+    expect(await processOutbox(deps)).toMatchObject({ claimed: 3, sent: 3 });
+    expect(provider.restrictionCalls).toHaveLength(1);
+    expect(provider.availabilityCalls).toHaveLength(1);
+    expect(provider.restrictionCalls[0]?.[0]?.dateFrom).toBe('2026-11-23');
+    expect(provider.restrictionCalls[0]?.at(-1)?.dateTo).toBe('2026-11-27');
+  });
+});
+
 describe('full sync', () => {
   it('queues 500 days for properties V-01 manages, and none for any other', async () => {
     await owner(`update app.ari_outbox set status = 'sent'`);
     const queued = await enqueueFullSync(deps, new Date('2026-10-14T12:00:00Z'));
     expect(queued).toBe(1);
-    const rows = await owner<{ property_id: string; date_from: string; date_to: string }>(
-      `select property_id, date_from::text, date_to::text from app.ari_outbox where status = 'pending'`,
+    const rows = await owner<{ property_id: string; kind: string; date_from: string; date_to: string }>(
+      `select property_id, kind, date_from::text, date_to::text from app.ari_outbox where status = 'pending'
+        order by kind`,
     );
-    expect(rows).toEqual([{ property_id: mapped, date_from: '2026-10-14', date_to: '2028-02-25' }]);
+    expect(rows).toEqual(
+      ['availability', 'restrictions'].map((kind) => ({
+        property_id: mapped,
+        kind,
+        date_from: '2026-10-14',
+        date_to: '2028-02-25',
+      })),
+    );
     expect(FULL_SYNC_DAYS).toBe(500);
   });
 });

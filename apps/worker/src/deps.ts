@@ -14,6 +14,8 @@ export interface WorkerDeps {
   limiter: PerKeyRateLimiter;
   alerts: AlertSink;
   log: Logger;
+  /** The clock, so tests can fix today. */
+  now?: () => Date;
 }
 
 export const silentLogger: Logger = {

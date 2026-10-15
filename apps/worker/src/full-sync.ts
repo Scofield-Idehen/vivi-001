@@ -7,8 +7,8 @@ import type { WorkerDeps } from './deps.ts';
 export const FULL_SYNC_DAYS = 500;
 
 /**
- * Queues a full availability sync for every property that V-01 manages and has mapped.
- * The outbox sender then sends each property as one batched call.
+ * Queues a full sync for every property that V-01 manages and has mapped: availability, and prices
+ * and stay rules. The outbox sender then sends each as one batched call per property.
  *
  * Never run this straight after an outage: drain the booking feed first (playbook,
  * Section 8, "drain before push"), or it could reopen dates Channex has already closed.
@@ -37,13 +37,15 @@ export async function enqueueFullSync(
         );
       if (ready.length === 0) return 0;
       await tx.insert(ariOutbox).values(
-        ready.map((p) => ({
-          organisationId: org.id,
-          propertyId: p.id,
-          kind: 'availability' as const,
-          dateFrom: today,
-          dateTo: addDays(today, FULL_SYNC_DAYS - 1),
-        })),
+        ready.flatMap((p) =>
+          (['availability', 'restrictions'] as const).map((kind) => ({
+            organisationId: org.id,
+            propertyId: p.id,
+            kind,
+            dateFrom: today,
+            dateTo: addDays(today, FULL_SYNC_DAYS - 1),
+          })),
+        ),
       );
       return ready.length;
     });

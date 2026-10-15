@@ -1,8 +1,20 @@
-import { ChannelError } from '@v01/channels';
-import { ariOutbox, type ClaimedOutboxRow, channexMappings, properties, syncLog } from '@v01/db';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { ChannelError, type ExternalPropertyRef, type PushResult } from '@v01/channels';
+import {
+  ariOutbox,
+  type ClaimedOutboxRow,
+  calendarDays,
+  channexMappings,
+  organisationSettings,
+  properties,
+  syncLog,
+  type Tx,
+} from '@v01/db';
+import { addDays, todayIn } from '@v01/shared';
+import { and, asc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { availabilityRanges, type Hold } from './availability.ts';
 import type { WorkerDeps } from './deps.ts';
+import { FULL_SYNC_DAYS } from './full-sync.ts';
+import { restrictionRanges } from './restrictions.ts';
 
 const MAX_ATTEMPTS = 10;
 
@@ -20,8 +32,9 @@ export function backoffMs(attempts: number, retryAfterMs?: number): number {
 }
 
 /**
- * Sends queued availability changes, batched per property: everything waiting for one
- * property goes out as a single call. Only the worker sends to the channel manager.
+ * Sends queued changes, batched per property and kind: everything waiting for one property's
+ * availability goes out as one call, and likewise its prices and stay rules. The database queues
+ * them (migration 0012); only the worker sends to the channel manager.
  */
 export async function processOutbox(deps: WorkerDeps, batchSize = 200): Promise<OutboxStats> {
   const claimed = await deps.db.claimOutbox(batchSize);
@@ -38,6 +51,11 @@ export async function processOutbox(deps: WorkerDeps, batchSize = 200): Promise<
   return stats;
 }
 
+const WHAT: Record<ClaimedOutboxRow['kind'], string> = {
+  availability: 'availability',
+  restrictions: 'prices and stay rules',
+};
+
 async function processGroup(
   deps: WorkerDeps,
   rows: ClaimedOutboxRow[],
@@ -47,8 +65,8 @@ async function processGroup(
   const { organisationId: orgId, propertyId, kind } = first;
   const ids = rows.map((r) => r.id);
   const attempts = Math.max(...rows.map((r) => r.attempts));
-  const dateFrom = rows.map((r) => r.dateFrom).sort()[0] ?? first.dateFrom;
-  const dateTo =
+  const queuedFrom = rows.map((r) => r.dateFrom).sort()[0] ?? first.dateFrom;
+  const queuedTo =
     rows
       .map((r) => r.dateTo)
       .sort()
@@ -56,21 +74,15 @@ async function processGroup(
   const limiterKey = `${kind}:${propertyId}`;
 
   const context = await deps.db.withOrg({ orgId }, async (tx) => {
-    const [property] = await tx
-      .select({ name: properties.name, managedBy: properties.managedBy })
-      .from(properties)
-      .where(eq(properties.id, propertyId));
+    const [property] = await tx.select().from(properties).where(eq(properties.id, propertyId));
     const [mapping] = await tx
       .select()
       .from(channexMappings)
       .where(eq(channexMappings.propertyId, propertyId));
-    const held = await tx.execute(
-      sql`select lower(nights)::text as start, upper(nights)::text as "end"
-            from app.occupancies
-           where property_id = ${propertyId}
-             and nights && daterange(${dateFrom}::date, ${dateTo}::date, '[]')`,
-    );
-    return { property, mapping, holds: held.rows as unknown as Hold[] };
+    const [settings] = await tx
+      .select({ timeZone: organisationSettings.timeZone })
+      .from(organisationSettings);
+    return { property, mapping, timeZone: settings?.timeZone ?? 'Europe/London' };
   });
 
   const fail = async (message: string, alert: boolean) => {
@@ -85,22 +97,30 @@ async function processGroup(
     return 'failed' as const;
   };
 
-  if (!context.property) return fail('Property not found.', true);
+  const { property, mapping } = context;
+  if (!property) return fail('Property not found.', true);
   // During migration only properties switched to V-01 send anything (playbook, Section 13).
-  if (context.property.managedBy !== 'v01') {
+  if (property.managedBy !== 'v01') {
     return fail(
-      context.property.managedBy === 'guesty'
+      property.managedBy === 'guesty'
         ? 'Skipped: this property is still managed by Guesty.'
         : "Skipped: this property's listings are not connected to V-01 yet.",
       false,
     );
   }
-  if (!context.mapping?.channexRoomTypeId || !context.mapping.channexRatePlanId) {
+  if (!mapping?.channexRoomTypeId || !mapping.channexRatePlanId) {
     return fail('This property is not mapped to the channel manager yet.', true);
   }
-  if (kind !== 'availability') {
-    // Prices and restrictions follow in Phase 1, once nightly prices are stored (calendar_days).
-    return fail('Price and restriction updates are not built yet (Phase 1).', false);
+
+  // Only nights from today, where the operator is, up to the channels' horizon. Past nights can't
+  // be booked, and the channels refuse changes to them.
+  const today = todayIn(context.timeZone, deps.now?.() ?? new Date());
+  const dateFrom = queuedFrom > today ? queuedFrom : today;
+  const horizon = addDays(today, FULL_SYNC_DAYS - 1);
+  const dateTo = queuedTo < horizon ? queuedTo : horizon;
+  if (dateFrom > dateTo) {
+    await markSent(deps, orgId, ids, null);
+    return 'sent';
   }
 
   const slot = deps.limiter.tryTake(limiterKey);
@@ -109,26 +129,65 @@ async function processGroup(
     return 'deferred';
   }
 
-  const ref = {
-    externalPropertyId: context.mapping.channexPropertyId,
-    externalRoomTypeId: context.mapping.channexRoomTypeId,
-    externalRatePlanId: context.mapping.channexRatePlanId,
+  const ref: ExternalPropertyRef = {
+    externalPropertyId: mapping.channexPropertyId,
+    externalRoomTypeId: mapping.channexRoomTypeId,
+    externalRatePlanId: mapping.channexRatePlanId,
   };
-  const updates = availabilityRanges(dateFrom, dateTo, context.holds).map((r) => ({ ref, ...r }));
 
   try {
-    const result = await deps.provider.pushAvailability(updates);
+    let result: PushResult;
+    let detail: Record<string, unknown>;
+    if (kind === 'availability') {
+      const held = await deps.db.withOrg({ orgId }, (tx) =>
+        tx.execute(
+          sql`select lower(nights)::text as start, upper(nights)::text as "end"
+                from app.occupancies
+               where property_id = ${propertyId}
+                 and nights && daterange(${dateFrom}::date, ${dateTo}::date, '[]')`,
+        ),
+      );
+      const updates = availabilityRanges(dateFrom, dateTo, held.rows as unknown as Hold[]).map((r) => ({
+        ref,
+        ...r,
+      }));
+      result = await deps.provider.pushAvailability(updates);
+      detail = { dateFrom, dateTo, ranges: updates.length };
+    } else {
+      const nights = await deps.db.withOrg({ orgId }, (tx) =>
+        tx
+          .select({
+            night: calendarDays.night,
+            priceMinor: calendarDays.priceMinor,
+            minNights: calendarDays.minNights,
+            closedToArrival: calendarDays.closedToArrival,
+            closedToDeparture: calendarDays.closedToDeparture,
+          })
+          .from(calendarDays)
+          .where(
+            and(
+              eq(calendarDays.propertyId, propertyId),
+              gte(calendarDays.night, dateFrom),
+              lte(calendarDays.night, dateTo),
+            ),
+          )
+          .orderBy(asc(calendarDays.night)),
+      );
+      const plan = restrictionRanges(dateFrom, dateTo, property, nights, {
+        sendRates: property.priceOwner === 'v01',
+      });
+      result = await deps.provider.pushRestrictions(plan.ranges.map((r) => ({ ref, ...r })));
+      detail = {
+        dateFrom,
+        dateTo,
+        ranges: plan.ranges.length,
+        rates: property.priceOwner === 'v01',
+        heldAtLimit: plan.heldAtLimit,
+      };
+    }
+
     await deps.db.withOrg({ orgId }, async (tx) => {
-      await tx
-        .update(ariOutbox)
-        .set({
-          status: 'sent',
-          sentAt: sql`now()`,
-          providerTaskId: result.taskId,
-          lastError: null,
-          lockedAt: null,
-        })
-        .where(inArray(ariOutbox.id, ids));
+      await markSent(deps, orgId, ids, result.taskId, tx);
       await tx.insert(syncLog).values({
         organisationId: orgId,
         propertyId,
@@ -136,17 +195,17 @@ async function processGroup(
         kind,
         providerTaskId: result.taskId,
         status: result.warnings.length ? 'warning' : 'ok',
-        detail: { dateFrom, dateTo, ranges: updates.length, warnings: result.warnings },
+        detail: { ...detail, warnings: result.warnings },
       });
     });
     if (result.warnings.length) {
       await deps.alerts.send({
         severity: 'warning',
-        title: `Channel manager accepted availability with warnings: ${context.property.name}`,
+        title: `Channel manager accepted ${WHAT[kind]} with warnings: ${property.name}`,
         detail: result.warnings.join('; '),
       });
     }
-    deps.log.info({ orgId, propertyId, taskId: result.taskId, ranges: updates.length }, 'Availability sent');
+    deps.log.info({ orgId, propertyId, kind, taskId: result.taskId, ...detail }, 'Sent to channels');
     return 'sent';
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -168,11 +227,30 @@ async function processGroup(
         delayMs: backoffMs(attempts, error.retryAfterMs),
         error: message,
       });
-      deps.log.warn({ orgId, propertyId, attempts, error: message }, 'Availability send will be retried');
+      deps.log.warn(
+        { orgId, propertyId, kind, attempts, error: message },
+        'Send to channels will be retried',
+      );
       return 'deferred';
     }
     return fail(message, true);
   }
+}
+
+async function markSent(
+  deps: WorkerDeps,
+  orgId: string,
+  ids: number[],
+  taskId: string | null,
+  tx?: Tx,
+): Promise<void> {
+  const update = (t: Tx) =>
+    t
+      .update(ariOutbox)
+      .set({ status: 'sent', sentAt: sql`now()`, providerTaskId: taskId, lastError: null, lockedAt: null })
+      .where(inArray(ariOutbox.id, ids));
+  if (tx) await update(tx);
+  else await deps.db.withOrg({ orgId }, update);
 }
 
 async function finish(

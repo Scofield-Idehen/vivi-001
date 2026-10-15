@@ -44,7 +44,8 @@ export class ChannexProvider implements ChannelProvider {
       // Rates go as whole minor units, which Channex accepts directly (20000 = 200.00).
       if (u.rateMinor !== undefined) value.rate = u.rateMinor;
       if (u.minStayArrival !== undefined) value.min_stay_arrival = u.minStayArrival;
-      if (u.maxStay !== undefined) value.max_stay = u.maxStay;
+      // Channex reads a longest stay of 0 as no limit.
+      if (u.maxStay !== undefined) value.max_stay = u.maxStay ?? 0;
       if (u.closedToArrival !== undefined) value.closed_to_arrival = u.closedToArrival;
       if (u.closedToDeparture !== undefined) value.closed_to_departure = u.closedToDeparture;
       if (u.stopSell !== undefined) value.stop_sell = u.stopSell;
