@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { keyInExampleEnv, runChannexCheck } from '../src/channex-check.ts';
+import { keyInExampleEnv, parseCheckArgs, runChannexCheck } from '../src/channex-check.ts';
 
 /**
  * `pnpm channex:check` against a stand-in for Channex's API, since tests never reach the real one.
@@ -387,6 +387,35 @@ describe('pnpm channex:check', () => {
     );
     expect(stub.state.calls).toContain('DELETE staging /properties/prop-1');
     expect(stub.state.properties).toEqual([]);
+  });
+
+  it('says which code it runs from, and refuses options it does not know', async () => {
+    const lines: string[] = [];
+    await runChannexCheck({
+      version: '3a92166',
+      apiKey: KEY,
+      fetch: stubChannex({ knownOn: 'staging' }).fetch,
+      now: NOW,
+      print: (line) => lines.push(line),
+    });
+    expect(lines[0]).toBe('V-01 Channex check, code 3a92166');
+
+    expect(parseCheckArgs([])).toEqual({ makeTestProperty: false });
+    expect(parseCheckArgs(['--make-test-property'])).toEqual({ makeTestProperty: true });
+    expect(parseCheckArgs(['--round-trip', 'prop-1'])).toEqual({
+      roundTrip: 'prop-1',
+      makeTestProperty: false,
+    });
+    expect(parseCheckArgs(['--round-trip'])).toEqual({
+      error: 'Give the Channex property id after --round-trip: pnpm channex:check --round-trip <id>',
+    });
+    expect(parseCheckArgs(['--make-test-propery'])).toEqual({
+      error:
+        'Unknown option --make-test-propery. The options are --round-trip <Channex property id> and --make-test-property.',
+    });
+    expect(parseCheckArgs(['--round-trip', 'prop-1', '--make-test-property'])).toEqual({
+      error: 'Use --round-trip or --make-test-property, not both.',
+    });
   });
 
   it('warns when the key was pasted into the example file, which git tracks', async () => {

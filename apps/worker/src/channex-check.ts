@@ -28,6 +28,8 @@ import { addDays, formatMoney, minorDigits } from '@v01/shared';
  */
 
 export interface CheckOptions {
+  /** The commit the check runs from, so an out-of-date copy shows at a glance. */
+  version?: string | undefined;
   apiKey: string | undefined;
   /** CHANNEX_BASE_URL, when set. Otherwise staging is tried first, then live. */
   baseUrl?: string | undefined;
@@ -71,6 +73,37 @@ interface Night {
   available: number | null;
 }
 
+export type CheckArgs = { roundTrip?: string; makeTestProperty: boolean } | { error: string };
+
+/** The command line, or what is wrong with it. An option the check doesn't know is refused, not ignored. */
+export function parseCheckArgs(args: readonly string[]): CheckArgs {
+  let roundTrip: string | undefined;
+  let makeTestProperty = false;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--make-test-property') {
+      makeTestProperty = true;
+    } else if (arg === '--round-trip') {
+      const id = args[i + 1];
+      if (!id || id.startsWith('-')) {
+        return {
+          error: 'Give the Channex property id after --round-trip: pnpm channex:check --round-trip <id>',
+        };
+      }
+      roundTrip = id;
+      i += 1;
+    } else {
+      return {
+        error: `Unknown option ${arg}. The options are --round-trip <Channex property id> and --make-test-property.`,
+      };
+    }
+  }
+  if (roundTrip && makeTestProperty) {
+    return { error: 'Use --round-trip or --make-test-property, not both.' };
+  }
+  return { ...(roundTrip ? { roundTrip } : {}), makeTestProperty };
+}
+
 /** True when the example file holds what looks like a real key, commented out or not. */
 export function keyInExampleEnv(text: string | null | undefined): boolean {
   return Boolean(text && /^[ \t]*#?[ \t]*CHANNEX_API_KEY[ \t]*=[ \t]*\S{8,}/m.test(text));
@@ -96,7 +129,7 @@ class Report {
 
 export async function runChannexCheck(options: CheckOptions): Promise<boolean> {
   const out = new Report(options.print);
-  out.line('V-01 Channex check');
+  out.line(options.version ? `V-01 Channex check, code ${options.version}` : 'V-01 Channex check');
   out.line();
 
   if (keyInExampleEnv(options.exampleEnv)) {
