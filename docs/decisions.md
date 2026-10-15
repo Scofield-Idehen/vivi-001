@@ -7,15 +7,34 @@ V-01 Build Playbook and Design Roadmap.
 
 - **The Calendar after Alpha's review.** Anyone leaving Guesty should find their way around it as
   easily as before, without V-01 copying Guesty. The changes below come from that review.
+- **A booking selected on the Calendar offers Open reservation, Edit and Message guest (Alpha).** The
+  panel shows the status, channel and its code, property, check-in and check-out with their times,
+  nights, party, total, the guest's contact details and the team's notes. Edit works in the panel.
+- **Every booking has its own page** (design phase D1): the stay, the guest and the team's notes,
+  with what the channel sent beside them and a link to the stay on the Calendar. The Reservations list
+  shows upcoming bookings (staying now included), past ones and cancellations, 200 at a time, and
+  finds one by guest, the channel's code or property. Both await design sign-off.
+- **The team can change a booking's guest details, times agreed for that stay, and notes; the dates,
+  party and price stay as the channel sent them,** because those change on the channel. Admins,
+  operations and the guest team can change them; accounts and V-01 support can look; the field team
+  can't see bookings, which carry guests' contact details. Migration 0015 adds the agreed times (none
+  means the property's usual times) and a limit of 4,000 characters on notes. Every change is in the
+  audit trail.
+- **A channel's new details for a guest replace the team's, but a detail it doesn't send keeps what
+  the team typed** (Airbnb shares no email address, say). The booking import only overwrites what the
+  channel sends.
+- **Message guest offers an email, a call or a text when V-01 has the details,** with the stay in
+  the email's subject. Messages with Airbnb, Booking.com and Vrbo guests stay on those channels until
+  the Inbox (design phase D2, Phase 2).
 - **A night's box is 72 pixels wide at least (Alpha),** up from 52, so a two-night stay shows the
   guest's whole name. A laptop shows about 12 to 15 nights instead of 21; a phone scrolls sideways
   through two weeks. A bar too short for the name shows the first name, and a one-night stay shows
   only its channel's mark: never a stray letter. The whole name is in the hover line and the panel.
-- **Each booking's bar starts with the mark of the channel it came from:** Airbnb, Booking.com, "V"
-  for Vrbo, "E" for Expedia, or a person for a direct booking. The marks are drawn in ink on a white
-  circle, never in the channels' own colours, because colour means status. This departs from the
-  Design Roadmap's rule that channels are named only in words, so it waits on Alpha's yes or no.
-  Stopping it means removing the circles; the channel stays in the hover line and the panel.
+- **Each booking's bar starts with the mark of the channel it came from (Alpha):** Airbnb,
+  Booking.com, "V" for Vrbo, "E" for Expedia, or a person for a direct booking. The marks are drawn in
+  ink on a white circle, never in the channels' own colours, because colour still means status. This
+  reverses the Design Roadmap's rule that channels are named only in words; the roadmap changes at its
+  next revision. Everywhere else a channel is still named in words beside its mark.
 - **The Calendar's filters sit across the top:** Area (area or town), Tags, Sync (moved here, still
   on Guesty, not connected yet), Bedrooms (this many or more) and Free dates (no booking or block on
   any night of a stay, and room for the party). Beside them: how many properties are showing out of

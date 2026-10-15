@@ -18,6 +18,7 @@ import { calendarRoutes } from './routes/calendar.ts';
 import { consoleRoutes } from './routes/console.ts';
 import { meRoutes } from './routes/me.ts';
 import { propertyRoutes } from './routes/properties.ts';
+import { reservationRoutes } from './routes/reservations.ts';
 import { webhookRoutes } from './routes/webhooks.ts';
 import { workspaceRoutes } from './routes/workspace.ts';
 
@@ -106,6 +107,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   workspaceRoutes(app, { scope });
   propertyRoutes(app, { scope, photos: deps.photos ?? photoStoreFrom(deps.env) });
   calendarRoutes(app, { scope });
+  reservationRoutes(app, { scope });
   consoleRoutes(app, { scope });
   await webhookRoutes(app, { db: deps.db, channexSecret: deps.env.CHANNEX_WEBHOOK_SECRET });
 

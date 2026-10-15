@@ -22,6 +22,7 @@ import {
   PropertyCreateSchema,
   PropertyUpdateSchema,
   parseMajorToMinor,
+  ReservationUpdateSchema,
   SupportAccessStartSchema,
   selectedNights,
   staysOverlap,
@@ -313,5 +314,39 @@ describe('the calendar', () => {
       CalendarChangeSchema.safeParse({ ...change, lastNight: '2026-11-02', daysOfWeek: [0], blocked: true })
         .success,
     ).toBe(false);
+  });
+});
+
+describe('changing a booking', () => {
+  it('takes tidied contact details, agreed times and notes', () => {
+    expect(
+      ReservationUpdateSchema.parse({
+        guestName: '  Hannah Lee ',
+        guestEmail: ' hannah@guest.example ',
+        guestPhone: '+44 7700 900123',
+        checkInTime: '13:00',
+        notes: ' Early arrival agreed ',
+      }),
+    ).toEqual({
+      guestName: 'Hannah Lee',
+      guestEmail: 'hannah@guest.example',
+      guestPhone: '+44 7700 900123',
+      checkInTime: '13:00',
+      notes: 'Early arrival agreed',
+    });
+    // Empty clears a detail; null puts a time back to the property's.
+    expect(ReservationUpdateSchema.parse({ guestEmail: '', checkOutTime: null })).toEqual({
+      guestEmail: '',
+      checkOutTime: null,
+    });
+  });
+
+  it('refuses what is not an email, a phone number or a time, and an empty change', () => {
+    expect(ReservationUpdateSchema.safeParse({ guestEmail: 'hannah at home' }).success).toBe(false);
+    expect(ReservationUpdateSchema.safeParse({ guestPhone: 'call me' }).success).toBe(false);
+    expect(ReservationUpdateSchema.safeParse({ guestPhone: '12-34' }).success).toBe(false);
+    expect(ReservationUpdateSchema.safeParse({ checkInTime: '3pm' }).success).toBe(false);
+    expect(ReservationUpdateSchema.safeParse({ notes: 'x'.repeat(4001) }).success).toBe(false);
+    expect(ReservationUpdateSchema.safeParse({}).success).toBe(false);
   });
 });

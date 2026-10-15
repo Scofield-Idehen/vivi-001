@@ -36,14 +36,17 @@ access.
   - V-01 staff open a company's workspace with a reason and a time limit, and can't change anything.
   - The company sees every visit.
 - **A company's workspace**
-  - Today, Calendar, Properties and Workspace settings. The sidebar is a row of icons that opens when
-    your mouse rests on it.
+  - Today, Calendar, Reservations, Properties and Workspace settings. The sidebar is a row of icons
+    that opens when your mouse rests on it.
   - The Calendar: every property by night, with prices, minimum stays, bookings and blocks. Each
     booking starts with the mark of the channel it came from. Drag across nights (and down across
     properties) to change their price or minimum stay, close them to arrivals or departures, or block
     them. Prices stay within each property's limits.
   - Finding properties on the Calendar: search over the names, and filter by area, tags, sync,
     bedrooms, or free dates for a stay. Tags are the team's own labels, set under a property's name.
+  - Bookings: select one on the Calendar to see it, edit it, message the guest or open its page. Every
+    booking has a page with the stay, the guest and the team's notes. The Reservations list shows
+    upcoming, past and cancelled bookings, and finds one by guest, code or property.
   - Adding a property: a panel slides in from the right and asks one thing at a time, in Airbnb's three
     stages: about the place; make it stand out (amenities, photos, title and description); then
     pricing. Only a name is required, and closing it keeps the draft.
@@ -70,12 +73,14 @@ access.
 ![The calendar](docs/images/calendar.png)
 *The Calendar: filters across the top, bookings marked with their channel, and dragging across nights to change them.*
 
+![A booking on the calendar](docs/images/booking-panel.png)
+*A booking: open its page, edit it, or reach the guest by email, a call or a text.*
+
 ## Coming next
 
 Phase 1 connects V-01 to Airbnb, Booking.com and Vrbo through Channex: prices and availability out,
 bookings in. Channex can't send photos, descriptions or amenities to the channels yet, so for now those
-are copied across from each property's page. Phase 1 also adds the Reservations and Channels & sync
-screens.
+are copied across from each property's page. Phase 1 also adds the Channels & sync screen.
 
 ---
 

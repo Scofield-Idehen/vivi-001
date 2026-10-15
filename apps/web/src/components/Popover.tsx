@@ -68,7 +68,9 @@ export function Popover({
   useLayoutEffect(() => {
     if (!open || !wrapper.current || !panel.current) return;
     const left = wrapper.current.getBoundingClientRect().left;
-    const over = left + panel.current.offsetWidth - (window.innerWidth - EDGE);
+    // The page's own width: on a phone the window's grows with anything that overflows, this panel too.
+    const width = document.documentElement.clientWidth;
+    const over = left + panel.current.offsetWidth - (width - EDGE);
     setShift(over > 0 ? -Math.min(over, Math.max(0, left - EDGE)) : 0);
   }, [open]);
 
@@ -83,6 +85,8 @@ export function Popover({
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Escape' && open) {
+      // Only the popover closes: not a side panel it sits in, which Escape would otherwise close too.
+      event.preventDefault();
       event.stopPropagation();
       close();
     }

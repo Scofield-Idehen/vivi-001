@@ -24,6 +24,7 @@ import {
   formatMoney,
   type Me,
   type MemberRole,
+  nightRules,
   nightsBetween,
   type Permission,
   PHOTO_MAX_COUNT,
@@ -36,6 +37,13 @@ import {
   PropertySchema,
   type PropertyType,
   PropertyUpdateSchema,
+  RESERVATION_LIST_LIMIT,
+  type Reservation,
+  type ReservationList,
+  ReservationListQuerySchema,
+  type ReservationStatus,
+  type ReservationSummary,
+  ReservationUpdateSchema,
   RoomsUpdateSchema,
   SUPPORT_ROLE,
   SupportAccessStartSchema,
@@ -105,10 +113,29 @@ interface DemoOperator {
   calendar: DemoCalendar;
 }
 
+/** A booking as the API keeps it: what the calendar shows, and what the reservation page adds. */
+interface DemoStay extends Omit<CalendarStay, 'status'> {
+  status: ReservationStatus;
+  adults: number;
+  children: number;
+  infants: number;
+  guestEmail: string | null;
+  guestPhone: string | null;
+  currency: string;
+  totalMinor: number | null;
+  payoutMinor: number | null;
+  checkInTime: string | null;
+  checkOutTime: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  cancelledAt: string | null;
+}
+
 /** The operator's nights with their own rules, bookings and blocks, as the API keeps them. */
 interface DemoCalendar {
   nights: CalendarNight[];
-  stays: CalendarStay[];
+  stays: DemoStay[];
   blocks: CalendarBlock[];
 }
 
@@ -133,7 +160,7 @@ interface DemoSyncError {
 
 interface DemoState {
   /** Raised whenever the shape changes, so a browser holding older sample data starts fresh. */
-  version: 6;
+  version: 7;
   /** The day the sample bookings were laid out from. They are laid out afresh each week. */
   calendarFrom: string;
   operators: DemoOperator[];
@@ -264,10 +291,17 @@ interface SampleStay {
   from: number;
   nights: number;
   guest: string;
+  /** Everyone, children included. */
   guests: number;
+  children?: number;
   channel: Channel;
   reference: string | null;
-  status?: CalendarStay['status'];
+  status?: ReservationStatus;
+  email?: string;
+  phone?: string;
+  notes?: string;
+  checkInTime?: string;
+  checkOutTime?: string;
 }
 
 interface SampleCalendar {
@@ -295,6 +329,8 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
         guests: 4,
         channel: 'airbnb',
         reference: 'HM8KQ2TZ4N',
+        children: 2,
+        phone: '+44 7700 900101',
       },
       {
         property: 0,
@@ -304,6 +340,8 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
         guests: 2,
         channel: 'booking_com',
         reference: '4281907733',
+        email: 'tom.becker@example.com',
+        phone: '+44 7700 900102',
       },
       {
         property: 0,
@@ -313,6 +351,7 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
         guests: 5,
         channel: 'airbnb',
         reference: 'HMZ4P7Q1RT',
+        children: 3,
       },
       {
         property: 0,
@@ -322,6 +361,8 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
         guests: 6,
         channel: 'vrbo',
         reference: 'HA-4X2K9P',
+        children: 2,
+        email: 'daniel.okafor@example.com',
       },
       {
         property: 0,
@@ -331,6 +372,9 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
         guests: 2,
         channel: 'direct',
         reference: null,
+        email: 'lena.fischer@example.com',
+        phone: '+44 7700 900103',
+        notes: 'Booked by phone. Paying by bank transfer before arrival.',
       },
       {
         property: 1,
@@ -340,6 +384,7 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
         guests: 2,
         channel: 'airbnb',
         reference: 'HMR2D8W5KC',
+        notes: 'Arriving late, around 22:00. Self check-in instructions sent.',
       },
       {
         property: 1,
@@ -349,6 +394,7 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
         guests: 1,
         channel: 'booking_com',
         reference: '4290315518',
+        email: 'jamie.clarke@example.com',
       },
       {
         property: 1,
@@ -358,6 +404,8 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
         guests: 2,
         channel: 'airbnb',
         reference: 'HMB6N3T9XE',
+        checkInTime: '13:00',
+        notes: 'Early check-in at 13:00 agreed. The cleaners know.',
       },
       {
         property: 1,
@@ -367,6 +415,8 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
         guests: 2,
         channel: 'booking_com',
         reference: '4302276641',
+        email: 'arjun.mehta@example.com',
+        phone: '+44 7700 900104',
       },
       {
         property: 1,
@@ -385,6 +435,8 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
         guests: 4,
         channel: 'vrbo',
         reference: 'HA-7M3R1D',
+        children: 2,
+        email: 'claire.dubois@example.com',
       },
       {
         property: 2,
@@ -394,6 +446,8 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
         guests: 3,
         channel: 'airbnb',
         reference: 'HMT9W2E6LB',
+        children: 1,
+        phone: '+44 7700 900105',
       },
       // Came in over Owen Price's stay: it holds no nights until someone sorts it out.
       {
@@ -404,6 +458,8 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
         guests: 2,
         channel: 'booking_com',
         reference: '4311850297',
+        email: 'ravi.kumar@example.com',
+        notes: 'Came in over Owen Price’s stay. Ask Booking.com to move or cancel it.',
         status: 'conflict',
       },
       {
@@ -414,6 +470,8 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
         guests: 8,
         channel: 'airbnb',
         reference: 'HMQ3F7H2NJ',
+        children: 3,
+        phone: '+44 7700 900106',
       },
       {
         property: 3,
@@ -423,6 +481,53 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
         guests: 6,
         channel: 'direct',
         reference: null,
+        children: 2,
+        email: 'noah.williams@example.com',
+        phone: '+44 7700 900107',
+        checkOutTime: '12:00',
+        notes: 'Late check-out at 12:00 included for this direct booking.',
+      },
+      // Finished stays, for the Reservations list's Past view.
+      {
+        property: 0,
+        from: -12,
+        nights: 3,
+        guest: 'Lucas Moreau',
+        guests: 2,
+        channel: 'airbnb',
+        reference: 'HMP2L6K8WD',
+      },
+      {
+        property: 1,
+        from: -9,
+        nights: 4,
+        guest: 'Fatima Rahman',
+        guests: 2,
+        channel: 'booking_com',
+        reference: '4266120934',
+        email: 'fatima.rahman@example.com',
+      },
+      {
+        property: 3,
+        from: -15,
+        nights: 5,
+        guest: 'Amaka Okoro',
+        guests: 7,
+        children: 4,
+        channel: 'direct',
+        reference: null,
+        phone: '+44 7700 900108',
+      },
+      // Cancelled on Airbnb: it holds no nights.
+      {
+        property: 3,
+        from: 24,
+        nights: 3,
+        guest: 'Chloe Martin',
+        guests: 4,
+        channel: 'airbnb',
+        reference: 'HMX7C3B9TR',
+        status: 'cancelled',
       },
     ],
     blocks: [
@@ -491,19 +596,6 @@ function sampleCalendar(orgId: string, properties: PropertyDetail[], from: strin
   const calendar: DemoCalendar = { nights: [], stays: [], blocks: [] };
   if (!sample) return calendar;
   const idOf = (index: number) => properties[index]?.id ?? '';
-  for (const s of sample.stays) {
-    calendar.stays.push({
-      id: crypto.randomUUID(),
-      propertyId: idOf(s.property),
-      checkIn: addDays(from, s.from),
-      checkOut: addDays(from, s.from + s.nights),
-      status: s.status ?? 'confirmed',
-      channel: s.channel,
-      channelReference: s.reference,
-      guestName: s.guest,
-      guests: s.guests,
-    });
-  }
   for (const b of sample.blocks) {
     calendar.blocks.push({
       id: crypto.randomUUID(),
@@ -525,6 +617,49 @@ function sampleCalendar(orgId: string, properties: PropertyDetail[], from: strin
       });
     }
   }
+  // Each booking's total is its nights at the prices the calendar shows for them.
+  sample.stays.forEach((s, index) => {
+    const property = properties[s.property];
+    const checkIn = addDays(from, s.from);
+    const checkOut = addDays(from, s.from + s.nights);
+    let total: number | null = 0;
+    for (const night of eachNight(checkIn, checkOut)) {
+      const own = calendar.nights.find((n) => n.propertyId === property?.id && n.night === night) ?? null;
+      const price = property ? nightRules(property, night, own).priceMinor : null;
+      total = total === null || price === null ? null : total + price;
+    }
+    // Booked a few weeks before arrival, or the day after the last one for a past stay.
+    const booked = new Date(
+      `${addDays(from, Math.min(s.from, 0) - 21 - (index % 9))}T10:${String(10 + index).padStart(2, '0')}:00Z`,
+    );
+    const children = s.children ?? 0;
+    calendar.stays.push({
+      id: crypto.randomUUID(),
+      propertyId: idOf(s.property),
+      checkIn,
+      checkOut,
+      status: s.status ?? 'confirmed',
+      channel: s.channel,
+      channelReference: s.reference,
+      guestName: s.guest,
+      guests: s.guests,
+      adults: Math.max(1, s.guests - children),
+      children,
+      infants: 0,
+      guestEmail: s.email ?? null,
+      guestPhone: s.phone ?? null,
+      currency: 'GBP',
+      totalMinor: total,
+      payoutMinor: null,
+      checkInTime: s.checkInTime ?? null,
+      checkOutTime: s.checkOutTime ?? null,
+      notes: s.notes ?? null,
+      createdAt: booked.toISOString(),
+      updatedAt: booked.toISOString(),
+      cancelledAt:
+        s.status === 'cancelled' ? new Date(Date.now() - 2 * 24 * 60 * MINUTE).toISOString() : null,
+    });
+  });
   return calendar;
 }
 
@@ -552,7 +687,7 @@ function operatorWorkspace(
 function seed(): DemoState {
   const pastVisit = Date.now() - (2 * 24 * 60 + 190) * MINUTE;
   const state: DemoState = {
-    version: 6,
+    version: 7,
     calendarFrom: demoToday(),
     operators: [
       {
@@ -830,7 +965,7 @@ function load(): DemoState {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved) as DemoState;
-      if (parsed.version === 6) {
+      if (parsed.version === 7) {
         // A week on, the sample bookings would all be in the past: lay them out again from today.
         if (parsed.calendarFrom <= addDays(demoToday(), -7)) {
           layOutSamples(parsed);
@@ -1178,9 +1313,29 @@ async function demoCalendar(
       .filter((n) => ids.has(n.propertyId) && n.night >= from && n.night <= to)
       .sort((a, b) => a.night.localeCompare(b.night)),
     // Stays leaving on the first day are included, as the API does: that day's turnover shows.
+    // Cancelled bookings, enquiries and requests hold no nights, so the calendar leaves them out.
     stays: stays
-      .filter((x) => ids.has(x.propertyId) && x.checkIn <= to && x.checkOut >= from)
-      .sort((a, b) => a.checkIn.localeCompare(b.checkIn)),
+      .filter(
+        (x) =>
+          ids.has(x.propertyId) &&
+          (x.status === 'confirmed' || x.status === 'conflict') &&
+          x.checkIn <= to &&
+          x.checkOut >= from,
+      )
+      .sort((a, b) => a.checkIn.localeCompare(b.checkIn))
+      .map(
+        (x): CalendarStay => ({
+          id: x.id,
+          propertyId: x.propertyId,
+          checkIn: x.checkIn,
+          checkOut: x.checkOut,
+          status: x.status === 'conflict' ? 'conflict' : 'confirmed',
+          channel: x.channel,
+          channelReference: x.channelReference,
+          guestName: x.guestName,
+          guests: x.adults + x.children,
+        }),
+      ),
     blocks: blocks
       .filter((b) => ids.has(b.propertyId) && b.startsOn <= to && b.endsOn > from)
       .sort((a, b) => a.startsOn.localeCompare(b.startsOn)),
@@ -1357,6 +1512,113 @@ const pause = () => new Promise((resolve) => setTimeout(resolve, 120));
 const OPERATOR_PATH = /^\/v1\/console\/operators\/([0-9a-f-]{36})$/;
 const START_PATH = /^\/v1\/console\/operators\/([0-9a-f-]{36})\/support-access$/;
 const END_PATH = /^\/v1\/console\/support-access\/([0-9a-f-]{36})\/end$/;
+// Reservations -----------------------------------------------------------------------------------
+
+const RESERVATION_PATH = /^\/v1\/reservations\/([0-9a-f-]{36})$/;
+
+function reservationSummary(operator: DemoOperator, x: DemoStay): ReservationSummary {
+  return {
+    id: x.id,
+    propertyId: x.propertyId,
+    propertyName: operator.properties.find((p) => p.id === x.propertyId)?.name ?? '',
+    status: x.status,
+    channel: x.channel,
+    channelReference: x.channelReference,
+    checkIn: x.checkIn,
+    checkOut: x.checkOut,
+    guestName: x.guestName,
+    adults: x.adults,
+    children: x.children,
+    infants: x.infants,
+    currency: x.currency,
+    totalMinor: x.totalMinor,
+    createdAt: x.createdAt,
+  };
+}
+
+function toReservation(operator: DemoOperator, x: DemoStay): Reservation {
+  const property = operator.properties.find((p) => p.id === x.propertyId);
+  return {
+    ...reservationSummary(operator, x),
+    propertyCode: property?.internalCode ?? null,
+    propertyCheckInTime: property?.checkInTime ?? '15:00',
+    propertyCheckOutTime: property?.checkOutTime ?? '10:00',
+    checkInTime: x.checkInTime,
+    checkOutTime: x.checkOutTime,
+    guestEmail: x.guestEmail,
+    guestPhone: x.guestPhone,
+    payoutMinor: x.payoutMinor,
+    notes: x.notes,
+    cancelledAt: x.cancelledAt,
+    updatedAt: x.updatedAt,
+    today: todayIn(operator.workspace.settings.timeZone),
+  };
+}
+
+/** The API's GET /v1/reservations: upcoming (staying now included), past or cancelled, searched. */
+function demoReservations(operator: DemoOperator, query: Record<string, string>): ReservationList {
+  const parsed = ReservationListQuerySchema.safeParse(query);
+  if (!parsed.success) invalid(parsed.error.issues);
+  const { view, q } = parsed.data;
+  const today = todayIn(operator.workspace.settings.timeZone);
+  const words = q?.toLowerCase() ?? '';
+  const nameOf = (x: DemoStay) => operator.properties.find((p) => p.id === x.propertyId)?.name ?? '';
+  const matching = operator.calendar.stays.filter((x) => {
+    const inView =
+      view === 'cancelled'
+        ? x.status === 'cancelled'
+        : x.status !== 'cancelled' && (view === 'past' ? x.checkOut < today : x.checkOut >= today);
+    if (!inView) return false;
+    if (!words) return true;
+    return [x.guestName ?? '', x.channelReference ?? '', nameOf(x)].some((v) =>
+      v.toLowerCase().includes(words),
+    );
+  });
+  matching.sort((a, b) =>
+    view === 'upcoming'
+      ? a.checkIn.localeCompare(b.checkIn) || a.createdAt.localeCompare(b.createdAt)
+      : view === 'past'
+        ? b.checkIn.localeCompare(a.checkIn)
+        : (b.cancelledAt ?? b.updatedAt).localeCompare(a.cancelledAt ?? a.updatedAt),
+  );
+  return {
+    today,
+    reservations: matching.slice(0, RESERVATION_LIST_LIMIT).map((x) => reservationSummary(operator, x)),
+    more: matching.length > RESERVATION_LIST_LIMIT,
+  };
+}
+
+function findStay(operator: DemoOperator, id: string): DemoStay {
+  const stay = operator.calendar.stays.find((x) => x.id === id);
+  if (!stay) {
+    throw new ApiError(404, 'reservation_not_found', 'That booking does not exist in this workspace.');
+  }
+  return stay;
+}
+
+/** The API's PATCH /v1/reservations/:id: contact details, agreed times and notes. */
+function changeDemoReservation(operator: DemoOperator, id: string, body: unknown): Reservation {
+  const stay = findStay(operator, id);
+  const parsed = ReservationUpdateSchema.safeParse(body);
+  if (!parsed.success) invalid(parsed.error.issues);
+  const change = parsed.data;
+  const orNull = (v: string | null | undefined) => (v === undefined ? undefined : v || null);
+  const next = {
+    guestName: orNull(change.guestName),
+    guestEmail: orNull(change.guestEmail),
+    guestPhone: orNull(change.guestPhone),
+    checkInTime: change.checkInTime,
+    checkOutTime: change.checkOutTime,
+    notes: orNull(change.notes),
+  };
+  for (const [key, value] of Object.entries(next)) {
+    if (value !== undefined) Object.assign(stay, { [key]: value });
+  }
+  stay.updatedAt = new Date().toISOString();
+  save();
+  return toReservation(operator, stay);
+}
+
 const PROPERTY_PATH = /^\/v1\/properties\/([0-9a-f-]{36})(\/rooms|\/amenities|\/photos\/order)?$/;
 const PHOTO_PATH = /^\/v1\/properties\/([0-9a-f-]{36})\/photos\/([0-9a-f-]{36})$/;
 
@@ -1593,6 +1855,24 @@ export async function demoFetch<T>(
     const result = changeDemoCalendar(operator, options.body);
     save();
     return result as T;
+  }
+
+  if (method === 'GET' && (path === '/v1/reservations' || path.startsWith('/v1/reservations?'))) {
+    const { operator } = access(options.orgId, 'reservations.read');
+    const query = Object.fromEntries(new URLSearchParams(path.split('?')[1] ?? ''));
+    return demoReservations(operator, query) as T;
+  }
+
+  const reservationMatch = RESERVATION_PATH.exec(path);
+  if (reservationMatch?.[1]) {
+    if (method === 'GET') {
+      const { operator } = access(options.orgId, 'reservations.read');
+      return toReservation(operator, findStay(operator, reservationMatch[1])) as T;
+    }
+    if (method === 'PATCH') {
+      const { operator } = access(options.orgId, 'reservations.write');
+      return changeDemoReservation(operator, reservationMatch[1], options.body) as T;
+    }
   }
 
   // The V-01 console: the demo user is a V-01 owner.

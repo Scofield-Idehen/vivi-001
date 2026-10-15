@@ -22,6 +22,7 @@ with a soft white page.
 | Calendar: nightly prices, stay rules and blocks | `apps/api/src/routes/calendar.ts`, `packages/shared/src/calendar.ts` | Done |
 | Calendar screen, with filters, free dates and the channel marks | `apps/web/src/pages/calendar` | Done; awaiting design sign-off |
 | Property tags | `packages/db/migrations/0014_property_tags.sql`, `apps/web/src/pages/properties/Tags.tsx` | Done |
+| Reservations: list, one booking's page, and its edits | `apps/api/src/routes/reservations.ts`, `apps/web/src/pages/reservations` | Done; awaiting design sign-off |
 | Changes queued for the channels by the database | `packages/db/migrations/0012_channel_queue.sql` | Done |
 | Prices and stay rules out | `apps/worker/src/outbox.ts` | Done, tested against the stand-in |
 
@@ -147,7 +148,7 @@ Not set up yet. These are the steps for when the staging and production accounts
 - Property sync into Channex (step 3), auto-availability settings (step 6) and mapping screens
   (step 7). Prices and stay rules out (step 4) and booking import (step 5) are built and tested against
   the stand-in; they run against Channex once a property is mapped and moved over.
-- Reservations and Channels & sync screens from design phase D1 (the Calendar is built).
+- The Channels & sync screen from design phase D1 (the Calendar and Reservations are built).
 - Nightly cross-check.
 
 Design sign-off: Alpha and Alessio, at every design gate.

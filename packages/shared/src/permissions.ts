@@ -11,6 +11,9 @@ export const PERMISSIONS = {
   'properties.write': ['admin', 'operations'],
   'calendar.read': ['admin', 'operations', 'guest_comms', 'accounts', 'v01_support'],
   'calendar.write': ['admin', 'operations'],
+  'reservations.read': ['admin', 'operations', 'guest_comms', 'accounts', 'v01_support'],
+  /** Guest contact details, agreed times and the team's notes. Dates and prices change on the channel. */
+  'reservations.write': ['admin', 'operations', 'guest_comms'],
   'channels.manage': ['admin'],
   'workspace.read': ['admin', 'operations', 'guest_comms', 'accounts', 'field', 'v01_support'],
   'workspace.manage': ['admin'],

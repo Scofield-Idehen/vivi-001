@@ -132,12 +132,18 @@ export async function saveRevision(
     }
   }
 
-  // The guest, as the channel last described them.
+  // The guest, as the channel last described them. A detail the channel doesn't send (Airbnb shares
+  // no email, say) keeps what the team typed in on the reservation page.
   let guestId = existing?.guestId ?? null;
   const guest = { fullName: revision.guestName, email: revision.guestEmail, phone: revision.guestPhone };
   if (guest.fullName || guest.email || guest.phone) {
     if (guestId) {
-      await tx.update(guests).set(guest).where(eq(guests.id, guestId));
+      const sent = {
+        ...(guest.fullName ? { fullName: guest.fullName } : {}),
+        ...(guest.email ? { email: guest.email } : {}),
+        ...(guest.phone ? { phone: guest.phone } : {}),
+      };
+      await tx.update(guests).set(sent).where(eq(guests.id, guestId));
     } else {
       const [row] = await tx
         .insert(guests)

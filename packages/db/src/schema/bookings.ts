@@ -8,6 +8,7 @@ import {
   integer,
   jsonb,
   text,
+  time,
   timestamp,
   unique,
   uuid,
@@ -58,7 +59,11 @@ export const reservations = app.table(
     currency: char('currency', { length: 3 }),
     totalMinor: bigint('total_minor', { mode: 'number' }),
     payoutMinor: bigint('payout_minor', { mode: 'number' }),
+    /** The team's own notes on the booking. Channels never see them. */
     notes: text('notes'),
+    /** Agreed times for this stay only (an early arrival, a late departure); null keeps the property's. */
+    checkInTime: time('check_in_time'),
+    checkOutTime: time('check_out_time'),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true, mode: 'string' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -66,8 +71,11 @@ export const reservations = app.table(
   (t) => [
     index('reservations_org_idx').on(t.organisationId),
     index('reservations_property_dates_idx').on(t.propertyId, t.checkIn),
+    // The Reservations list: an operator's bookings by arrival.
+    index('reservations_org_check_in_idx').on(t.organisationId, t.checkIn),
     unique('reservations_channel_reference_key').on(t.organisationId, t.channel, t.channelReference),
     check('reservations_dates_order', sql`${t.checkOut} > ${t.checkIn}`),
+    check('reservations_notes_length', sql`char_length(${t.notes}) <= 4000`),
   ],
 );
 

@@ -1,0 +1,195 @@
+import { guests, organisationSettings, properties, reservations, type Tx } from '@v01/db';
+import {
+  RESERVATION_LIST_LIMIT,
+  type Reservation,
+  type ReservationList,
+  ReservationListQuerySchema,
+  ReservationListSchema,
+  ReservationSchema,
+  ReservationUpdateSchema,
+  todayIn,
+} from '@v01/shared';
+import { and, asc, desc, eq, gte, ilike, lt, ne, or, type SQL, sql } from 'drizzle-orm';
+import type { FastifyInstance } from 'fastify';
+import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { z } from 'zod';
+import { type RequestScope, toIso } from '../context.ts';
+import { HttpError } from '../errors.ts';
+
+const ReservationParams = z.object({ id: z.uuid() });
+
+const notFound = () =>
+  new HttpError(404, 'reservation_not_found', 'That booking does not exist in this workspace.');
+
+/** Today where the operator is. Row-level security leaves exactly one settings row in scope. */
+async function operatorToday(tx: Tx): Promise<string> {
+  const [row] = await tx.select({ timeZone: organisationSettings.timeZone }).from(organisationSettings);
+  return todayIn(row?.timeZone ?? 'Europe/London');
+}
+
+/** A search typed by a person, safe inside LIKE: its own % and _ match only themselves. */
+const contains = (text: string) => `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+
+const summary = {
+  id: reservations.id,
+  propertyId: reservations.propertyId,
+  propertyName: properties.name,
+  status: reservations.status,
+  channel: reservations.channel,
+  channelReference: reservations.channelReference,
+  checkIn: reservations.checkIn,
+  checkOut: reservations.checkOut,
+  guestName: guests.fullName,
+  adults: reservations.adults,
+  children: reservations.children,
+  infants: reservations.infants,
+  currency: reservations.currency,
+  totalMinor: reservations.totalMinor,
+  createdAt: reservations.createdAt,
+};
+
+/** "15:00:00" as stored, "15:00" as shown. */
+const clock = (value: string | null) => (value ? value.slice(0, 5) : null);
+
+async function loadReservation(tx: Tx, id: string): Promise<Reservation> {
+  // Row-level security limits this to the operator in scope: another operator's booking is not found.
+  const [row] = await tx
+    .select({
+      ...summary,
+      propertyCode: properties.internalCode,
+      propertyCheckInTime: properties.checkInTime,
+      propertyCheckOutTime: properties.checkOutTime,
+      checkInTime: reservations.checkInTime,
+      checkOutTime: reservations.checkOutTime,
+      guestEmail: guests.email,
+      guestPhone: guests.phone,
+      payoutMinor: reservations.payoutMinor,
+      notes: reservations.notes,
+      cancelledAt: reservations.cancelledAt,
+      updatedAt: reservations.updatedAt,
+    })
+    .from(reservations)
+    .innerJoin(properties, eq(properties.id, reservations.propertyId))
+    .leftJoin(guests, eq(guests.id, reservations.guestId))
+    .where(eq(reservations.id, id));
+  if (!row) throw notFound();
+  return {
+    ...row,
+    propertyCheckInTime: clock(row.propertyCheckInTime) ?? '15:00',
+    propertyCheckOutTime: clock(row.propertyCheckOutTime) ?? '10:00',
+    checkInTime: clock(row.checkInTime),
+    checkOutTime: clock(row.checkOutTime),
+    createdAt: toIso(row.createdAt),
+    updatedAt: toIso(row.updatedAt),
+    cancelledAt: row.cancelledAt ? toIso(row.cancelledAt) : null,
+    today: await operatorToday(tx),
+  };
+}
+
+/** An empty value clears a detail. */
+const orNull = (value: string | null | undefined) => (value === undefined ? undefined : value || null);
+
+export function reservationRoutes(app: FastifyInstance, deps: { scope: RequestScope }) {
+  const typed = app.withTypeProvider<ZodTypeProvider>();
+
+  typed.get(
+    '/v1/reservations',
+    { schema: { querystring: ReservationListQuerySchema, response: { 200: ReservationListSchema } } },
+    async (req) =>
+      deps.scope.inOrg(req, 'reservations.read', async (tx): Promise<ReservationList> => {
+        const { view, q } = req.query;
+        const today = await operatorToday(tx);
+        const notCancelled = ne(reservations.status, 'cancelled');
+        // Upcoming includes everyone staying now: a stay leaving today is still on.
+        const which: SQL | undefined =
+          view === 'cancelled'
+            ? eq(reservations.status, 'cancelled')
+            : view === 'past'
+              ? and(notCancelled, lt(reservations.checkOut, today))
+              : and(notCancelled, gte(reservations.checkOut, today));
+        const search = q
+          ? or(
+              ilike(guests.fullName, contains(q)),
+              ilike(reservations.channelReference, contains(q)),
+              ilike(properties.name, contains(q)),
+            )
+          : undefined;
+        const order =
+          view === 'upcoming'
+            ? [asc(reservations.checkIn), asc(reservations.createdAt)]
+            : view === 'past'
+              ? [desc(reservations.checkIn), desc(reservations.createdAt)]
+              : [desc(sql`coalesce(${reservations.cancelledAt}, ${reservations.updatedAt})`)];
+        const rows = await tx
+          .select(summary)
+          .from(reservations)
+          .innerJoin(properties, eq(properties.id, reservations.propertyId))
+          .leftJoin(guests, eq(guests.id, reservations.guestId))
+          .where(and(which, search))
+          .orderBy(...order)
+          .limit(RESERVATION_LIST_LIMIT + 1);
+        return {
+          today,
+          reservations: rows
+            .slice(0, RESERVATION_LIST_LIMIT)
+            .map((row) => ({ ...row, createdAt: toIso(row.createdAt) })),
+          more: rows.length > RESERVATION_LIST_LIMIT,
+        };
+      }),
+  );
+
+  typed.get(
+    '/v1/reservations/:id',
+    { schema: { params: ReservationParams, response: { 200: ReservationSchema } } },
+    async (req) => deps.scope.inOrg(req, 'reservations.read', (tx) => loadReservation(tx, req.params.id)),
+  );
+
+  typed.patch(
+    '/v1/reservations/:id',
+    {
+      schema: {
+        params: ReservationParams,
+        body: ReservationUpdateSchema,
+        response: { 200: ReservationSchema },
+      },
+    },
+    async (req) =>
+      deps.scope.inOrg(req, 'reservations.write', async (tx, ctx) => {
+        const [booking] = await tx
+          .select({ id: reservations.id, guestId: reservations.guestId })
+          .from(reservations)
+          .where(eq(reservations.id, req.params.id));
+        if (!booking) throw notFound();
+        const change = req.body;
+
+        // The guest's details. A booking with no guest yet gets one.
+        const guest = {
+          fullName: orNull(change.guestName),
+          email: orNull(change.guestEmail),
+          phone: orNull(change.guestPhone),
+        };
+        const touchesGuest = Object.values(guest).some((v) => v !== undefined);
+        let guestId = booking.guestId;
+        if (touchesGuest && guestId) {
+          await tx.update(guests).set(guest).where(eq(guests.id, guestId));
+        } else if (touchesGuest && Object.values(guest).some(Boolean)) {
+          const [row] = await tx
+            .insert(guests)
+            .values({ organisationId: ctx.orgId, ...guest })
+            .returning({ id: guests.id });
+          guestId = row?.id ?? null;
+        }
+
+        const stay = {
+          checkInTime: change.checkInTime,
+          checkOutTime: change.checkOutTime,
+          notes: orNull(change.notes),
+          ...(guestId !== booking.guestId ? { guestId } : {}),
+        };
+        if (Object.values(stay).some((v) => v !== undefined)) {
+          await tx.update(reservations).set(stay).where(eq(reservations.id, booking.id));
+        }
+        return loadReservation(tx, booking.id);
+      }),
+  );
+}

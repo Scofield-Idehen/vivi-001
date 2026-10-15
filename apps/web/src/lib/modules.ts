@@ -52,7 +52,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
         path: 'reservations',
         label: 'Reservations',
         icon: IconClipboardText,
-        built: false,
+        built: true,
         design: 'D1',
         phase: 'Phase 1',
         summary: 'Every booking with its guest, channel and account, payout, documents and history.',

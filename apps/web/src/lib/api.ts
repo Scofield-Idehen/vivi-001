@@ -13,6 +13,10 @@ import type {
   PropertyDetail,
   PropertyList,
   PropertyUpdate,
+  Reservation,
+  ReservationList,
+  ReservationUpdate,
+  ReservationView,
   RoomInput,
   SupportAccessStart,
   SupportGrant,
@@ -315,6 +319,53 @@ export function useChangeCalendar(orgId: string | null) {
         body: change,
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['calendar', orgId] }),
+  });
+}
+
+// Bookings --------------------------------------------------------------------------------------
+
+/** The Reservations list: upcoming (staying now included), past or cancelled, optionally searched. */
+export function useReservations(orgId: string | null, view: ReservationView, search: string) {
+  const token = useToken();
+  const query = new URLSearchParams({ view });
+  if (search.trim()) query.set('q', search.trim());
+  return useQuery({
+    queryKey: ['reservations', orgId, query.toString()],
+    enabled: Boolean(token && orgId),
+    placeholderData: keepPreviousData,
+    queryFn: () => apiFetch<ReservationList>(`/v1/reservations?${query}`, { token: token as string, orgId }),
+  });
+}
+
+/** One booking, with everything the reservation page shows. */
+export function useReservation(orgId: string | null, id: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['reservation', orgId, id],
+    enabled: Boolean(token && orgId && id),
+    queryFn: () => apiFetch<Reservation>(`/v1/reservations/${id}`, { token: token as string, orgId }),
+  });
+}
+
+/** Contact details, agreed times and notes. The calendar and lists show the new guest name too. */
+export function useUpdateReservation(orgId: string | null, id: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (change: ReservationUpdate) =>
+      apiFetch<Reservation>(`/v1/reservations/${id}`, {
+        token: token as string,
+        orgId,
+        method: 'PATCH',
+        body: change,
+      }),
+    onSuccess: async (reservation) => {
+      queryClient.setQueryData(['reservation', orgId, id], reservation);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['reservations', orgId] }),
+        queryClient.invalidateQueries({ queryKey: ['calendar', orgId] }),
+      ]);
+    },
   });
 }
 

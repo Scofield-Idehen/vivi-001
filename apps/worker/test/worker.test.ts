@@ -442,6 +442,36 @@ describe('bringing bookings in', () => {
     expect(provider.acknowledged).toEqual(['rev-2']);
   });
 
+  it('keeps a detail the team added when the channel sends none, and takes the ones it sends', async () => {
+    const guestOf = async () => {
+      const [row] = await owner<{ email: string | null; phone: string | null }>(
+        `select g.email, g.phone from app.channex_bookings cb
+           join app.reservations r on r.id = cb.reservation_id
+           join app.guests g on g.id = r.guest_id
+          where cb.channex_booking_id = 'bk-1'`,
+      );
+      return row;
+    };
+    // Typed in on the reservation page: Airbnb sends no phone number.
+    await owner(
+      `update app.guests g set phone = '+44 7700 900123'
+         from app.reservations r join app.channex_bookings cb on cb.reservation_id = r.id
+        where g.id = r.guest_id and cb.channex_booking_id = 'bk-1'`,
+    );
+    provider.feed = [
+      revision({
+        id: 'rev-2b',
+        status: 'modified',
+        arrivalDate: '2026-12-21',
+        departureDate: '2026-12-24',
+        guestEmail: 'maya.collins@example.test',
+        guestPhone: null,
+      }),
+    ];
+    await sweepBookingFeed(deps);
+    expect(await guestOf()).toEqual({ email: 'maya.collins@example.test', phone: '+44 7700 900123' });
+  });
+
   it('keeps a booking that overlaps another as a conflict, with an urgent alert, and still acknowledges it', async () => {
     provider.feed = [
       revision({

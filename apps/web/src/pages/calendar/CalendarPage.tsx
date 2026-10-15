@@ -1,7 +1,7 @@
 import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
-import { addDays, can, nightsBetween, todayIn } from '@v01/shared';
+import { addDays, can, isIsoDate, nightsBetween, todayIn } from '@v01/shared';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { Button, EmptyState, Notice, PageHeader } from '../../components/ui.tsx';
 import { ApiError, useCalendar, useWorkspace } from '../../lib/api.ts';
 import { plural } from '../../lib/format.ts';
@@ -104,7 +104,12 @@ function CalendarScreen() {
   const [filters, setFilters] = useState(() => loadFilters(orgId));
   useEffect(() => keepFilters(orgId, filters), [orgId, filters]);
 
-  const [start, setStart] = useState<string | null>(null);
+  // Opened from a booking ("See it on the Calendar"): start just before its arrival.
+  const [params] = useSearchParams();
+  const asked = params.get('from');
+  const [start, setStart] = useState<string | null>(() =>
+    asked && isIsoDate(asked) && asked > localToday ? addDays(asked, -DAYS_BEFORE_TODAY) : null,
+  );
   const first = start ?? addDays(localToday, -DAYS_BEFORE_TODAY);
   const last = addDays(first, count - 1);
   const calendar = useCalendar(orgId, first, last, filters.free);
@@ -300,6 +305,7 @@ function CalendarScreen() {
           currency={currency}
           locale={locale}
           editable={editable}
+          canEditBookings={can(entry.role, 'reservations.write')}
           onSelectionChange={(next) => {
             setSelection(next);
             setPanel({ kind: 'change', selection: next });

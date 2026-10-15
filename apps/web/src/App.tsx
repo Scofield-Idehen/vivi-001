@@ -18,6 +18,8 @@ import { About, ModuleToCome, NotFound, NoWorkspace } from './pages/misc.tsx';
 import { Properties } from './pages/Properties.tsx';
 import { NewPropertyPanel } from './pages/properties/NewPropertyPanel.tsx';
 import { PropertyPage } from './pages/properties/PropertyPage.tsx';
+import { ReservationPage } from './pages/reservations/ReservationPage.tsx';
+import { Reservations } from './pages/reservations/Reservations.tsx';
 import { SignIn } from './pages/SignIn.tsx';
 import { Today } from './pages/Today.tsx';
 import { WorkspacePage } from './pages/WorkspacePage.tsx';
@@ -93,6 +95,8 @@ const routes = [
         children: [
           { path: 'today', element: <Today /> },
           { path: 'calendar', element: <CalendarPage /> },
+          { path: 'reservations', element: <Reservations /> },
+          { path: 'reservations/:id', element: <ReservationPage /> },
           {
             path: 'properties',
             element: <Properties />,

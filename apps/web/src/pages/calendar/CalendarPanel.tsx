@@ -1,19 +1,22 @@
-import { IconX } from '@tabler/icons-react';
+import { IconPencil, IconX } from '@tabler/icons-react';
 import {
   addDays,
   CALENDAR_DAYS_AHEAD,
   type CalendarBlock,
   type CalendarProperty,
   type CalendarStay,
-  CHANNEL_LABELS,
+  formatMoney,
   nightsBetween,
 } from '@v01/shared';
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router';
 import { Stepper } from '../../components/choices.tsx';
 import { MoneyField, TextField } from '../../components/fields.tsx';
 import { Button, Notice } from '../../components/ui.tsx';
-import { ApiError, useChangeCalendar } from '../../lib/api.ts';
+import { ApiError, useChangeCalendar, useReservation } from '../../lib/api.ts';
 import { plural } from '../../lib/format.ts';
+import { contactRoutes, partyLabel, stayTimes } from '../reservations/model.ts';
+import { ChannelName, MessageGuest, ReservationEditor, StatusLabel } from '../reservations/parts.tsx';
 import {
   ALL_DAYS,
   type CalendarRow,
@@ -48,6 +51,8 @@ interface PanelProps {
   currency: string;
   locale: string;
   editable: boolean;
+  /** The role can change a booking's guest details, agreed times and notes. */
+  canEditBookings: boolean;
   onSelectionChange(selection: Selection): void;
   onClose(): void;
   /** Saved: the line to show on the calendar. */
@@ -459,30 +464,124 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function StayBody({ stay, property }: { stay: CalendarStay; property: CalendarProperty | null }) {
+/**
+ * One booking: what it is at a glance, with the three things people do next. Open reservation goes
+ * to its page; Edit changes the guest's details, agreed times and notes here; Message guest offers
+ * the ways to reach them. Whatever the API adds to the calendar's line fills in once it loads.
+ */
+function StayBody({
+  stay,
+  property,
+  orgId,
+  canEditBooking,
+  currency,
+  locale,
+}: {
+  stay: CalendarStay;
+  property: CalendarProperty | null;
+  orgId: string;
+  canEditBooking: boolean;
+  currency: string;
+  locale: string;
+}) {
+  const booking = useReservation(orgId, stay.id);
+  const notesId = useId();
+  const [editing, setEditing] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const r = booking.data;
   const nights = nightsBetween(stay.checkIn, stay.checkOut);
+  const times = r ? stayTimes(r) : null;
+
+  useEffect(() => {
+    if (!saved) return;
+    const timer = window.setTimeout(() => setSaved(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [saved]);
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-6 md:px-6">
-      {stay.status === 'conflict' ? (
-        <Notice tone="urgent">
-          This booking came in over another one, so it holds no nights. Sort it out with the guest and the
-          channel, then cancel one of them there.
-        </Notice>
-      ) : null}
-      <dl>
-        {property ? <Fact label="Property">{property.name}</Fact> : null}
-        <Fact label="Arrives">{shortNight(stay.checkIn)}</Fact>
-        <Fact label="Leaves">{shortNight(stay.checkOut)}</Fact>
-        <Fact label="Nights">{nights}</Fact>
-        <Fact label="Guests">{stay.guests}</Fact>
-        <Fact label="Booked on">{CHANNEL_LABELS[stay.channel]}</Fact>
-        {stay.channelReference ? (
-          <Fact label="Reference">
-            <span className="font-mono text-[13px]">{stay.channelReference}</span>
-          </Fact>
+    <>
+      <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-5 py-3 md:px-6">
+        <Link
+          to={`/reservations/${stay.id}`}
+          className="inline-flex h-9 items-center justify-center rounded-md bg-ink px-4 text-[13.5px] font-medium text-canvas transition-colors hover:bg-ink/88"
+        >
+          Open reservation
+        </Link>
+        {canEditBooking ? (
+          <Button onClick={() => setEditing(true)} disabled={!r || editing}>
+            <IconPencil size={16} stroke={1.75} aria-hidden className="text-slate" />
+            Edit
+          </Button>
         ) : null}
-      </dl>
-    </div>
+        {r ? <MessageGuest reservation={r} routes={contactRoutes(r)} /> : null}
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-6 md:px-6">
+        {stay.status === 'conflict' ? (
+          <Notice tone="urgent">
+            This booking came in over another one, so it holds no nights. Sort it out with the guest and the
+            channel, then cancel one of them there.
+          </Notice>
+        ) : null}
+        {saved ? <Notice tone="done">Saved.</Notice> : null}
+        {booking.error ? (
+          <Notice tone="urgent">
+            {booking.error instanceof ApiError ? booking.error.message : 'The booking’s details didn’t load.'}
+          </Notice>
+        ) : null}
+        {editing && r ? (
+          <ReservationEditor
+            orgId={orgId}
+            reservation={r}
+            onCancel={() => setEditing(false)}
+            onDone={(changed) => {
+              setEditing(false);
+              setSaved(changed);
+            }}
+          />
+        ) : (
+          <>
+            <dl>
+              <Fact label="Status">
+                <StatusLabel status={stay.status} />
+              </Fact>
+              <Fact label="Booked on">
+                <ChannelName channel={stay.channel} reference={stay.channelReference} />
+              </Fact>
+              {property ? <Fact label="Property">{property.name}</Fact> : null}
+              <Fact label="Check-in">
+                {shortNight(stay.checkIn)}
+                {times ? `, from ${times.checkIn}` : ''}
+                {times?.checkInAgreed ? <span className="text-slate"> (agreed)</span> : null}
+              </Fact>
+              <Fact label="Check-out">
+                {shortNight(stay.checkOut)}
+                {times ? `, by ${times.checkOut}` : ''}
+                {times?.checkOutAgreed ? <span className="text-slate"> (agreed)</span> : null}
+              </Fact>
+              <Fact label="Nights">{nights}</Fact>
+              <Fact label="Guests">{r ? partyLabel(r) : stay.guests}</Fact>
+              {r?.totalMinor != null && r.currency ? (
+                <Fact label="Total">
+                  <span className="tnum">
+                    {formatMoney({ amountMinor: r.totalMinor, currency: r.currency ?? currency }, locale)}
+                  </span>
+                </Fact>
+              ) : null}
+              {r?.guestEmail ? <Fact label="Email">{r.guestEmail}</Fact> : null}
+              {r?.guestPhone ? <Fact label="Phone">{r.guestPhone}</Fact> : null}
+            </dl>
+            {r?.notes ? (
+              <section aria-labelledby={notesId}>
+                <h3 id={notesId} className="text-[13px] text-slate">
+                  Notes for the team
+                </h3>
+                <p className="mt-1.5 text-[14px] leading-relaxed whitespace-pre-line text-ink">{r.notes}</p>
+              </section>
+            ) : null}
+          </>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -608,7 +707,14 @@ export function CalendarPanel(props: PanelProps) {
         {target.kind === 'change' ? (
           <ChangeBody {...props} selection={target.selection} onCancel={onClose} />
         ) : target.kind === 'stay' ? (
-          <StayBody stay={target.stay} property={propertyOf(target.stay.propertyId)} />
+          <StayBody
+            stay={target.stay}
+            property={propertyOf(target.stay.propertyId)}
+            orgId={props.orgId}
+            canEditBooking={props.canEditBookings}
+            currency={props.currency}
+            locale={props.locale}
+          />
         ) : (
           <BlockBody
             block={target.block}
