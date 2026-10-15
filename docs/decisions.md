@@ -10,8 +10,10 @@ V-01 Build Playbook and Design Roadmap.
   arrives, so a home is never sold twice while V-01 catches up or is down, and minimum stays apply to the
   night a guest arrives. If Channex refuses any part, what was made is removed again. The channels'
   existing listings are then linked to the property in Channex, so they keep their reviews.
-- **The Channex staging key works** (Alpha ran `pnpm channex:check`). The account is empty, so the check
-  can now make a test property on staging, through V-01's own code, and send it a test night.
+- **V-01's Channex code is proven on Channex staging** (Alpha ran `pnpm channex:check
+  --make-test-property`). Channex accepted the property, unit and rate plan exactly as V-01 sends them;
+  a price sent as whole pence (15000) read back as £150.00; a minimum stay and an open night read back as
+  sent, and the night was put back afterwards. "V-01 test property" stays on staging for later tests.
 - **Bookings from Channex are saved before they are acknowledged** (integration step 5). Each revision
   is stored as received, then saved as a reservation with its guest, party and total; only once that has
   committed is it acknowledged, so Channex keeps anything V-01 hasn't saved in its feed. A booking whose
