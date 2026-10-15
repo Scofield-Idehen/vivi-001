@@ -3,6 +3,8 @@ import {
   AMENITIES,
   AmenityCodesSchema,
   addDays,
+  CalendarChangeSchema,
+  CalendarQuerySchema,
   can,
   canPlatform,
   countBeds,
@@ -10,14 +12,18 @@ import {
   eachNight,
   formatMoney,
   isIsoDate,
+  isoWeekday,
+  isWeekendNight,
   listingChecklist,
   minorToMajorString,
+  nightRules,
   nightsBetween,
   PERMISSIONS,
   PropertyCreateSchema,
   PropertyUpdateSchema,
   parseMajorToMinor,
   SupportAccessStartSchema,
+  selectedNights,
   staysOverlap,
   suggestPropertyCode,
   todayIn,
@@ -216,5 +222,96 @@ describe('the listing', () => {
     expect(PropertyUpdateSchema.parse({ licenceNumber: ' EL00123F ' })).toEqual({
       licenceNumber: 'EL00123F',
     });
+  });
+});
+
+describe('the calendar', () => {
+  const usual = {
+    basePriceMinor: 15_000,
+    weekendPriceMinor: 19_000,
+    minPriceMinor: 9_500,
+    maxPriceMinor: 40_000,
+    minNights: 2,
+    maxNights: null,
+  };
+  const own = (patch: Partial<Parameters<typeof nightRules>[2] & object> = {}) => ({
+    priceMinor: null,
+    minNights: null,
+    closedToArrival: false,
+    closedToDeparture: false,
+    ...patch,
+  });
+
+  it('counts the week from Monday, and takes Friday and Saturday nights as the weekend', () => {
+    expect(isoWeekday('2026-10-19')).toBe(1);
+    expect(isoWeekday('2026-10-25')).toBe(7);
+    expect(['2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25'].map(isWeekendNight)).toEqual([
+      false,
+      true,
+      true,
+      false,
+    ]);
+    expect(selectedNights('2026-10-19', '2026-11-01', [5, 6])).toEqual([
+      '2026-10-23',
+      '2026-10-24',
+      '2026-10-30',
+      '2026-10-31',
+    ]);
+    expect(selectedNights('2026-12-31', '2027-01-01')).toEqual(['2026-12-31', '2027-01-01']);
+  });
+
+  it("uses the usual price, the weekend price on Fridays and Saturdays, or the night's own", () => {
+    expect(nightRules(usual, '2026-10-21')).toMatchObject({ priceMinor: 15_000, priceFrom: 'usual' });
+    expect(nightRules(usual, '2026-10-23')).toMatchObject({ priceMinor: 19_000, priceFrom: 'weekend' });
+    expect(nightRules(usual, '2026-10-23', own({ priceMinor: 21_000 }))).toMatchObject({
+      priceMinor: 21_000,
+      priceFrom: 'night',
+      heldAt: null,
+    });
+    expect(nightRules({ ...usual, weekendPriceMinor: null }, '2026-10-23').priceFrom).toBe('usual');
+    expect(
+      nightRules({ ...usual, basePriceMinor: null, weekendPriceMinor: null }, '2026-10-21'),
+    ).toMatchObject({ priceMinor: null, priceFrom: null });
+  });
+
+  it('never goes outside the price limits', () => {
+    expect(nightRules({ ...usual, basePriceMinor: 8_000 }, '2026-10-21')).toMatchObject({
+      priceMinor: 9_500,
+      heldAt: 'lowest',
+    });
+    expect(nightRules(usual, '2026-10-23', own({ priceMinor: 55_000 }))).toMatchObject({
+      priceMinor: 40_000,
+      heldAt: 'highest',
+    });
+  });
+
+  it("takes the night's own minimum stay and closed dates over the usual ones", () => {
+    expect(nightRules(usual, '2026-10-21')).toMatchObject({
+      minNights: 2,
+      minNightsFrom: 'usual',
+      closedToArrival: false,
+      closedToDeparture: false,
+    });
+    expect(
+      nightRules(usual, '2026-10-21', own({ minNights: 4, closedToArrival: true, closedToDeparture: true })),
+    ).toMatchObject({ minNights: 4, minNightsFrom: 'night', closedToArrival: true, closedToDeparture: true });
+  });
+
+  it('reads up to two months at a time, and changes up to a year', () => {
+    expect(CalendarQuerySchema.safeParse({ from: '2026-11-01', to: '2026-12-31' }).success).toBe(true);
+    expect(CalendarQuerySchema.safeParse({ from: '2026-11-01', to: '2027-01-02' }).success).toBe(false);
+    expect(CalendarQuerySchema.safeParse({ from: '2026-11-02', to: '2026-11-01' }).success).toBe(false);
+    const change = { propertyIds: ['8f7c1a52-2b1e-4c55-9a2a-3c1f0d9e7b11'], firstNight: '2026-11-01' };
+    expect(CalendarChangeSchema.safeParse({ ...change, lastNight: '2027-11-01', minNights: 3 }).success).toBe(
+      true,
+    );
+    expect(CalendarChangeSchema.safeParse({ ...change, lastNight: '2027-11-02', minNights: 3 }).success).toBe(
+      false,
+    );
+    expect(CalendarChangeSchema.safeParse({ ...change, lastNight: '2026-11-02' }).success).toBe(false);
+    expect(
+      CalendarChangeSchema.safeParse({ ...change, lastNight: '2026-11-02', daysOfWeek: [0], blocked: true })
+        .success,
+    ).toBe(false);
   });
 });

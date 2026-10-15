@@ -9,6 +9,8 @@ import type { PlatformRole, WorkspaceRole } from './enums.ts';
 export const PERMISSIONS = {
   'properties.read': ['admin', 'operations', 'guest_comms', 'accounts', 'v01_support'],
   'properties.write': ['admin', 'operations'],
+  'calendar.read': ['admin', 'operations', 'guest_comms', 'accounts', 'v01_support'],
+  'calendar.write': ['admin', 'operations'],
   'channels.manage': ['admin'],
   'workspace.read': ['admin', 'operations', 'guest_comms', 'accounts', 'field', 'v01_support'],
   'workspace.manage': ['admin'],

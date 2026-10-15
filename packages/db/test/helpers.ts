@@ -27,6 +27,7 @@ export async function expectPgError(promise: Promise<unknown>, code: string): Pr
 
 export const PG = {
   exclusionViolation: '23P01',
+  foreignKeyViolation: '23503',
   insufficientPrivilege: '42501',
   /** Raised when a row fails a row-level security WITH CHECK. */
   rlsViolation: '42501',

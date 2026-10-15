@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   ApiDatabase,
   appUsers,
+  calendarDays,
   memberships,
   organisations,
   properties,
@@ -88,6 +89,43 @@ describe('operator isolation', () => {
       tx.select().from(appUsers),
     );
     expect(people.map((p) => p.id)).toEqual([b.userId]);
+  });
+});
+
+describe('nightly prices', () => {
+  const night = '2026-12-24';
+
+  it("keeps a property's nightly prices with its own operator", async () => {
+    await api.withOrg({ orgId: a.orgId, userId: a.userId }, (tx) =>
+      tx
+        .insert(calendarDays)
+        .values({ organisationId: a.orgId, propertyId: propertyA, night, priceMinor: 32_000 }),
+    );
+    const seenByB = await api.withOrg({ orgId: b.orgId }, (tx) => tx.select().from(calendarDays));
+    expect(seenByB).toEqual([]);
+    const changedByB = await api.withOrg({ orgId: b.orgId }, (tx) =>
+      tx.update(calendarDays).set({ priceMinor: 1 }).where(eq(calendarDays.night, night)).returning(),
+    );
+    const removedByB = await api.withOrg({ orgId: b.orgId }, (tx) =>
+      tx.delete(calendarDays).where(eq(calendarDays.night, night)).returning(),
+    );
+    expect(changedByB).toEqual([]);
+    expect(removedByB).toEqual([]);
+    const [still] = await api.withOrg({ orgId: a.orgId }, (tx) => tx.select().from(calendarDays));
+    expect(still?.priceMinor).toBe(32_000);
+  });
+
+  it("refuses a nightly price for another operator's property, however it is labelled", async () => {
+    const plant = (organisationId: string) =>
+      api.withOrg({ orgId: b.orgId }, (tx) =>
+        tx
+          .insert(calendarDays)
+          .values({ organisationId, propertyId: propertyA, night: '2026-12-25', priceMinor: 1 }),
+      );
+    // Labelled as operator A's: row-level security refuses it.
+    await expectPgError(plant(a.orgId), PG.rlsViolation);
+    // Labelled as operator B's: the property isn't B's, so the composite key refuses it.
+    await expectPgError(plant(b.orgId), PG.foreignKeyViolation);
   });
 });
 

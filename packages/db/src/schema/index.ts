@@ -1,4 +1,5 @@
 export * from './bookings.ts';
+export * from './calendar.ts';
 export * from './channels.ts';
 export * from './common.ts';
 export * from './console.ts';
