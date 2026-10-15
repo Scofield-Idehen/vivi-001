@@ -5,6 +5,13 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-15
 
+- **V-01 stays on Channex (Alpha).** Vivistays' Airbnb, Booking.com and Vrbo listings are linked into
+  Channex as they are, so they keep their reviews, photos and descriptions; Channex carries prices,
+  availability, stay rules and bookings. Photos, descriptions and amenities are changed on each channel,
+  using the copy buttons on the property page, until Channex can send them (its target is 2027, for
+  Airbnb and Booking.com). A brand-new listing is made on the channel first, then linked. Vrbo needs
+  Guesty's API connection taken off the account first (Vrbo support may have to turn it back into a
+  normal account) and any iCal links removed.
 - **The sidebar is a rail of icons that opens while the mouse rests on it (Alpha).** It opens over the
   page, so nothing on the page moves, and closes when the mouse leaves. There is no button to fold or
   unfold it. Keyboard focus inside it opens it too, and on touch screens a tap on the rail opens it and
@@ -30,8 +37,7 @@ V-01 Build Playbook and Design Roadmap.
   also sets pricing rules (cleaning and extra-guest fees, deposit), booking rules (instant book,
   check-in times, cancellation policy, pets, smoking, events, children) and publishing. So V-01 keeps
   the master copy of every listing, everything Channex can carry syncs, and the rest is set on each
-  channel from the property page's copy buttons. Full content sync would need each channel's partner
-  API or a channel manager that carries content: **a decision for Alpha and Alessio.**
+  channel from the property page's copy buttons. (Decided on 15 October: stay on Channex.)
 - **Every property has its own page with the whole listing,** editable part by part after it is added:
   photos, the place, rooms and beds, amenities, title and description, address, arriving, house rules,
   booking rules, prices and fees, licence and channels. A checklist shows what the channels still need
