@@ -5,6 +5,16 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-15
 
+- **Bookings from Channex are saved before they are acknowledged** (integration step 5). Each revision
+  is stored as received, then saved as a reservation with its guest, party and total; only once that has
+  committed is it acknowledged, so Channex keeps anything V-01 hasn't saved in its feed. A booking whose
+  nights are taken is still saved, as a conflict that holds no nights, with an urgent alert; if it later
+  stops overlapping, it is confirmed. A cancellation releases the nights. Revisions of one booking that
+  arrive together apply in the order Channex made them. A revision that can't be saved is tried again
+  every five minutes and alerts once (migration 0013 records the attempts).
+- **A booking V-01 already has under the channel's own code is linked, not saved twice.** Bookings
+  brought across from Guesty keep their Airbnb or Booking.com codes, so when Channex later sends the same
+  booking it joins the one already there.
 - **The Calendar screen (design phase D1) is every property by night.** Each night shows the price the
   channels get, with any minimum stay or closed date of its own; the usual minimum is beside the name.
   Bookings and blocks are bars from the middle of the arrival day to the middle of the departure day, so

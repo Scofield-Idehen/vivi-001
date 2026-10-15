@@ -1,11 +1,17 @@
-import { ChannelError, createChannexRateLimiter, FakeChannelProvider } from '@v01/channels';
+import {
+  type BookingRevision,
+  ChannelError,
+  createChannexRateLimiter,
+  FakeChannelProvider,
+  fakeRevision,
+} from '@v01/channels';
 import { ApiDatabase, WorkerDatabase } from '@v01/db';
 import { createTestDatabase, seedOperator, type TestDatabase } from '@v01/db/testing';
 import type { Alert, AlertSink } from '@v01/integrations';
 import pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { availabilityRanges } from '../src/availability.ts';
-import { processWebhooks } from '../src/bookings.ts';
+import { importBookings, processWebhooks, sweepBookingFeed } from '../src/bookings.ts';
 import { silentLogger, type WorkerDeps } from '../src/deps.ts';
 import { enqueueFullSync, FULL_SYNC_DAYS } from '../src/full-sync.ts';
 import { startJobs } from '../src/jobs.ts';
@@ -326,42 +332,253 @@ describe('full sync', () => {
   });
 });
 
-describe('booking webhooks', () => {
-  it('stores every revision for the property, and acknowledges nothing until the importer saves it', async () => {
-    provider.feed = [
-      {
-        id: 'rev-1',
-        bookingId: 'bk-1',
+/** A booking revision as Channex would send it for Harbour View Lodge (mapped, run by V-01). */
+function revision(patch: Partial<Omit<BookingRevision, 'raw'>> & { id: string }): BookingRevision {
+  return fakeRevision({
+    bookingId: 'bk-1',
+    externalPropertyId: 'cx-hvl',
+    status: 'new',
+    arrivalDate: '2026-12-20',
+    departureDate: '2026-12-23',
+    otaName: 'Airbnb',
+    otaReservationCode: 'HMABC123',
+    channel: 'airbnb',
+    guestName: 'Maya Collins',
+    guestEmail: 'maya@example.test',
+    guestPhone: null,
+    adults: 2,
+    children: 1,
+    infants: 0,
+    amount: '450.00',
+    currency: 'GBP',
+    insertedAt: null,
+    ...patch,
+  });
+}
+
+interface StayRow {
+  status: string;
+  check_in: string;
+  check_out: string;
+  guest: string | null;
+  adults: number;
+  children: number;
+  channel: string;
+  channel_reference: string | null;
+  total_minor: string | null;
+  cancelled: boolean;
+}
+
+const stayFor = async (bookingId: string) => {
+  const [row] = await owner<StayRow>(
+    `select r.status, r.check_in::text, r.check_out::text, g.full_name as guest, r.adults, r.children,
+            r.channel, r.channel_reference, r.total_minor::text, r.cancelled_at is not null as cancelled
+       from app.channex_bookings cb
+       join app.reservations r on r.id = cb.reservation_id
+       left join app.guests g on g.id = r.guest_id
+      where cb.channex_booking_id = $1`,
+    [bookingId],
+  );
+  return row;
+};
+
+const revisionRow = async (id: string) => {
+  const [row] = await owner<{ saved: boolean; acked: boolean; attempts: number; error: string | null }>(
+    `select processed_at is not null as saved, acked_at is not null as acked, import_attempts as attempts,
+            import_error as error
+       from app.reservation_revisions where external_revision_id = $1`,
+    [id],
+  );
+  return row;
+};
+
+describe('bringing bookings in', () => {
+  it('saves a new booking with its guest, and only then acknowledges it', async () => {
+    provider.feed = [revision({ id: 'rev-1' })];
+    // Two webhooks for one booking: stored once, saved once.
+    for (let i = 0; i < 2; i++) {
+      await api.recordWebhook({
+        provider: 'channex',
+        event: 'booking_new',
         externalPropertyId: 'cx-hvl',
-        status: 'new',
-        arrivalDate: '2026-12-20',
-        departureDate: '2026-12-23',
-        otaName: 'Airbnb',
-        otaReservationCode: 'HMABC123',
-        amount: '450.00',
-        currency: 'GBP',
-        raw: { id: 'rev-1' },
-      },
-    ];
-    await api.recordWebhook({
-      provider: 'channex',
-      event: 'booking_new',
-      externalPropertyId: 'cx-hvl',
-      payload: {},
-    });
-    await api.recordWebhook({
-      provider: 'channex',
-      event: 'booking_new',
-      externalPropertyId: 'cx-hvl',
-      payload: {},
-    });
+        payload: {},
+      });
+    }
     expect(await processWebhooks(deps)).toBe(2);
 
-    const stored = await owner<{ external_revision_id: string }>(
-      `select external_revision_id from app.reservation_revisions`,
+    expect(await stayFor('bk-1')).toEqual({
+      status: 'confirmed',
+      check_in: '2026-12-20',
+      check_out: '2026-12-23',
+      guest: 'Maya Collins',
+      adults: 2,
+      children: 1,
+      channel: 'airbnb',
+      channel_reference: 'HMABC123',
+      total_minor: '45000',
+      cancelled: false,
+    });
+    expect(await revisionRow('rev-1')).toEqual({ saved: true, acked: true, attempts: 0, error: null });
+    expect(provider.acknowledged).toEqual(['rev-1']);
+    // The nights are queued for the channels, closed.
+    const queued = await owner<{ kind: string; date_from: string; date_to: string }>(
+      `select kind, date_from::text, date_to::text from app.ari_outbox
+        where property_id = $1 and date_from = '2026-12-20'`,
+      [mapped],
     );
-    expect(stored).toEqual([{ external_revision_id: 'rev-1' }]);
+    expect(queued).toEqual([{ kind: 'availability', date_from: '2026-12-20', date_to: '2026-12-22' }]);
+  });
+
+  it('moves the stay when the booking changes', async () => {
+    provider.feed = [
+      revision({ id: 'rev-2', status: 'modified', arrivalDate: '2026-12-21', departureDate: '2026-12-24' }),
+    ];
+    await sweepBookingFeed(deps);
+    expect(await stayFor('bk-1')).toMatchObject({
+      status: 'confirmed',
+      check_in: '2026-12-21',
+      check_out: '2026-12-24',
+    });
+    expect(provider.acknowledged).toEqual(['rev-2']);
+  });
+
+  it('keeps a booking that overlaps another as a conflict, with an urgent alert, and still acknowledges it', async () => {
+    provider.feed = [
+      revision({
+        id: 'rev-3',
+        bookingId: 'bk-2',
+        arrivalDate: '2026-12-22',
+        departureDate: '2026-12-26',
+        otaName: 'BookingCom',
+        otaReservationCode: '4311850297',
+        channel: 'booking_com',
+        guestName: 'Ravi Kumar',
+      }),
+    ];
+    await sweepBookingFeed(deps);
+    expect(await stayFor('bk-2')).toMatchObject({ status: 'conflict', guest: 'Ravi Kumar' });
+    expect(alerts.sent).toEqual([
+      expect.objectContaining({ severity: 'urgent', title: 'Double booking: Harbour View Lodge' }),
+    ]);
+    expect(alerts.sent[0]?.detail).toContain('Ravi Kumar (Booking.com 4311850297), 2026-12-22 to 2026-12-26');
+    expect(provider.acknowledged).toEqual(['rev-3']);
+  });
+
+  it('releases the nights when a booking is cancelled, and confirms a conflict that no longer overlaps', async () => {
+    provider.feed = [
+      revision({ id: 'rev-4', status: 'cancelled', arrivalDate: '2026-12-21', departureDate: '2026-12-24' }),
+    ];
+    await sweepBookingFeed(deps);
+    expect(await stayFor('bk-1')).toMatchObject({ status: 'cancelled', cancelled: true });
+    provider.feed = [
+      revision({
+        id: 'rev-5',
+        bookingId: 'bk-2',
+        status: 'modified',
+        arrivalDate: '2026-12-22',
+        departureDate: '2026-12-26',
+        channel: 'booking_com',
+        otaReservationCode: '4311850297',
+        guestName: 'Ravi Kumar',
+      }),
+    ];
+    await sweepBookingFeed(deps);
+    expect(await stayFor('bk-2')).toMatchObject({ status: 'confirmed', check_in: '2026-12-22' });
+  });
+
+  it('applies revisions of one booking in the order they were made, even when they arrive together', async () => {
+    provider.feed = [
+      revision({
+        id: 'rev-7',
+        bookingId: 'bk-3',
+        otaReservationCode: 'HMQ3F7H2NJ',
+        status: 'modified',
+        arrivalDate: '2027-01-10',
+        departureDate: '2027-01-14',
+        insertedAt: '2026-10-15T10:05:00Z',
+      }),
+      revision({
+        id: 'rev-6',
+        bookingId: 'bk-3',
+        otaReservationCode: 'HMQ3F7H2NJ',
+        arrivalDate: '2027-01-10',
+        departureDate: '2027-01-12',
+        insertedAt: '2026-10-15T10:00:00Z',
+      }),
+    ];
+    await sweepBookingFeed(deps);
+    expect(await stayFor('bk-3')).toMatchObject({ status: 'confirmed', check_out: '2027-01-14' });
+  });
+
+  it('never acknowledges a revision it could not save, and alerts once however often it is retried', async () => {
+    provider.feed = [
+      revision({
+        id: 'rev-8',
+        bookingId: 'bk-4',
+        otaReservationCode: 'HMB6N3T9XE',
+        arrivalDate: '2027-02-10',
+        departureDate: '2027-02-08',
+      }),
+    ];
+    await sweepBookingFeed(deps);
+    await sweepBookingFeed(deps);
+    expect(await revisionRow('rev-8')).toEqual({
+      saved: false,
+      acked: false,
+      attempts: 2,
+      error: "The stay's dates don't make sense: 2027-02-10 to 2027-02-08.",
+    });
     expect(provider.acknowledged).toEqual([]);
+    expect(alerts.sent.map((a) => a.title)).toEqual(["A booking from the channel manager couldn't be saved"]);
+    expect(await stayFor('bk-4')).toBeUndefined();
+  });
+
+  it('tries the acknowledgement again when the channel manager is down, without saving twice', async () => {
+    provider.feed = [
+      revision({
+        id: 'rev-9',
+        bookingId: 'bk-5',
+        otaReservationCode: 'HMK1C5V8QA',
+        arrivalDate: '2027-03-01',
+        departureDate: '2027-03-04',
+      }),
+    ];
+    provider.failNextCallWith(new ChannelError('Service unavailable', 'server', 503));
+    // The feed read fails first; nothing is stored.
+    await expect(sweepBookingFeed(deps)).rejects.toThrow('Service unavailable');
+    await sweepBookingFeed(deps);
+    expect(provider.acknowledged).toEqual(['rev-9']);
+    const stays = await owner<{ n: number }>(
+      `select count(*)::int as n from app.channex_bookings where channex_booking_id = 'bk-5'`,
+    );
+    expect(stays).toEqual([{ n: 1 }]);
+    expect((await importBookings(deps, op.orgId)).acknowledged).toBe(0);
+  });
+
+  it('links a booking V-01 already has under the same channel code, instead of saving it twice', async () => {
+    // As if brought across from Guesty before the listing was linked to Channex.
+    await owner(
+      `insert into app.reservations (organisation_id, property_id, channel, channel_reference, status, check_in, check_out)
+       values ($1, $2, 'airbnb', 'HMGUESTY01', 'confirmed', '2027-04-02', '2027-04-05')`,
+      [op.orgId, mapped],
+    );
+    provider.feed = [
+      revision({
+        id: 'rev-10',
+        bookingId: 'bk-6',
+        otaReservationCode: 'HMGUESTY01',
+        arrivalDate: '2027-04-02',
+        departureDate: '2027-04-05',
+        guestName: 'Lena Fischer',
+      }),
+    ];
+    await sweepBookingFeed(deps);
+    expect(await stayFor('bk-6')).toMatchObject({ status: 'confirmed', guest: 'Lena Fischer' });
+    const copies = await owner<{ n: number }>(
+      `select count(*)::int as n from app.reservations where channel_reference = 'HMGUESTY01'`,
+    );
+    expect(copies).toEqual([{ n: 1 }]);
+    expect(provider.acknowledged).toEqual(['rev-10']);
   });
 
   it('alerts once about a booking for a property nobody has mapped', async () => {

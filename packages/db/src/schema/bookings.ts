@@ -109,6 +109,9 @@ export const reservationRevisions = app.table(
     receivedAt: timestamp('received_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
     processedAt: timestamp('processed_at', { withTimezone: true, mode: 'string' }),
     ackedAt: timestamp('acked_at', { withTimezone: true, mode: 'string' }),
+    /** Tries to save it as a booking that failed, and why the last one did. Cleared once saved. */
+    importAttempts: integer('import_attempts').notNull().default(0),
+    importError: text('import_error'),
   },
   (t) => [
     index('reservation_revisions_org_idx').on(t.organisationId),

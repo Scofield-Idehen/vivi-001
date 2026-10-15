@@ -231,4 +231,54 @@ describe('Channex adapter', () => {
     expect(calls[1]?.url).toBe('https://x/api/v1/booking_revisions/rev-1/ack');
     expect(calls[1]?.init.method).toBe('POST');
   });
+
+  it('reads the guest, their party and the channel from a stored revision', () => {
+    const provider = new ChannexProvider({ baseUrl: 'https://x/api/v1', apiKey: 'key' });
+    const stored = {
+      id: 'rev-2',
+      type: 'booking_revision',
+      attributes: {
+        booking_id: 'bk-2',
+        property_id: 'cx-prop',
+        status: 'modified',
+        arrival_date: '2026-12-20',
+        departure_date: '2026-12-23',
+        ota_name: 'BookingCom',
+        ota_reservation_code: '4311850297',
+        amount: 612.5,
+        currency: 'GBP',
+        inserted_at: '2026-10-15T10:05:00.000000',
+        customer: { name: ' Ravi ', surname: 'Kumar', mail: 'ravi@guest.example', phone: '' },
+        rooms: [
+          { occupancy: { adults: 2, children: 1, infants: 0 } },
+          { occupancy: { adults: 1, children: 0, infants: 1 } },
+        ],
+      },
+    };
+    expect(provider.parseRevision(stored)).toEqual({
+      id: 'rev-2',
+      bookingId: 'bk-2',
+      externalPropertyId: 'cx-prop',
+      status: 'modified',
+      arrivalDate: '2026-12-20',
+      departureDate: '2026-12-23',
+      otaName: 'BookingCom',
+      otaReservationCode: '4311850297',
+      channel: 'booking_com',
+      guestName: 'Ravi Kumar',
+      guestEmail: 'ravi@guest.example',
+      guestPhone: null,
+      adults: 3,
+      children: 1,
+      infants: 1,
+      amount: '612.5',
+      currency: 'GBP',
+      insertedAt: '2026-10-15T10:05:00.000000',
+      raw: stored,
+    });
+    // Channels it doesn't know come in as direct; a party of nobody is still one adult.
+    const other = provider.parseRevision({ id: 'rev-3', attributes: { ota_name: 'Agoda' } });
+    expect(other).toMatchObject({ channel: 'direct', adults: 1, children: 0, guestName: null });
+    expect(() => provider.parseRevision({ attributes: {} })).toThrow('Not a Channex booking revision');
+  });
 });

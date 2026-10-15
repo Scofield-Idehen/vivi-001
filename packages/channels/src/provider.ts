@@ -44,17 +44,32 @@ export interface PushResult {
 
 export type RevisionStatus = 'new' | 'modified' | 'cancelled';
 
+/** Where a booking came from, as V-01 names channels. Any other source comes in as direct. */
+export type BookingChannel = 'airbnb' | 'booking_com' | 'vrbo' | 'expedia' | 'direct';
+
 export interface BookingRevision {
   id: string;
   bookingId: string;
   externalPropertyId: string;
   status: RevisionStatus;
+  /** The stay: arrival and departure dates, [arrival, departure). */
   arrivalDate: string;
   departureDate: string;
+  /** The channel's name as the channel manager sent it, kept for the record. */
   otaName: string | null;
   otaReservationCode: string | null;
+  channel: BookingChannel;
+  guestName: string | null;
+  guestEmail: string | null;
+  guestPhone: string | null;
+  adults: number;
+  children: number;
+  infants: number;
+  /** The booking's total as a decimal string, such as "450.00", in `currency`. */
   amount: string | null;
   currency: string | null;
+  /** When the channel manager made this revision, so revisions of one booking apply in order. */
+  insertedAt: string | null;
   /** The full payload exactly as received, stored before processing so it can be replayed. */
   raw: unknown;
 }
@@ -70,6 +85,8 @@ export interface ChannelProvider {
   }): Promise<BookingRevision[]>;
   /** Only call this after the revision is saved in our database (playbook rule 3). */
   acknowledgeBookingRevision(revisionId: string): Promise<void>;
+  /** Reads a stored payload back into a revision, so a stored booking can be imported, or replayed. */
+  parseRevision(raw: unknown): BookingRevision;
 }
 
 export type ChannelErrorKind = 'rate_limited' | 'server' | 'auth' | 'validation' | 'network';

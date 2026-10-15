@@ -18,7 +18,7 @@ with a soft white page.
 | Web app: sign-in, shell, Today, Properties, Workspace | `apps/web` | Done |
 | V-01 console: overview, operators, sync health, support log | `apps/web/src/pages/console`, `apps/api/src/routes/console.ts` | Done |
 | V-01 staff and read-only support access, logged and visible to the operator | `packages/db/migrations/0003_console_security.sql` | Done |
-| Booking import into reservations, then acknowledgement | `apps/worker/src/bookings.ts` | Phase 1, step 5 |
+| Booking import into reservations, then acknowledgement | `apps/worker/src/bookings.ts` | Done, tested against the stand-in |
 | Calendar: nightly prices, stay rules and blocks | `apps/api/src/routes/calendar.ts`, `packages/shared/src/calendar.ts` | Done |
 | Calendar screen | `apps/web/src/pages/calendar` | Done; awaiting design sign-off |
 | Changes queued for the channels by the database | `packages/db/migrations/0012_channel_queue.sql` | Done |
@@ -138,8 +138,9 @@ Not set up yet. These are the steps for when the staging and production accounts
 ## Next (Phase 1)
 
 - Channex staging account in V-01's name; set `CHANNEL_PROVIDER=channex` and the staging key.
-- Property sync into Channex (step 3), prices and restrictions out (step 4), booking import with
-  acknowledgement after saving (step 5), auto-availability settings (step 6), mapping screens (step 7).
+- Property sync into Channex (step 3), auto-availability settings (step 6) and mapping screens
+  (step 7). Prices and stay rules out (step 4) and booking import (step 5) are built and tested against
+  the stand-in; they run against Channex once a property is mapped and moved over.
 - Reservations and Channels & sync screens from design phase D1 (the Calendar is built).
 - Nightly cross-check.
 

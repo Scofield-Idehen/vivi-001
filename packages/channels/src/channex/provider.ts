@@ -1,5 +1,6 @@
 import type {
   AvailabilityUpdate,
+  BookingChannel,
   BookingRevision,
   ChannelProvider,
   PushResult,
@@ -76,6 +77,19 @@ export class ChannexProvider implements ChannelProvider {
   async acknowledgeBookingRevision(revisionId: string): Promise<void> {
     await this.client.request('POST', `/booking_revisions/${encodeURIComponent(revisionId)}/ack`);
   }
+
+  parseRevision(raw: unknown): BookingRevision {
+    if (!raw || typeof raw !== 'object' || typeof (raw as { id?: unknown }).id !== 'string') {
+      throw new Error('Not a Channex booking revision: it has no id');
+    }
+    return toRevision(raw as RevisionResource);
+  }
+}
+
+interface Occupancy {
+  adults?: number | null;
+  children?: number | null;
+  infants?: number | null;
 }
 
 interface RevisionResource {
@@ -91,7 +105,46 @@ interface RevisionResource {
     ota_reservation_code?: string | null;
     amount?: string | number | null;
     currency?: string | null;
+    inserted_at?: string | null;
+    customer?: {
+      name?: string | null;
+      surname?: string | null;
+      mail?: string | null;
+      phone?: string | null;
+    } | null;
+    occupancy?: Occupancy | null;
+    rooms?: { occupancy?: Occupancy | null }[] | null;
   };
+}
+
+/** Channex's names for the channels, squashed to letters, mapped to V-01's. */
+const CHANNELS: Record<string, BookingChannel> = {
+  airbnb: 'airbnb',
+  bookingcom: 'booking_com',
+  booking: 'booking_com',
+  vrbo: 'vrbo',
+  homeaway: 'vrbo',
+  expedia: 'expedia',
+};
+
+function count(value: number | null | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+/** Guests from the booking's own count, or added up across its rooms. */
+function occupancy(a: NonNullable<RevisionResource['attributes']>): {
+  adults: number;
+  children: number;
+  infants: number;
+} {
+  const rooms = a.rooms ?? [];
+  const sum = (key: keyof Occupancy) =>
+    a.occupancy ? count(a.occupancy[key]) : rooms.reduce((n, r) => n + count(r.occupancy?.[key]), 0);
+  return { adults: Math.max(1, sum('adults')), children: sum('children'), infants: sum('infants') };
+}
+
+function text(value: string | null | undefined): string | null {
+  return value?.trim() ? value.trim() : null;
 }
 
 function toRevision(resource: RevisionResource): BookingRevision {
@@ -99,6 +152,9 @@ function toRevision(resource: RevisionResource): BookingRevision {
   const status = (['new', 'modified', 'cancelled'] as const).includes(a.status as RevisionStatus)
     ? (a.status as RevisionStatus)
     : 'modified';
+  const guests = occupancy(a);
+  const customer = a.customer ?? {};
+  const name = [text(customer.name), text(customer.surname)].filter(Boolean).join(' ');
   return {
     id: resource.id,
     bookingId: a.booking_id ?? '',
@@ -108,8 +164,14 @@ function toRevision(resource: RevisionResource): BookingRevision {
     departureDate: a.departure_date ?? '',
     otaName: a.ota_name ?? null,
     otaReservationCode: a.ota_reservation_code ?? null,
+    channel: CHANNELS[(a.ota_name ?? '').toLowerCase().replace(/[^a-z]/g, '')] ?? 'direct',
+    guestName: name || null,
+    guestEmail: text(customer.mail),
+    guestPhone: text(customer.phone),
+    ...guests,
     amount: a.amount === undefined || a.amount === null ? null : String(a.amount),
     currency: a.currency ?? null,
+    insertedAt: a.inserted_at ?? null,
     raw: resource,
   };
 }

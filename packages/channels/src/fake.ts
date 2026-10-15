@@ -57,4 +57,18 @@ export class FakeChannelProvider implements ChannelProvider {
     this.maybeFail();
     this.acknowledged.push(revisionId);
   }
+
+  /** The stand-in stores a revision as itself, so reading it back is the revision less its payload. */
+  parseRevision(raw: unknown): BookingRevision {
+    const stored = raw as Partial<BookingRevision> | null;
+    if (!stored || typeof stored.id !== 'string' || typeof stored.bookingId !== 'string') {
+      throw new Error('Not a revision the stand-in recognises');
+    }
+    return { ...(stored as Omit<BookingRevision, 'raw'>), raw };
+  }
+}
+
+/** A revision as the stand-in sends it: its payload is the revision itself, as a real one's would be. */
+export function fakeRevision(revision: Omit<BookingRevision, 'raw'>): BookingRevision {
+  return { ...revision, raw: { ...revision } };
 }

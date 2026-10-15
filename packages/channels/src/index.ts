@@ -14,6 +14,6 @@ export {
   verifyChannexWebhook,
   type WebhookCheck,
 } from './channex/webhook.ts';
-export { FakeChannelProvider } from './fake.ts';
+export { FakeChannelProvider, fakeRevision } from './fake.ts';
 export * from './provider.ts';
 export { createChannexRateLimiter, PerKeyRateLimiter } from './rate-limit.ts';
