@@ -98,9 +98,28 @@ export const PropertySchema = z.object({
   /** The first photo, shown on the property list. */
   coverPhotoUrl: z.string().nullable(),
   photoCount: z.number().int(),
+  /** The team's own labels, for finding and grouping properties. Guests never see them. */
+  tags: z.array(z.string()),
   createdAt: z.string(),
 });
 export type Property = z.infer<typeof PropertySchema>;
+
+export const TAG_MAX = 40;
+export const TAGS_MAX = 30;
+
+/** Tags as typed: trimmed, without repeats (whatever the capitals), in the order given. */
+export const TagsSchema = z
+  .array(z.string().trim().min(1).max(TAG_MAX))
+  .max(TAGS_MAX)
+  .transform((tags) => {
+    const seen = new Set<string>();
+    return tags.filter((tag) => {
+      const key = tag.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  });
 
 /** Everything about one property: the basics above plus the whole listing. */
 export const PropertyDetailSchema = PropertySchema.extend({
@@ -257,6 +276,7 @@ export const PropertyUpdateSchema = z
     extraGuestFrom: z.number().int().min(1).max(50).nullable().optional(),
     securityDepositMinor: Minor,
     licenceNumber: Text(80),
+    tags: TagsSchema.optional(),
   })
   .refine((p) => Object.keys(p).length > 0, 'Nothing to change')
   .refine((p) => !p.minPriceMinor || !p.maxPriceMinor || p.minPriceMinor <= p.maxPriceMinor, {

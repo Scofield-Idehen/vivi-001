@@ -2,12 +2,23 @@ import type { Calendar, CalendarProperty } from '@v01/shared';
 import { describe, expect, it } from 'vitest';
 import {
   barFor,
+  barLabel,
   buildRows,
+  type CalendarFilters,
   type ChangeForm,
+  chosenLabel,
+  filterChoices,
+  filterProperties,
+  filtersOn,
+  filtersToKeep,
+  freeDatesError,
+  freeLabel,
   monthSpans,
+  NO_FILTERS,
   newForm,
   nightsFrom,
   nightsThatFit,
+  parseFilters,
   rangeLabel,
   resultMessage,
   selectionBetween,
@@ -23,6 +34,11 @@ const property = (patch: Partial<CalendarProperty>): CalendarProperty => ({
   name: 'Harbour View Lodge',
   internalCode: 'HVL',
   coverPhotoUrl: null,
+  area: 'Harbourside',
+  city: 'Port Seton',
+  bedrooms: 3,
+  maxGuests: 6,
+  tags: ['Sea view', 'Owner: Ellis'],
   managedBy: 'v01',
   priceOwner: 'v01',
   basePriceMinor: 16_500,
@@ -38,6 +54,11 @@ const lodge = property({});
 const flat = property({
   name: 'Mill Street Flat',
   internalCode: 'MSF',
+  area: 'Old Town',
+  city: 'Edinburgh',
+  bedrooms: 1,
+  maxGuests: 2,
+  tags: ['City centre'],
   managedBy: 'guesty',
   priceOwner: 'pricelabs',
   basePriceMinor: 8_500,
@@ -55,6 +76,7 @@ const calendar: Calendar = {
   to: '2026-10-26',
   today: TODAY,
   properties: [lodge, flat],
+  propertyCount: 2,
   nights: [
     {
       propertyId: lodge.id,
@@ -104,10 +126,26 @@ const rows = buildRows(calendar, nights);
 const cell = (row: number, night: string) => rows[row]?.cells.find((c) => c.night === night);
 
 describe('the calendar grid', () => {
-  it('shows as many nights as fit, two weeks at least and two months at most', () => {
-    expect(nightsThatFit(1100, 224)).toBe(16);
+  it('shows as many nights as fit, up to two months, and two weeks to scroll on a phone', () => {
+    // Each night's box is 72 pixels wide at least.
+    expect(nightsThatFit(1600, 224)).toBe(19);
+    expect(nightsThatFit(1100, 224)).toBe(12);
+    expect(nightsThatFit(730, 224)).toBe(7);
+    expect(nightsThatFit(700, 224)).toBe(14);
     expect(nightsThatFit(390, 136)).toBe(14);
-    expect(nightsThatFit(5000, 224)).toBe(62);
+    expect(nightsThatFit(6000, 224)).toBe(62);
+  });
+
+  it('puts as much of a name on a bar as fits, and never a stray letter', () => {
+    // A two-night stay: the whole name.
+    expect(barLabel('Sofia Romano', 'Sofia', 112, 13)).toBe('Sofia Romano');
+    // Shorter: the first name, rather than "Daniel Oka…".
+    expect(barLabel('Daniel Okafor', 'Daniel', 60, 13)).toBe('Daniel');
+    // A long first name in a short bar is cut short, but only with room for a few letters.
+    expect(barLabel('Christopher Lee', 'Christopher', 50, 13)).toBe('Christopher');
+    // A one-night stay: the mark alone.
+    expect(barLabel('Jamie Clarke', 'Jamie', 23, 13)).toBeNull();
+    expect(barLabel('Owner staying', null, 23, 13)).toBeNull();
   });
 
   it("works out each night from the property's usual rules and the night's own", () => {
@@ -192,6 +230,93 @@ describe('the calendar grid', () => {
   });
 });
 
+describe('finding properties', () => {
+  const filters = (patch: Partial<CalendarFilters>): CalendarFilters => ({ ...NO_FILTERS, ...patch });
+  const names = (f: CalendarFilters) => filterProperties(rows, f).map((r) => r.property.name);
+
+  it('offers the areas, towns, tags and sync states the properties have, with how many have each', () => {
+    const cottage = property({ area: 'Harbourside', city: 'Harbourside', tags: ['Sea view', 'Sea view'] });
+    expect(filterChoices([lodge, flat, cottage])).toEqual({
+      areas: [
+        { value: 'Edinburgh', count: 1 },
+        { value: 'Harbourside', count: 2 },
+        { value: 'Old Town', count: 1 },
+        { value: 'Port Seton', count: 1 },
+      ],
+      tags: [
+        { value: 'City centre', count: 1 },
+        { value: 'Owner: Ellis', count: 1 },
+        { value: 'Sea view', count: 2 },
+      ],
+      statuses: [
+        { value: 'guesty', count: 1 },
+        { value: 'v01', count: 2 },
+      ],
+    });
+  });
+
+  it('names what is chosen on each button', () => {
+    expect(chosenLabel(['Riverside'], 'areas')).toBe('Riverside');
+    expect(chosenLabel(['Riverside', 'Old Town'], 'areas')).toBe('2 areas');
+    expect(freeLabel({ from: '2026-10-23', to: '2026-10-25', guests: 4 })).toBe(
+      'Free 23 to 25 Oct, 4 guests',
+    );
+    expect(freeLabel({ from: '2026-10-30', to: '2026-11-02', guests: 1 })).toBe(
+      'Free 30 Oct to 2 Nov, 1 guest',
+    );
+  });
+
+  it('checks free dates before asking', () => {
+    expect(freeDatesError('2026-10-23', '2026-10-25', TODAY)).toBeNull();
+    expect(freeDatesError('', '2026-10-25', TODAY)).toBe('Choose the arrival date');
+    expect(freeDatesError('2026-10-23', '', TODAY)).toBe('Choose the departure date');
+    expect(freeDatesError('2026-10-14', '2026-10-16', TODAY)).toMatch(/has passed/);
+    expect(freeDatesError('2026-10-23', '2026-10-23', TODAY)).toMatch(/after the arrival/);
+  });
+
+  it('keeps the view between visits, but not a search or free dates', () => {
+    const chosen = filters({
+      search: 'harbour',
+      areas: ['Riverside'],
+      tags: ['Family'],
+      statuses: ['v01'],
+      minBedrooms: 2,
+      free: { from: '2026-10-23', to: '2026-10-25', guests: 4 },
+    });
+    const kept = JSON.parse(JSON.stringify(filtersToKeep(chosen)));
+    expect(parseFilters(kept)).toEqual({ ...chosen, search: '', free: null });
+    // Whatever was stored, it comes back as filters or as none.
+    expect(parseFilters(null)).toEqual(NO_FILTERS);
+    expect(parseFilters('areas')).toEqual(NO_FILTERS);
+    expect(
+      parseFilters({ areas: ['Riverside', 4, ''], statuses: ['v01', 'airbnb'], minBedrooms: 2.5, tags: 'x' }),
+    ).toEqual({ ...NO_FILTERS, areas: ['Riverside'], statuses: ['v01'] });
+  });
+
+  it('narrows the rows by search, area, tag, status and bedrooms', () => {
+    expect(names(NO_FILTERS)).toEqual(['Harbour View Lodge', 'Mill Street Flat']);
+    expect(names(filters({ search: 'msf' }))).toEqual(['Mill Street Flat']);
+    expect(names(filters({ search: 'harbour ellis' }))).toEqual(['Harbour View Lodge']);
+    expect(names(filters({ areas: ['Edinburgh'] }))).toEqual(['Mill Street Flat']);
+    expect(names(filters({ tags: ['sea view', 'City centre'] }))).toEqual([
+      'Harbour View Lodge',
+      'Mill Street Flat',
+    ]);
+    expect(names(filters({ statuses: ['guesty'] }))).toEqual(['Mill Street Flat']);
+    expect(names(filters({ minBedrooms: 2 }))).toEqual(['Harbour View Lodge']);
+    expect(names(filters({ areas: ['Edinburgh'], minBedrooms: 2 }))).toEqual([]);
+  });
+
+  it('counts the filters that are on', () => {
+    expect(filtersOn(NO_FILTERS)).toBe(0);
+    expect(
+      filtersOn(
+        filters({ search: ' ', tags: ['Family'], free: { from: TODAY, to: '2026-10-18', guests: 2 } }),
+      ),
+    ).toBe(2);
+  });
+});
+
 describe('a change to some nights', () => {
   const selection = { propertyIds: [lodge.id], firstNight: '2026-10-19', lastNight: '2026-10-25' };
   const form = (patch: Partial<ChangeForm>): ChangeForm => ({ ...newForm(), ...patch });
@@ -264,6 +389,7 @@ describe('a change to some nights', () => {
   it('names nights and windows the way people read them', () => {
     expect(rangeLabel('2026-10-23', '2026-10-25')).toBe('Fri 23 Oct to Sun 25 Oct');
     expect(rangeLabel('2026-10-23', '2026-10-23')).toBe('Fri 23 Oct');
+    expect(windowLabel('2026-10-13', '2026-10-27')).toBe('13 to 27 October 2026');
     expect(windowLabel('2026-10-13', '2026-11-02')).toBe('13 October to 2 November 2026');
     expect(windowLabel('2026-12-28', '2027-01-10')).toBe('28 December 2026 to 10 January 2027');
     expect(monthSpans(nightsFrom('2026-10-30', 4))).toEqual([

@@ -1,0 +1,2 @@
+ALTER TABLE "app"."properties" ADD COLUMN "tags" text[] DEFAULT '{}'::text[] NOT NULL;--> statement-breakpoint
+ALTER TABLE "app"."properties" ADD CONSTRAINT "properties_tags_count" CHECK (cardinality("app"."properties"."tags") <= 30);

@@ -133,7 +133,7 @@ interface DemoSyncError {
 
 interface DemoState {
   /** Raised whenever the shape changes, so a browser holding older sample data starts fresh. */
-  version: 5;
+  version: 6;
   /** The day the sample bookings were laid out from. They are laid out afresh each week. */
   calendarFrom: string;
   operators: DemoOperator[];
@@ -219,6 +219,7 @@ function sampleProperty(p: {
   managedBy: Property['managedBy'];
   title?: string;
   amenities?: string[];
+  tags?: string[];
 }): PropertyDetail {
   const createdAt = new Date('2026-10-14T09:00:00Z').toISOString();
   return {
@@ -244,6 +245,7 @@ function sampleProperty(p: {
     maxPriceMinor: p.prices ? p.prices[1] : null,
     coverPhotoUrl: null,
     photoCount: 0,
+    tags: p.tags ?? [],
     createdAt,
     ...listingDefaults(),
     title: p.title ?? null,
@@ -550,7 +552,7 @@ function operatorWorkspace(
 function seed(): DemoState {
   const pastVisit = Date.now() - (2 * 24 * 60 + 190) * MINUTE;
   const state: DemoState = {
-    version: 5,
+    version: 6,
     calendarFrom: demoToday(),
     operators: [
       {
@@ -595,6 +597,7 @@ function seed(): DemoState {
             guests: 6,
             prices: [12_000, 34_000],
             usual: { base: 16_500, weekend: 19_500, minNights: 2 },
+            tags: ['Sea view', 'Owner: Ellis'],
             managedBy: 'v01',
             title: 'Harbourside house with sea views',
             amenities: ['sea_view', 'log_burner', 'wifi', 'kitchen', 'washing_machine', 'free_parking'],
@@ -610,6 +613,7 @@ function seed(): DemoState {
             guests: 2,
             prices: [6_500, 15_000],
             usual: { base: 8_500, weekend: 9_500, minNights: 1 },
+            tags: ['City centre', 'Owner: Patel'],
             managedBy: 'v01',
           }),
           sampleProperty({
@@ -623,6 +627,7 @@ function seed(): DemoState {
             guests: 4,
             prices: [9_000, 22_000],
             usual: { base: 12_000, weekend: 14_500, minNights: 2 },
+            tags: ['Family', 'Owner: Ellis'],
             managedBy: 'guesty',
           }),
           sampleProperty({
@@ -636,6 +641,7 @@ function seed(): DemoState {
             guests: 8,
             prices: null,
             usual: { base: 24_000, minNights: 3 },
+            tags: ['Large groups', 'Family'],
             managedBy: 'guesty',
           }),
         ],
@@ -824,7 +830,7 @@ function load(): DemoState {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved) as DemoState;
-      if (parsed.version === 5) {
+      if (parsed.version === 6) {
         // A week on, the sample bookings would all be in the past: lay them out again from today.
         if (parsed.calendarFrom <= addDays(demoToday(), -7)) {
           layOutSamples(parsed);
@@ -1123,8 +1129,23 @@ export async function demoAddPhoto(
 
 // The calendar -----------------------------------------------------------------------------------
 
-async function demoCalendar(operator: DemoOperator, from: string, to: string): Promise<Calendar> {
-  const properties = [...operator.properties].sort((a, b) => a.name.localeCompare(b.name));
+async function demoCalendar(
+  operator: DemoOperator,
+  from: string,
+  to: string,
+  free: { from: string; to: string; guests: number | undefined } | null,
+): Promise<Calendar> {
+  const { stays: allStays, blocks: allBlocks } = operator.calendar;
+  // Free for the stay: no booking or block on any of its nights, and room for everyone.
+  const freeFor = (p: PropertyDetail) =>
+    !free ||
+    ((free.guests === undefined || p.maxGuests >= free.guests) &&
+      !allStays.some(
+        (x) =>
+          x.propertyId === p.id && x.status === 'confirmed' && x.checkIn < free.to && free.from < x.checkOut,
+      ) &&
+      !allBlocks.some((b) => b.propertyId === p.id && b.startsOn < free.to && free.from < b.endsOn));
+  const properties = [...operator.properties].filter(freeFor).sort((a, b) => a.name.localeCompare(b.name));
   const ids = new Set(properties.map((p) => p.id));
   const covers: (string | null)[] = [];
   for (const property of properties) covers.push((await resolved(property)).coverPhotoUrl);
@@ -1138,6 +1159,11 @@ async function demoCalendar(operator: DemoOperator, from: string, to: string): P
       name: p.name,
       internalCode: p.internalCode,
       coverPhotoUrl: covers[index] ?? null,
+      area: p.area,
+      city: p.city,
+      bedrooms: p.bedrooms,
+      maxGuests: p.maxGuests,
+      tags: p.tags,
       managedBy: p.managedBy,
       priceOwner: p.priceOwner,
       basePriceMinor: p.basePriceMinor,
@@ -1147,6 +1173,7 @@ async function demoCalendar(operator: DemoOperator, from: string, to: string): P
       minNights: p.minNights,
       maxNights: p.maxNights,
     })),
+    propertyCount: operator.properties.length,
     nights: nights
       .filter((n) => ids.has(n.propertyId) && n.night >= from && n.night <= to)
       .sort((a, b) => a.night.localeCompare(b.night)),
@@ -1425,6 +1452,7 @@ export async function demoFetch<T>(
       maxPriceMinor: input.maxPriceMinor ?? null,
       coverPhotoUrl: null,
       photoCount: 0,
+      tags: [],
       createdAt: now,
       ...listingDefaults(),
       title: input.title ?? null,
@@ -1555,7 +1583,9 @@ export async function demoFetch<T>(
     const query = Object.fromEntries(new URLSearchParams(path.slice(path.indexOf('?') + 1)));
     const parsed = CalendarQuerySchema.safeParse(query);
     if (!parsed.success) invalid(parsed.error.issues);
-    return (await demoCalendar(operator, parsed.data.from, parsed.data.to)) as T;
+    const { from, to, freeFrom, freeTo, guests } = parsed.data;
+    const free = freeFrom && freeTo ? { from: freeFrom, to: freeTo, guests } : null;
+    return (await demoCalendar(operator, from, to, free)) as T;
   }
 
   if (method === 'PATCH' && path === '/v1/calendar') {

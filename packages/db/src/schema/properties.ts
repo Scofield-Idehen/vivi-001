@@ -99,6 +99,8 @@ export const properties = app.table(
     securityDepositMinor: integer('security_deposit_minor'),
     /** A short-term let licence or registration number, where the law asks for one (Scotland does). */
     licenceNumber: text('licence_number'),
+    /** The team's own labels, such as an owner or a part of town, for finding and grouping properties. */
+    tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
     archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'string' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -119,6 +121,7 @@ export const properties = app.table(
       sql`${t.minPriceMinor} is null or ${t.maxPriceMinor} is null or ${t.minPriceMinor} <= ${t.maxPriceMinor}`,
     ),
     check('properties_title_length', sql`char_length(${t.title}) <= 50`),
+    check('properties_tags_count', sql`cardinality(${t.tags}) <= 30`),
     check('properties_summary_length', sql`char_length(${t.summary}) <= 500`),
     check(
       'properties_stay_lengths',

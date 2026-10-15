@@ -447,6 +447,57 @@ describe('who may change the calendar', () => {
   });
 });
 
+describe('finding a property', () => {
+  const window = `from=${night(50)}&to=${night(56)}`;
+  const names = (body: Record<string, unknown>) => (body.properties as { name: string }[]).map((p) => p.name);
+
+  it('gives the calendar what its filters need, tags included', async () => {
+    const tagged = await call('PATCH', `/v1/properties/${lodge}`, {
+      as: asA(),
+      body: { tags: [' Sea view ', 'sea view', 'Owner: Jones'], area: 'Harbourside' },
+    });
+    expect(tagged.body.tags).toEqual(['Sea view', 'Owner: Jones']);
+    const { body } = await read(night(50), night(56));
+    expect(body.propertyCount).toBe(2);
+    expect(body.properties[0]).toMatchObject({
+      name: 'Harbour View Lodge',
+      area: 'Harbourside',
+      city: null,
+      bedrooms: null,
+      maxGuests: 6,
+      tags: ['Sea view', 'Owner: Jones'],
+    });
+    const tooMany = await call('PATCH', `/v1/properties/${lodge}`, {
+      as: asA(),
+      body: { tags: Array.from({ length: 31 }, (_, i) => `Tag ${i}`) },
+    });
+    expect(tooMany.status).toBe(400);
+  });
+
+  it('lists only properties free for the whole stay, with room for everyone', async () => {
+    const free = (query: string) => call('GET', `/v1/calendar?${window}&${query}`, { as: asA() });
+    expect(names((await free(`freeFrom=${night(100)}&freeTo=${night(103)}`)).body)).toEqual([
+      'Harbour View Lodge',
+      'Mill Street Flat',
+    ]);
+    // The lodge is booked on the 52nd and 53rd nights from today; leaving on the 52nd day is fine.
+    const onlyFlat = (await free(`freeFrom=${night(53)}&freeTo=${night(56)}`)).body;
+    expect(names(onlyFlat)).toEqual(['Mill Street Flat']);
+    // The count is of every property, so the screen can say "1 of 2".
+    expect(onlyFlat.propertyCount).toBe(2);
+    expect(names((await free(`freeFrom=${night(49)}&freeTo=${night(50)}`)).body)).toEqual([
+      'Harbour View Lodge',
+      'Mill Street Flat',
+    ]);
+    // The flat sleeps two.
+    expect(names((await free(`freeFrom=${night(100)}&freeTo=${night(103)}&guests=3`)).body)).toEqual([
+      'Harbour View Lodge',
+    ]);
+    expect((await free(`freeFrom=${night(100)}`)).status).toBe(400);
+    expect((await free(`freeFrom=${night(103)}&freeTo=${night(100)}`)).status).toBe(400);
+  });
+});
+
 /** The weekend minimum stay set above lands on Friday and Saturday nights in the first four weeks. */
 function weekendStay(date: string): number | null {
   return date <= night(27) && [5, 6].includes(isoWeekday(date)) ? 3 : null;

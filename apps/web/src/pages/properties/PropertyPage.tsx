@@ -28,6 +28,7 @@ import {
 import { PhotosSection } from './PhotosSection.tsx';
 import { RoomsSection } from './RoomsSection.tsx';
 import { SECTION_TITLES, sectionAnchor } from './Section.tsx';
+import { Tags } from './Tags.tsx';
 
 function cx(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(' ');
@@ -238,6 +239,7 @@ export function PropertyPage() {
               {placeLine.charAt(0).toUpperCase() + placeLine.slice(1)}
             </p>
           ) : null}
+          <Tags orgId={orgId} tags={d.tags} canEdit={canEdit} save={(tags) => save({ tags })} />
         </div>
         <Badge>{MANAGED_BY_LABELS[d.managedBy]}</Badge>
       </header>

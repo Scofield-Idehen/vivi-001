@@ -20,7 +20,8 @@ with a soft white page.
 | V-01 staff and read-only support access, logged and visible to the operator | `packages/db/migrations/0003_console_security.sql` | Done |
 | Booking import into reservations, then acknowledgement | `apps/worker/src/bookings.ts` | Done, tested against the stand-in |
 | Calendar: nightly prices, stay rules and blocks | `apps/api/src/routes/calendar.ts`, `packages/shared/src/calendar.ts` | Done |
-| Calendar screen | `apps/web/src/pages/calendar` | Done; awaiting design sign-off |
+| Calendar screen, with filters, free dates and the channel marks | `apps/web/src/pages/calendar` | Done; awaiting design sign-off |
+| Property tags | `packages/db/migrations/0014_property_tags.sql`, `apps/web/src/pages/properties/Tags.tsx` | Done |
 | Changes queued for the channels by the database | `packages/db/migrations/0012_channel_queue.sql` | Done |
 | Prices and stay rules out | `apps/worker/src/outbox.ts` | Done, tested against the stand-in |
 

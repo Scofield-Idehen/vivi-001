@@ -65,6 +65,7 @@ function toProperty(row: PropertyRow, photos: { cover: string | null; count: num
     maxPriceMinor: row.maxPriceMinor,
     coverPhotoUrl: photos.cover,
     photoCount: photos.count,
+    tags: row.tags,
     createdAt: toIso(row.createdAt),
   };
 }

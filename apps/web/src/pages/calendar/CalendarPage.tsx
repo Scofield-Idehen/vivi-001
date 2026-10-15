@@ -1,68 +1,71 @@
 import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
 import { addDays, can, nightsBetween, todayIn } from '@v01/shared';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { Button, EmptyState, Notice, PageHeader } from '../../components/ui.tsx';
 import { ApiError, useCalendar, useWorkspace } from '../../lib/api.ts';
+import { plural } from '../../lib/format.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
 import { type BarTarget, CalendarGrid } from './CalendarGrid.tsx';
 import { CalendarPanel, type PanelTarget } from './CalendarPanel.tsx';
+import { FilterBar } from './FilterBar.tsx';
 import {
   buildRows,
+  type CalendarFilters,
   CELL_WIDTH,
+  filterChoices,
+  filterProperties,
+  filtersOn,
+  filtersToKeep,
   NAME_WIDTH,
   NAME_WIDTH_NARROW,
+  NO_FILTERS,
   nightsFrom,
   nightsThatFit,
+  parseFilters,
+  rangeLabel,
   type Selection,
   windowLabel,
 } from './model.ts';
 
 /** Nights shown before today, so this morning's departures are on screen. */
 const DAYS_BEFORE_TODAY = 2;
+/** The page's own padding below the grid. */
+const BOTTOM_SPACE = 40;
 
-function Key({ swatch, children }: { swatch: ReactNode; children: ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-2 whitespace-nowrap">
-      {swatch}
-      {children}
-    </span>
-  );
+const filtersKey = (orgId: string) => `v01.calendarFilters.${orgId}`;
+
+/** The filters this browser kept for the workspace, or none. */
+function loadFilters(orgId: string): CalendarFilters {
+  try {
+    const raw = localStorage.getItem(filtersKey(orgId));
+    return raw ? parseFilters(JSON.parse(raw)) : NO_FILTERS;
+  } catch {
+    return NO_FILTERS;
+  }
 }
 
-/** What the marks on the calendar mean, in words. */
-function Legend() {
-  return (
-    <p className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px] text-slate">
-      <Key swatch={<span aria-hidden className="h-3 w-6 rounded-full bg-accent" />}>Booked</Key>
-      <Key
-        swatch={
-          <span
-            aria-hidden
-            className="h-3 w-6 rounded-sm border border-edge/45 bg-[repeating-linear-gradient(135deg,var(--color-linen)_0_3px,var(--color-paper)_3px_6px)]"
-          />
-        }
-      >
-        Blocked
-      </Key>
-      <Key swatch={<span aria-hidden className="h-3 w-6 rounded-full border border-urgent" />}>
-        Overlapping booking
-      </Key>
-      <Key swatch={<span className="tnum font-semibold text-accent">£180</span>}>Set for that night</Key>
-      <Key swatch={<span className="tnum text-pending-text">£95</span>}>Held at a price limit</Key>
-      <Key swatch={<span aria-hidden className="size-[6px] rounded-full bg-plum" />}>
-        Arrivals or departures closed
-      </Key>
-    </p>
-  );
+function keepFilters(orgId: string, filters: CalendarFilters): void {
+  try {
+    localStorage.setItem(filtersKey(orgId), JSON.stringify(filtersToKeep(filters)));
+  } catch {
+    // Storage can be unavailable (private windows); the filters then last until the page closes.
+  }
 }
 
 /**
  * Every property by night (design phase D1): prices, minimum stays, bookings and blocks, with the
  * price limits behind every price. Choosing nights opens a panel to change them; what changes goes
- * to the channels for properties V-01 runs.
+ * to the channels for properties V-01 runs. Filters across the top find properties; the search
+ * sits over their names.
  */
 export function CalendarPage() {
+  const { orgId } = useCurrentWorkspace();
+  // Another workspace starts afresh: its own filters, nothing selected.
+  return <CalendarScreen key={orgId} />;
+}
+
+function CalendarScreen() {
   const { orgId, entry } = useCurrentWorkspace();
   const workspace = useWorkspace(orgId);
   const settings = workspace.data?.settings;
@@ -88,17 +91,32 @@ export function CalendarPage() {
   // Whole nights fill the width exactly; a phone scrolls sideways at the usual width.
   const cellWidth = Math.max(CELL_WIDTH, (width - 2 - nameWidth) / count);
 
+  // The grid ends at the bottom of the window and scrolls inside, wherever the filters leave its top.
+  const [top, setTop] = useState(260);
+  useLayoutEffect(() => {
+    const element = frame.current;
+    if (!element) return;
+    const next = Math.round(element.getBoundingClientRect().top + window.scrollY);
+    if (next !== top) setTop(next);
+  });
+  const maxHeight = `max(420px, calc(100dvh - ${top + BOTTOM_SPACE}px))`;
+
+  const [filters, setFilters] = useState(() => loadFilters(orgId));
+  useEffect(() => keepFilters(orgId, filters), [orgId, filters]);
+
   const [start, setStart] = useState<string | null>(null);
   const first = start ?? addDays(localToday, -DAYS_BEFORE_TODAY);
   const last = addDays(first, count - 1);
-  const calendar = useCalendar(orgId, first, last);
+  const calendar = useCalendar(orgId, first, last, filters.free);
   const data = calendar.data;
   // Drawn from the nights the data covers, so a window still loading never shows half-empty.
   const nights = useMemo(
     () => (data ? nightsFrom(data.from, nightsBetween(data.from, data.to) + 1) : []),
     [data],
   );
-  const rows = useMemo(() => (data ? buildRows(data, nights) : []), [data, nights]);
+  const allRows = useMemo(() => (data ? buildRows(data, nights) : []), [data, nights]);
+  const rows = useMemo(() => filterProperties(allRows, filters), [allRows, filters]);
+  const choices = useMemo(() => filterChoices(data?.properties ?? []), [data]);
   const today = data?.today ?? localToday;
 
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -110,6 +128,19 @@ export function CalendarPage() {
     const timer = window.setTimeout(() => setMessage(null), 10_000);
     return () => window.clearTimeout(timer);
   }, [message]);
+
+  const changeFilters = (next: CalendarFilters) => {
+    // Nights chosen among properties that may now be hidden would change ones out of sight.
+    setSelection(null);
+    // A free-dates search brings the stay on screen, unless all of it is there already.
+    if (next.free && next.free !== filters.free) {
+      const { from, to } = next.free;
+      if (from < first || addDays(to, -1) > last) {
+        setStart(from <= localToday ? null : addDays(from, -DAYS_BEFORE_TODAY));
+      }
+    }
+    setFilters(next);
+  };
 
   const step = Math.max(7, count - 7);
   const onChoose = useCallback((chosen: Selection) => setPanel({ kind: 'change', selection: chosen }), []);
@@ -126,28 +157,59 @@ export function CalendarPage() {
   };
 
   const navigation = (
-    <div className="flex items-center gap-2">
-      <Button onClick={() => setStart(null)} disabled={start === null}>
-        Today
-      </Button>
-      <div className="flex">
-        <button
-          type="button"
-          aria-label="Earlier nights"
-          onClick={() => setStart(addDays(first, -step))}
-          className="grid size-9 place-items-center rounded-l-md border border-hairline text-ink transition-colors hover:bg-linen"
-        >
-          <IconChevronLeft size={18} stroke={1.75} aria-hidden />
-        </button>
-        <button
-          type="button"
-          aria-label="Later nights"
-          onClick={() => setStart(addDays(first, step))}
-          className="grid size-9 place-items-center rounded-r-md border border-l-0 border-hairline text-ink transition-colors hover:bg-linen"
-        >
-          <IconChevronRight size={18} stroke={1.75} aria-hidden />
-        </button>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div className="flex items-center gap-2">
+        <Button onClick={() => setStart(null)} disabled={start === null}>
+          Today
+        </Button>
+        <div className="flex">
+          <button
+            type="button"
+            aria-label="Earlier nights"
+            onClick={() => setStart(addDays(first, -step))}
+            className="grid size-9 place-items-center rounded-l-md border border-hairline text-ink transition-colors hover:bg-linen"
+          >
+            <IconChevronLeft size={18} stroke={1.75} aria-hidden />
+          </button>
+          <button
+            type="button"
+            aria-label="Later nights"
+            onClick={() => setStart(addDays(first, step))}
+            className="grid size-9 place-items-center rounded-r-md border border-l-0 border-hairline text-ink transition-colors hover:bg-linen"
+          >
+            <IconChevronRight size={18} stroke={1.75} aria-hidden />
+          </button>
+        </div>
       </div>
+      <h2 className="text-[15px] font-medium text-ink" aria-live="polite">
+        {windowLabel(first, last)}
+        {calendar.isFetching && data ? (
+          <span className="ml-3 text-[13px] font-normal text-mist">Loading</span>
+        ) : null}
+      </h2>
+    </div>
+  );
+
+  const free = filters.free;
+  const empty = (
+    <div className="flex flex-col items-start gap-2">
+      <p className="font-serif text-[19px] text-ink">
+        {free && data?.properties.length === 0 ? 'Nothing is free for that stay' : 'No property matches'}
+      </p>
+      <p className="text-[13.5px] leading-relaxed text-slate">
+        {free && data?.properties.length === 0
+          ? `For ${rangeLabel(free.from, free.to)}, every property has a booking or block on at least one night${free.guests > 1 ? `, or sleeps fewer than ${free.guests}` : ''}. Try other dates.`
+          : `None of the ${plural(data?.propertyCount ?? 0, 'property', 'properties')} matches ${
+              !filters.search.trim()
+                ? 'all of these filters'
+                : filtersOn(filters) > 1
+                  ? 'the search and the filters'
+                  : 'the search'
+            }.`}
+      </p>
+      <Button variant="quiet" className="mt-1" onClick={() => changeFilters(NO_FILTERS)}>
+        Clear all filters
+      </Button>
     </div>
   );
 
@@ -171,15 +233,16 @@ export function CalendarPage() {
         action={navigation}
       />
 
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <h2 className="text-[15px] font-medium text-ink" aria-live="polite">
-          {windowLabel(first, last)}
-          {calendar.isFetching && data ? (
-            <span className="ml-3 text-[13px] font-normal text-mist">Loading</span>
-          ) : null}
-        </h2>
-        <Legend />
-      </div>
+      {data && data.propertyCount > 0 ? (
+        <FilterBar
+          filters={filters}
+          onChange={changeFilters}
+          choices={choices}
+          shown={rows.length}
+          total={data.propertyCount}
+          today={today}
+        />
+      ) : null}
 
       {message ? (
         <div className="mb-3">
@@ -194,7 +257,7 @@ export function CalendarPage() {
           </Notice>
         ) : !data ? (
           <p className="text-[14px] text-mist">Loading the calendar</p>
-        ) : rows.length === 0 ? (
+        ) : data.propertyCount === 0 ? (
           <EmptyState
             title="No properties yet"
             action={
@@ -219,6 +282,11 @@ export function CalendarPage() {
             onSelect={setSelection}
             onChoose={onChoose}
             onOpenBar={onOpenBar}
+            search={filters.search}
+            onSearch={(search) => changeFilters({ ...filters, search })}
+            empty={empty}
+            marked={free ? { from: free.from, to: free.to } : null}
+            maxHeight={maxHeight}
           />
         )}
       </div>

@@ -38,9 +38,12 @@ access.
 - **A company's workspace**
   - Today, Calendar, Properties and Workspace settings. The sidebar is a row of icons that opens when
     your mouse rests on it.
-  - The Calendar: every property by night, with prices, minimum stays, bookings and blocks. Drag across
-    nights (and down across properties) to change their price or minimum stay, close them to arrivals
-    or departures, or block them. Prices stay within each property's limits.
+  - The Calendar: every property by night, with prices, minimum stays, bookings and blocks. Each
+    booking starts with the mark of the channel it came from. Drag across nights (and down across
+    properties) to change their price or minimum stay, close them to arrivals or departures, or block
+    them. Prices stay within each property's limits.
+  - Finding properties on the Calendar: search over the names, and filter by area, tags, sync,
+    bedrooms, or free dates for a stay. Tags are the team's own labels, set under a property's name.
   - Adding a property: a panel slides in from the right and asks one thing at a time, in Airbnb's three
     stages: about the place; make it stand out (amenities, photos, title and description); then
     pricing. Only a name is required, and closing it keeps the draft.
@@ -65,7 +68,7 @@ access.
 *A property's page: the whole listing, every part editable, with what the channels still need.*
 
 ![The calendar](docs/images/calendar.png)
-*The Calendar: bookings meet on turnover days, and dragging across nights chooses them to change.*
+*The Calendar: filters across the top, bookings marked with their channel, and dragging across nights to change them.*
 
 ## Coming next
 

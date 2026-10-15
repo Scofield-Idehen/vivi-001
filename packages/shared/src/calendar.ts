@@ -105,7 +105,14 @@ export function nightRules(usual: UsualRules, night: string, own?: NightOwnRules
 // API shapes ------------------------------------------------------------------------------------
 
 export const CalendarQuerySchema = z
-  .object({ from: IsoDate, to: IsoDate })
+  .object({
+    from: IsoDate,
+    to: IsoDate,
+    /** Only properties free for a stay arriving `freeFrom` and leaving `freeTo`, for `guests`. */
+    freeFrom: IsoDate.optional(),
+    freeTo: IsoDate.optional(),
+    guests: z.coerce.number().int().min(1).max(50).optional(),
+  })
   .refine((q) => !isIsoDate(q.from) || !isIsoDate(q.to) || q.to >= q.from, {
     message: 'The end is before the start',
     path: ['to'],
@@ -113,7 +120,15 @@ export const CalendarQuerySchema = z
   .refine(
     (q) => !isIsoDate(q.from) || !isIsoDate(q.to) || nightsBetween(q.from, q.to) < CALENDAR_MAX_WINDOW,
     { message: `Ask for up to ${CALENDAR_MAX_WINDOW} nights at a time`, path: ['to'] },
-  );
+  )
+  .refine((q) => (q.freeFrom === undefined) === (q.freeTo === undefined), {
+    message: 'Give both the arrival and the departure date',
+    path: ['freeTo'],
+  })
+  .refine((q) => !q.freeFrom || !q.freeTo || q.freeTo > q.freeFrom, {
+    message: 'The departure is not after the arrival',
+    path: ['freeTo'],
+  });
 export type CalendarQuery = z.infer<typeof CalendarQuerySchema>;
 
 export const CalendarPropertySchema = z.object({
@@ -121,6 +136,11 @@ export const CalendarPropertySchema = z.object({
   name: z.string(),
   internalCode: z.string().nullable(),
   coverPhotoUrl: z.string().nullable(),
+  area: z.string().nullable(),
+  city: z.string().nullable(),
+  bedrooms: z.number().int().nullable(),
+  maxGuests: z.number().int(),
+  tags: z.array(z.string()),
   managedBy: z.enum(MANAGED_BY),
   priceOwner: z.enum(PRICE_OWNERS),
   basePriceMinor: z.number().int().nullable(),
@@ -174,6 +194,8 @@ export const CalendarSchema = z.object({
   /** Today where the operator is. Earlier nights can't be changed. */
   today: z.string(),
   properties: z.array(CalendarPropertySchema),
+  /** Every property in the workspace, free or not, so a screen can say "3 of 12". */
+  propertyCount: z.number().int(),
   nights: z.array(CalendarNightSchema),
   stays: z.array(CalendarStaySchema),
   blocks: z.array(CalendarBlockSchema),

@@ -148,6 +148,8 @@ function usePropertyChange<Input>(
       queryClient.setQueryData(['property', orgId, id], detail);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['properties', orgId] }),
+        // Names, usual prices, stays and tags all show on the Calendar.
+        queryClient.invalidateQueries({ queryKey: ['calendar', orgId] }),
         queryClient.invalidateQueries({ queryKey: ['console'] }),
       ]);
     },
@@ -276,15 +278,28 @@ export function useAddPhotos(orgId: string | null, id: string) {
 
 // The calendar ----------------------------------------------------------------------------------
 
-/** Every property's nights from `from` to `to`. The last window stays on screen while the next loads. */
-export function useCalendar(orgId: string | null, from: string, to: string) {
+/**
+ * Every property's nights from `from` to `to`, optionally only properties free for a stay. The last
+ * window stays on screen while the next loads.
+ */
+export function useCalendar(
+  orgId: string | null,
+  from: string,
+  to: string,
+  free?: { from: string; to: string; guests: number } | null,
+) {
   const token = useToken();
+  const query = new URLSearchParams({ from, to });
+  if (free) {
+    query.set('freeFrom', free.from);
+    query.set('freeTo', free.to);
+    query.set('guests', String(free.guests));
+  }
   return useQuery({
-    queryKey: ['calendar', orgId, from, to],
+    queryKey: ['calendar', orgId, query.toString()],
     enabled: Boolean(token && orgId),
     placeholderData: keepPreviousData,
-    queryFn: () =>
-      apiFetch<Calendar>(`/v1/calendar?from=${from}&to=${to}`, { token: token as string, orgId }),
+    queryFn: () => apiFetch<Calendar>(`/v1/calendar?${query}`, { token: token as string, orgId }),
   });
 }
 

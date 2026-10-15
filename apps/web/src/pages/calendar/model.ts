@@ -9,6 +9,9 @@ import {
   type CalendarProperty,
   type CalendarStay,
   formatMoney,
+  isIsoDate,
+  MANAGED_BY,
+  type ManagedBy,
   type NightRules,
   nightRules,
   nightsBetween,
@@ -23,18 +26,26 @@ import { priceToMinor } from '../properties/draft.ts';
  * can be tested on its own.
  */
 
-/** Sizes in pixels. A night's cell and a property's row are fixed, so long lists can be windowed. */
-export const CELL_WIDTH = 52;
-export const ROW_HEIGHT = 68;
+/**
+ * Sizes in pixels. A property's row is fixed, so long lists can be windowed. A night's box is 72
+ * wide at least (Alpha, 15 Oct 2026: bigger day boxes, as Guesty has), so a two-night stay shows
+ * its guest's whole name.
+ */
+export const CELL_WIDTH = 72;
+export const ROW_HEIGHT = 76;
 export const NAME_WIDTH = 224;
 export const NAME_WIDTH_NARROW = 136;
-/** A narrow screen still gets two weeks, scrolled sideways. */
+/** A screen too narrow for a week (a phone) gets two weeks, scrolled sideways. */
 export const MIN_NIGHTS_SHOWN = 14;
 
-/** As many nights as fit beside the property names, two weeks at least and two months at most. */
+/**
+ * As many nights as fit beside the property names, up to two months. Where not even a week fits,
+ * two weeks to scroll through sideways instead.
+ */
 export function nightsThatFit(width: number, nameWidth: number): number {
   const fit = Math.floor((width - nameWidth) / CELL_WIDTH);
-  return Math.max(MIN_NIGHTS_SHOWN, Math.min(CALENDAR_MAX_WINDOW, fit));
+  if (fit < 7) return MIN_NIGHTS_SHOWN;
+  return Math.min(CALENDAR_MAX_WINDOW, fit);
 }
 
 export function nightsFrom(first: string, count: number): string[] {
@@ -107,6 +118,22 @@ export function barFor(start: string, end: string, nights: string[]): Bar | null
   const right = Math.min(nights.length, to);
   if (right <= left) return null;
   return { start: left, length: right - left, before: from < 0, after: to > nights.length };
+}
+
+/** About how wide text is at a size in the bars' semibold sans: enough to choose what fits. */
+function roughWidth(text: string, size: number): number {
+  return text.length * size * 0.58;
+}
+
+/**
+ * The most of a name a bar has room for: all of it, then the first name, then the first name cut
+ * short. Null when not even that fits, so the bar shows its mark alone, never a stray letter.
+ */
+export function barLabel(full: string, firstName: string | null, room: number, size: number): string | null {
+  if (roughWidth(full, size) <= room) return full;
+  if (firstName && roughWidth(firstName, size) <= room) return firstName;
+  // Four letters and the ellipsis, at least.
+  return room >= roughWidth('Abcde', size) ? (firstName ?? full) : null;
 }
 
 export interface GridPoint {
@@ -183,6 +210,162 @@ export function summarise(selection: Selection, rows: CalendarRow[]): SelectionS
     pricedByPriceLabs: chosen.map((r) => r.property).filter((p) => p.priceOwner !== 'v01'),
     notSent: chosen.map((r) => r.property).filter((p) => p.managedBy !== 'v01'),
   };
+}
+
+// Finding properties ------------------------------------------------------------------------------
+
+export interface FreeDates {
+  /** Arriving on `from` and leaving on `to`. */
+  from: string;
+  to: string;
+  guests: number;
+}
+
+export interface CalendarFilters {
+  search: string;
+  /** Areas or towns: a property in any of them. */
+  areas: string[];
+  /** A property with any of these tags. */
+  tags: string[];
+  statuses: ManagedBy[];
+  minBedrooms: number | null;
+  /** Only properties free for this stay. Asked of the API, since it reaches beyond the nights shown. */
+  free: FreeDates | null;
+}
+
+export const NO_FILTERS: CalendarFilters = {
+  search: '',
+  areas: [],
+  tags: [],
+  statuses: [],
+  minBedrooms: null,
+  free: null,
+};
+
+/** How many filters are on, so the bar can offer to clear them. */
+export function filtersOn(f: CalendarFilters): number {
+  return (
+    (f.search.trim() ? 1 : 0) +
+    (f.areas.length ? 1 : 0) +
+    (f.tags.length ? 1 : 0) +
+    (f.statuses.length ? 1 : 0) +
+    (f.minBedrooms ? 1 : 0) +
+    (f.free ? 1 : 0)
+  );
+}
+
+export interface FilterChoice {
+  value: string;
+  /** Properties with it. */
+  count: number;
+}
+
+/** Each value once, with how many properties have it, in alphabetical order. */
+function tally(perProperty: string[][]): FilterChoice[] {
+  const counts = new Map<string, number>();
+  for (const values of perProperty) {
+    for (const value of new Set(values)) counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => a.value.localeCompare(b.value));
+}
+
+/** The areas, tags and sync states the properties have, for the filters to offer. */
+export function filterChoices(properties: CalendarProperty[]): {
+  areas: FilterChoice[];
+  tags: FilterChoice[];
+  statuses: FilterChoice[];
+} {
+  return {
+    areas: tally(properties.map((p) => [p.area, p.city].filter((v): v is string => Boolean(v)))),
+    tags: tally(properties.map((p) => p.tags)),
+    statuses: tally(properties.map((p) => [p.managedBy])),
+  };
+}
+
+/** Bedroom counts the filter offers, each meaning "this many or more". */
+export const BEDROOM_CHOICES = [1, 2, 3, 4, 5] as const;
+
+/** What a filter's button says once something is chosen: "Riverside", or "2 areas". */
+export function chosenLabel(chosen: string[], many: string): string {
+  return chosen.length === 1 ? (chosen[0] ?? '') : `${chosen.length} ${many}`;
+}
+
+const DAY_SHORT_MONTH = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+});
+
+/** The free-dates button: "Free 23 to 25 Oct, 4 guests", or "Free 30 Oct to 2 Nov, 1 guest". */
+export function freeLabel(free: FreeDates): string {
+  const arrive = DAY_SHORT_MONTH.format(utc(free.from));
+  const leave = DAY_SHORT_MONTH.format(utc(free.to));
+  const sameMonth = free.from.slice(0, 7) === free.to.slice(0, 7);
+  const dates = sameMonth ? `${arrive.split(' ')[0]} to ${leave}` : `${arrive} to ${leave}`;
+  return `Free ${dates}, ${free.guests} ${free.guests === 1 ? 'guest' : 'guests'}`;
+}
+
+/** What is wrong with a free-dates search, or null when it can be asked. */
+export function freeDatesError(from: string, to: string, today: string): string | null {
+  if (!isIsoDate(from)) return 'Choose the arrival date';
+  if (!isIsoDate(to)) return 'Choose the departure date';
+  if (from < today) return 'The arrival has passed. Choose today or later.';
+  if (to <= from) return 'The departure needs to be after the arrival';
+  return null;
+}
+
+/**
+ * The filters kept between visits: the ones that describe the view (area, tags, sync, bedrooms).
+ * A search and free dates are for the moment, so they start empty each time.
+ */
+export function filtersToKeep(f: CalendarFilters): Partial<CalendarFilters> {
+  return { areas: f.areas, tags: f.tags, statuses: f.statuses, minBedrooms: f.minBedrooms };
+}
+
+/** Kept filters read back, trusting nothing about their shape. */
+export function parseFilters(raw: unknown): CalendarFilters {
+  if (!raw || typeof raw !== 'object') return NO_FILTERS;
+  const kept = raw as Record<string, unknown>;
+  const strings = (value: unknown) =>
+    Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && v.length > 0) : [];
+  const bedrooms = kept.minBedrooms;
+  return {
+    ...NO_FILTERS,
+    areas: strings(kept.areas),
+    tags: strings(kept.tags),
+    statuses: strings(kept.statuses).filter((s): s is ManagedBy =>
+      (MANAGED_BY as readonly string[]).includes(s),
+    ),
+    minBedrooms:
+      typeof bedrooms === 'number' && Number.isInteger(bedrooms) && bedrooms >= 1 && bedrooms <= 50
+        ? bedrooms
+        : null,
+  };
+}
+
+/** The properties that match, in their order. Free dates are left to the API. */
+export function filterProperties<T extends { property: CalendarProperty }>(
+  rows: T[],
+  f: CalendarFilters,
+): T[] {
+  const words = f.search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const tags = new Set(f.tags.map((t) => t.toLowerCase()));
+  return rows.filter(({ property: p }) => {
+    if (f.areas.length && !f.areas.some((a) => a === p.area || a === p.city)) return false;
+    if (tags.size && !p.tags.some((t) => tags.has(t.toLowerCase()))) return false;
+    if (f.statuses.length && !f.statuses.includes(p.managedBy)) return false;
+    if (f.minBedrooms && (p.bedrooms ?? 0) < f.minBedrooms) return false;
+    if (words.length) {
+      const text = [p.name, p.internalCode, p.area, p.city, ...p.tags]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      if (!words.every((w) => text.includes(w))) return false;
+    }
+    return true;
+  });
 }
 
 // The change a person asks for -------------------------------------------------------------------
@@ -338,10 +521,12 @@ const DAY_MONTH_YEAR = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'UTC',
 });
 
-/** The nights on screen: "13 October to 10 November 2026". */
+/** The nights on screen: "13 to 27 October 2026", or "13 October to 10 November 2026". */
 export function windowLabel(first: string, last: string): string {
+  const end = DAY_MONTH_YEAR.format(utc(last));
+  if (first.slice(0, 7) === last.slice(0, 7)) return `${dayOfMonth(first)} to ${end}`;
   const start = first.slice(0, 4) === last.slice(0, 4) ? DAY_MONTH : DAY_MONTH_YEAR;
-  return `${start.format(utc(first))} to ${DAY_MONTH_YEAR.format(utc(last))}`;
+  return `${start.format(utc(first))} to ${end}`;
 }
 
 /** "Fri 23 Oct to Sun 25 Oct", or one night. */

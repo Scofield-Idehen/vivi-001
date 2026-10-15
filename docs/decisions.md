@@ -5,6 +5,29 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-15
 
+- **The Calendar after Alpha's review.** Anyone leaving Guesty should find their way around it as
+  easily as before, without V-01 copying Guesty. The changes below come from that review.
+- **A night's box is 72 pixels wide at least (Alpha),** up from 52, so a two-night stay shows the
+  guest's whole name. A laptop shows about 12 to 15 nights instead of 21; a phone scrolls sideways
+  through two weeks. A bar too short for the name shows the first name, and a one-night stay shows
+  only its channel's mark: never a stray letter. The whole name is in the hover line and the panel.
+- **Each booking's bar starts with the mark of the channel it came from:** Airbnb, Booking.com, "V"
+  for Vrbo, "E" for Expedia, or a person for a direct booking. The marks are drawn in ink on a white
+  circle, never in the channels' own colours, because colour means status. This departs from the
+  Design Roadmap's rule that channels are named only in words, so it waits on Alpha's yes or no.
+  Stopping it means removing the circles; the channel stays in the hover line and the panel.
+- **The Calendar's filters sit across the top:** Area (area or town), Tags, Sync (moved here, still
+  on Guesty, not connected yet), Bedrooms (this many or more) and Free dates (no booking or block on
+  any night of a stay, and room for the party). Beside them: how many properties are showing out of
+  how many, and Clear all. The search is at the top of the names column, where Guesty users look for
+  it, and finds a property by name, short code, area or tag. Area, tags, sync and bedrooms are kept in
+  the browser for each workspace; a search and free dates start empty each visit. Free dates are asked
+  of the API, because they reach beyond the nights on screen, and the calendar then moves to the stay
+  and marks its nights along the top.
+- **Properties have tags** (migration 0014): the team's own labels, such as an owner or "Sea view",
+  set under the name on the property's page. Up to 30 a property, 40 characters each, and each once
+  whatever the capitals. Guests and channels never see them.
+- **What the marks mean moved behind a "Key" button,** and the nights shown sit beside the arrows.
 - **Each property is made in Channex as one property, one unit and one rate plan** ("Whole place" and
   "Standard"): a holiday home is booked once a night. Channex closes a night itself as soon as a booking
   arrives, so a home is never sold twice while V-01 catches up or is down, and minimum stays apply to the

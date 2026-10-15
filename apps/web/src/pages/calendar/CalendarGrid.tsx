@@ -1,8 +1,10 @@
-import { IconHome } from '@tabler/icons-react';
+import { IconBan, IconHome, IconSearch, IconX } from '@tabler/icons-react';
 import {
+  addDays,
   type CalendarBlock,
   type CalendarProperty,
   type CalendarStay,
+  CHANNEL_LABELS,
   isWeekendNight,
   MANAGED_BY_LABELS,
 } from '@v01/shared';
@@ -10,6 +12,7 @@ import {
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -17,9 +20,11 @@ import {
   useState,
 } from 'react';
 import { Link } from 'react-router';
+import { ChannelMark, Mark } from './marks.tsx';
 import {
   type Bar,
   barFor,
+  barLabel,
   type CalendarRow,
   dayOfMonth,
   type GridPoint,
@@ -29,8 +34,10 @@ import {
   monthSpans,
   type NightCell,
   ROW_HEIGHT,
+  rangeLabel,
   type Selection,
   selectionBetween,
+  shortNight,
   weekdayOf,
 } from './model.ts';
 
@@ -62,6 +69,64 @@ interface GridProps {
   /** A finished selection: open the panel to change it. */
   onChoose(selection: Selection): void;
   onOpenBar(target: BarTarget): void;
+  /** The search over the property names, at the top of their column. */
+  search: string;
+  onSearch(text: string): void;
+  /** Shown in place of the rows when the filters leave none. */
+  empty: ReactNode;
+  /** The nights of a free-dates search, marked along the top: [arrival, departure). */
+  marked: { from: string; to: string } | null;
+  /** The tallest the grid gets before it scrolls inside itself, as CSS. */
+  maxHeight: string;
+}
+
+/** Finds a property by name, code, area or tag. Sits where the names are, as in most PMS calendars. */
+function Search({
+  value,
+  onChange,
+  narrow,
+}: {
+  value: string;
+  onChange(text: string): void;
+  narrow: boolean;
+}) {
+  return (
+    <div className="relative w-full">
+      <IconSearch
+        size={15}
+        stroke={1.75}
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-mist"
+      />
+      <input
+        type="search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && value) {
+            event.preventDefault();
+            onChange('');
+          }
+        }}
+        aria-label="Search properties by name, code, area or tag"
+        placeholder={narrow ? 'Search' : 'Search properties'}
+        autoComplete="off"
+        spellCheck={false}
+        // The grid turns off text selection for dragging; typing here still needs it (Safari).
+        className="h-8 w-full rounded-md border border-hairline bg-canvas pr-7 pl-8 text-[13px] text-ink select-text placeholder:text-mist focus:border-accent focus:outline-none [&::-webkit-search-cancel-button]:hidden"
+      />
+      {value ? (
+        <button
+          type="button"
+          aria-label="Clear the search"
+          onClick={() => onChange('')}
+          className="absolute top-1/2 right-1 grid size-6 -translate-y-1/2 place-items-center rounded text-mist hover:text-ink"
+        >
+          <IconX size={14} stroke={2} aria-hidden />
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 /** What a cell says to a screen reader: everything the eye gets from it. */
@@ -142,6 +207,17 @@ function guestLabel(stay: CalendarStay): string {
   return stay.status === 'conflict' ? `Overlap: ${who}` : who;
 }
 
+/** The hover line on a stay: who, from where, which nights, how many. */
+function stayTitle(stay: CalendarStay): string {
+  const parts = [
+    stay.guestName ?? 'Guest',
+    CHANNEL_LABELS[stay.channel],
+    `${shortNight(stay.checkIn)} to ${shortNight(stay.checkOut)}`,
+    `${stay.guests} ${stay.guests === 1 ? 'guest' : 'guests'}`,
+  ];
+  return stay.status === 'conflict' ? `Overlaps another booking: ${parts.join(', ')}` : parts.join(', ');
+}
+
 function Bars({
   row,
   nights,
@@ -165,13 +241,13 @@ function Bars({
     if (bar) items.push({ item: { kind: 'block', block }, bar });
   }
   // A bar on its own is full height; overlapping ones share the space, thinner.
-  const top = 38;
-  const space = 28;
+  const top = 34;
+  const space = 38;
 
   return (
     <>
       {lay(items).map(({ item, bar, lane, lanes }) => {
-        const height = lanes === 1 ? 24 : Math.max(8, Math.floor((space - (lanes - 1) * 2) / lanes));
+        const height = lanes === 1 ? 32 : Math.max(10, Math.floor((space - (lanes - 1) * 2) / lanes));
         const style = {
           left: nameWidth + bar.start * cellWidth + 1,
           width: bar.length * cellWidth - 2,
@@ -179,7 +255,29 @@ function Bars({
           height,
         };
         const rounding = cx(bar.before ? 'rounded-l-none' : '', bar.after ? 'rounded-r-none' : '');
-        const small = lanes > 1 ? 'text-[10.5px]' : 'text-[12px]';
+        const roomy = lanes === 1;
+        const size = roomy ? 13 : 11;
+        const mark = roomy ? 22 : height - 4;
+        const showMark = mark >= 12;
+        // Room for words: the bar less its padding and the mark.
+        const room = style.width - (roomy ? 17 : 10) - (showMark ? mark + 8 : 0);
+        const fullName = item.kind === 'stay' ? guestLabel(item.stay) : (item.block.reason ?? 'Blocked');
+        const firstName = item.kind === 'stay' ? (item.stay.guestName?.trim().split(/\s+/)[0] ?? null) : null;
+        // As much of the name as fits: whole, the first name, or (a one-night stay) the mark alone,
+        // centred. The whole name is still in the hover line, read out, and in the panel.
+        const label = barLabel(fullName, firstName, room, size);
+        const shape = cx(
+          'absolute z-[2] flex items-center gap-2 overflow-hidden rounded-full text-left whitespace-nowrap',
+          label === null && showMark ? 'justify-center px-0' : roomy ? 'pr-3 pl-[5px]' : 'pr-2 pl-0.5',
+          roomy ? 'text-[13px]' : 'text-[11px]',
+          rounding,
+        );
+        const words = (
+          <>
+            {label ? <span className="truncate">{label}</span> : null}
+            {label !== fullName ? <span className="sr-only">{fullName}</span> : null}
+          </>
+        );
         if (item.kind === 'stay') {
           const { stay } = item;
           const conflict = stay.status === 'conflict';
@@ -187,18 +285,22 @@ function Bars({
             <button
               key={stay.id}
               type="button"
+              title={stayTitle(stay)}
               onClick={() => onOpen(item)}
               style={style}
               className={cx(
-                'absolute z-[2] flex items-center overflow-hidden rounded-full px-2.5 text-left font-medium whitespace-nowrap',
-                small,
-                rounding,
+                shape,
+                'font-semibold',
                 conflict
                   ? 'border border-urgent bg-[repeating-linear-gradient(135deg,rgb(169_65_47/0.1)_0_5px,var(--color-canvas)_5px_10px)] text-urgent'
-                  : 'bg-accent text-canvas shadow-[0_1px_2px_rgb(21_24_27/0.18)] hover:bg-accent/90',
+                  : 'bg-accent text-canvas shadow-[0_1px_3px_rgb(21_24_27/0.22)] hover:bg-accent/90',
               )}
             >
-              <span className="truncate">{guestLabel(stay)}</span>
+              {showMark ? (
+                <ChannelMark channel={stay.channel} size={mark} tone={conflict ? 'conflict' : 'stay'} />
+              ) : null}
+              {words}
+              <span className="sr-only">, {CHANNEL_LABELS[stay.channel]}</span>
             </button>
           );
         }
@@ -207,15 +309,20 @@ function Bars({
           <button
             key={block.id}
             type="button"
+            title={`${fullName}, ${rangeLabel(block.startsOn, addDays(block.endsOn, -1))}`}
             onClick={() => onOpen(item)}
             style={style}
             className={cx(
-              'absolute z-[2] flex items-center overflow-hidden rounded-md border border-edge/45 bg-[repeating-linear-gradient(135deg,var(--color-linen)_0_5px,var(--color-paper)_5px_10px)] px-2.5 text-left whitespace-nowrap text-slate hover:border-edge',
-              small,
-              rounding,
+              shape,
+              'border border-edge/45 bg-[repeating-linear-gradient(135deg,var(--color-linen)_0_5px,var(--color-paper)_5px_10px)] font-medium text-slate hover:border-edge',
             )}
           >
-            <span className="truncate">{block.reason ?? 'Blocked'}</span>
+            {showMark ? (
+              <Mark size={mark} tone="block">
+                <IconBan size={Math.round(mark * 0.66)} stroke={1.9} />
+              </Mark>
+            ) : null}
+            {words}
           </button>
         );
       })}
@@ -259,10 +366,10 @@ function Cell({
   const weekend = isWeekendNight(cell.night);
   const content = (
     <>
-      <span aria-hidden className="flex flex-col items-start gap-0.5 px-1.5 pt-[7px]">
+      <span aria-hidden className="flex flex-col items-start gap-1 px-2 pt-[7px]">
         <span
           className={cx(
-            'tnum flex items-center gap-1 text-[12.5px] leading-none',
+            'tnum flex items-center gap-1 text-[13px] leading-none',
             cell.past || held ? 'text-edge' : rules.heldAt ? 'text-pending-text' : 'text-ink',
             cell.own && rules.priceMinor !== null && !cell.past && 'font-semibold',
             cell.own && !cell.past && !held && !rules.heldAt && 'text-accent',
@@ -277,7 +384,7 @@ function Cell({
         {rules.minNightsFrom === 'night' ? (
           <span
             className={cx(
-              'text-[10.5px] leading-none font-medium',
+              'text-[11px] leading-none font-medium',
               cell.past || held ? 'text-edge' : 'text-accent',
             )}
           >
@@ -344,6 +451,11 @@ export function CalendarGrid({
   onSelect,
   onChoose,
   onOpenBar,
+  search,
+  onSearch,
+  empty,
+  marked,
+  maxHeight,
 }: GridProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const cells = useRef(new Map<string, HTMLElement>());
@@ -521,8 +633,8 @@ export function CalendarGrid({
     <div
       ref={scroller}
       onPointerMove={onPointerMove}
-      style={{ '--name-width': `${nameWidth}px` } as CSSProperties}
-      className="relative max-h-[calc(100dvh-230px)] overflow-auto overscroll-contain rounded-xl border border-hairline bg-canvas select-none"
+      style={{ '--name-width': `${nameWidth}px`, maxHeight } as CSSProperties}
+      className="relative overflow-auto overscroll-contain rounded-xl border border-hairline bg-canvas select-none"
     >
       <div style={{ width }} className="relative">
         {/* Months, then days. Sticks to the top as the properties scroll. */}
@@ -546,39 +658,54 @@ export function CalendarGrid({
           </div>
           <div className="flex" style={{ height: DAYS_HEIGHT }}>
             <div
-              className="sticky left-0 z-[7] flex shrink-0 items-end border-r border-hairline bg-paper px-4 pb-2 text-[12.5px] text-mist"
+              className="sticky left-0 z-[7] flex shrink-0 items-center border-r border-hairline bg-paper px-2.5"
               style={{ width: nameWidth }}
             >
-              {rows.length === 1 ? '1 property' : `${rows.length} properties`}
+              <Search value={search} onChange={onSearch} narrow={nameWidth < 160} />
             </div>
             {nights.map((night) => {
               const isToday = night === today;
+              const isMarked = marked !== null && night >= marked.from && night < marked.to;
               return (
                 <div
                   key={night}
                   className={cx(
-                    'flex shrink-0 flex-col items-center justify-center gap-1 border-r border-hairline/70',
-                    isWeekendNight(night) && 'bg-paper/55',
+                    'relative flex shrink-0 flex-col items-center justify-center gap-1 border-r border-hairline/70',
+                    isMarked ? 'bg-accent-tint' : isWeekendNight(night) && 'bg-paper/55',
                   )}
                   style={{ width: cellWidth }}
                 >
-                  <span className={cx('text-[11px] leading-none', night < today ? 'text-edge' : 'text-mist')}>
+                  <span
+                    className={cx('text-[11.5px] leading-none', night < today ? 'text-edge' : 'text-mist')}
+                  >
                     {weekdayOf(night)}
                   </span>
                   <span
                     className={cx(
-                      'tnum grid size-[22px] place-items-center rounded-full text-[13px] leading-none font-medium',
+                      'tnum grid size-[24px] place-items-center rounded-full text-[14px] leading-none font-medium',
                       isToday ? 'bg-accent text-canvas' : night < today ? 'text-edge' : 'text-ink',
                     )}
                   >
                     {dayOfMonth(night)}
                   </span>
                   {isToday ? <span className="sr-only">today</span> : null}
+                  {isMarked ? (
+                    <>
+                      <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] bg-accent" />
+                      <span className="sr-only">, a night of the stay you searched for</span>
+                    </>
+                  ) : null}
                 </div>
               );
             })}
           </div>
         </div>
+
+        {rows.length === 0 ? (
+          <div className="sticky left-0 px-5 py-10" style={{ width: 'min(560px, calc(100vw - 48px))' }}>
+            {empty}
+          </div>
+        ) : null}
 
         {/* Space for the rows not drawn, above and below, so the scrollbar stays true. */}
         <div style={{ height: rows.length * ROW_HEIGHT }} className="relative">

@@ -281,14 +281,27 @@ export function calendarRoutes(app: FastifyInstance, deps: { scope: RequestScope
     { schema: { querystring: CalendarQuerySchema, response: { 200: CalendarSchema } } },
     async (req) =>
       deps.scope.inOrg(req, 'calendar.read', async (tx): Promise<Calendar> => {
-        const { from, to } = req.query;
+        const { from, to, freeFrom, freeTo, guests: party } = req.query;
         const { today } = await operatorSettings(tx);
+        // Asked for properties free for a stay: no booking or block on any of its nights, room enough.
+        const free =
+          freeFrom && freeTo
+            ? sql`not exists (
+                select 1 from app.occupancies o
+                 where o.property_id = ${properties.id}
+                   and o.nights && daterange(${freeFrom}::date, ${freeTo}::date, '[)'))`
+            : undefined;
         // Row-level security limits every query here to the operator in scope.
         const rows = await tx
           .select({
             id: properties.id,
             name: properties.name,
             internalCode: properties.internalCode,
+            area: properties.area,
+            city: properties.city,
+            bedrooms: properties.bedrooms,
+            maxGuests: properties.maxGuests,
+            tags: properties.tags,
             managedBy: properties.managedBy,
             priceOwner: properties.priceOwner,
             basePriceMinor: properties.basePriceMinor,
@@ -299,10 +312,23 @@ export function calendarRoutes(app: FastifyInstance, deps: { scope: RequestScope
             maxNights: properties.maxNights,
           })
           .from(properties)
-          .where(isNull(properties.archivedAt))
+          .where(
+            and(isNull(properties.archivedAt), free, party ? gte(properties.maxGuests, party) : undefined),
+          )
           .orderBy(asc(properties.name));
+        // How many there are in all, so the screen can say "3 of 12" when only some are free.
+        let propertyCount = rows.length;
+        if (free || party) {
+          const [all] = await tx
+            .select({ count: sql<number>`count(*)::int` })
+            .from(properties)
+            .where(isNull(properties.archivedAt));
+          propertyCount = all?.count ?? 0;
+        }
         const ids = rows.map((r) => r.id);
-        if (ids.length === 0) return { from, to, today, properties: [], nights: [], stays: [], blocks: [] };
+        if (ids.length === 0) {
+          return { from, to, today, properties: [], propertyCount, nights: [], stays: [], blocks: [] };
+        }
 
         const covers = await tx
           .select({
@@ -376,6 +402,7 @@ export function calendarRoutes(app: FastifyInstance, deps: { scope: RequestScope
           to,
           today,
           properties: rows.map((r) => ({ ...r, coverPhotoUrl: coverOf.get(r.id) ?? null })),
+          propertyCount,
           nights,
           stays: stays.map(({ adults, children, status, ...stay }) => ({
             ...stay,
