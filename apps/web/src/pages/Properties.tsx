@@ -1,4 +1,4 @@
-import { IconHome } from '@tabler/icons-react';
+import { IconChevronRight, IconHome } from '@tabler/icons-react';
 import { can, formatMoney, MANAGED_BY_LABELS, PROPERTY_TYPE_LABELS, type Property } from '@v01/shared';
 import { Link, Outlet, useNavigate } from 'react-router';
 import { Badge, Button, EmptyState, Notice, PageHeader } from '../components/ui.tsx';
@@ -16,18 +16,14 @@ function priceLimits(p: Property, currency: string, locale: string): string {
 }
 
 /** The cover photo, or the kind of place as a picture until there is one. */
-function Thumbnail({ property }: { property: Property }) {
+function Thumbnail({ property, large = false }: { property: Property; large?: boolean }) {
   const Icon = property.propertyType ? PROPERTY_TYPE_ICONS[property.propertyType] : IconHome;
+  const size = large ? 'h-[60px] w-[80px] rounded-lg' : 'h-[42px] w-[56px] rounded-md';
   return property.coverPhotoUrl ? (
-    <img
-      src={property.coverPhotoUrl}
-      alt=""
-      loading="lazy"
-      className="h-[42px] w-[56px] shrink-0 rounded-md object-cover"
-    />
+    <img src={property.coverPhotoUrl} alt="" loading="lazy" className={`${size} shrink-0 object-cover`} />
   ) : (
-    <span aria-hidden className="grid h-[42px] w-[56px] shrink-0 place-items-center rounded-md bg-paper">
-      <Icon size={20} stroke={1.3} className="text-edge" />
+    <span aria-hidden className={`${size} grid shrink-0 place-items-center bg-paper`}>
+      <Icon size={large ? 24 : 20} stroke={1.3} className="text-edge" />
     </span>
   );
 }
@@ -61,7 +57,7 @@ export function Properties() {
       <PageHeader
         title="Properties"
         description={
-          list.data
+          list.data && properties.length > 0
             ? `${properties.length} ${properties.length === 1 ? 'property' : 'properties'} in ${entry.organisationName}.`
             : undefined
         }
@@ -82,8 +78,31 @@ export function Properties() {
         </EmptyState>
       ) : null}
 
+      {/* Narrow screens get one row per property, so nothing is cut off at the side. */}
       {properties.length > 0 ? (
-        <div className="overflow-x-auto">
+        <ul className="divide-y divide-hairline border-y border-hairline md:hidden">
+          {properties.map((p) => (
+            <li key={p.id}>
+              <Link to={`/properties/${p.id}`} className="flex items-center gap-3.5 py-3">
+                <Thumbnail property={p} large />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-serif text-[16px] text-ink">{p.name}</span>
+                  <span className="block truncate text-[12.5px] text-mist">
+                    {[placeLine(p), `sleeps ${p.maxGuests}`].filter(Boolean).join(', ')}
+                  </span>
+                  <span className="mt-1.5 block">
+                    <Badge>{MANAGED_BY_LABELS[p.managedBy]}</Badge>
+                  </span>
+                </span>
+                <IconChevronRight size={17} stroke={1.75} aria-hidden className="shrink-0 text-mist" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {properties.length > 0 ? (
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[720px] border-collapse text-left text-[13.5px]">
             <thead>
               <tr className="border-b border-hairline text-[12.5px] text-mist">

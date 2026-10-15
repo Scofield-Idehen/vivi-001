@@ -130,21 +130,3 @@ dialog.sheet::backdrop {
     background-color: rgb(21 24 27 / 0);
   }
 }
-
-/* The sidebar opening over the page on narrower screens, from the left. */
-dialog.rail {
-  transition:
-    translate 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 200ms ease-out;
-}
-
-dialog.rail::backdrop {
-  background: rgb(21 24 27 / 0.3);
-}
-
-@starting-style {
-  dialog.rail[open] {
-    translate: -40px 0;
-    opacity: 0;
-  }
-}

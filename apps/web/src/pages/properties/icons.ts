@@ -1,8 +1,10 @@
 import {
   IconAdjustmentsHorizontal,
+  IconAlarmSmoke,
   IconBarbell,
   IconBath,
   IconBeach,
+  IconBellRinging,
   IconBuilding,
   IconBuildingCottage,
   IconBuildingSkyscraper,
@@ -10,9 +12,13 @@ import {
   IconChargingPile,
   IconChartLine,
   IconChess,
+  IconDesk,
+  IconDeviceTv,
   IconDoor,
   IconDoorEnter,
   IconDots,
+  IconFireExtinguisher,
+  IconFirstAidKit,
   IconFlame,
   IconGrill,
   IconHome,
@@ -22,6 +28,7 @@ import {
   IconLock,
   IconMountain,
   IconMovie,
+  IconParking,
   IconPlant2,
   IconPool,
   IconRipple,
@@ -29,10 +36,14 @@ import {
   IconSofa,
   IconSparkles,
   IconTemperature,
+  IconTemperatureSun,
+  IconToolsKitchen2,
   IconTrees,
   IconUserCheck,
   IconUsers,
+  IconWashMachine,
   IconWaveSine,
+  IconWifi,
   type TablerIcon,
 } from '@tabler/icons-react';
 import type { CheckInMethod, PriceOwner, PropertyType, SpaceType } from '@v01/shared';
@@ -59,8 +70,23 @@ export const PRICE_OWNER_ICONS: Record<PriceOwner, TablerIcon> = {
   pricelabs: IconChartLine,
 };
 
-/** Standout features get a picture; the rest of the amenities are a plain list. */
-export const STANDOUT_ICONS: Record<string, TablerIcon> = {
+/**
+ * Amenities shown as tiles get a picture: the standout features, and in the add-property panel the
+ * guest favourites and safety items too. The rest of the list is plain checkboxes.
+ */
+export const AMENITY_ICONS: Record<string, TablerIcon> = {
+  wifi: IconWifi,
+  kitchen: IconToolsKitchen2,
+  washing_machine: IconWashMachine,
+  free_parking: IconParking,
+  tv: IconDeviceTv,
+  workspace: IconDesk,
+  central_heating: IconTemperatureSun,
+  self_check_in: IconKey,
+  smoke_alarm: IconAlarmSmoke,
+  co_alarm: IconBellRinging,
+  fire_extinguisher: IconFireExtinguisher,
+  first_aid_kit: IconFirstAidKit,
   hot_tub: IconBath,
   pool: IconPool,
   sauna: IconTemperature,

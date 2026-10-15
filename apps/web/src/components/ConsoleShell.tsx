@@ -2,31 +2,24 @@ import {
   IconActivityHeartbeat,
   IconBuildingCommunity,
   IconDoorEnter,
+  IconInfoCircle,
   IconLayoutDashboard,
   IconLock,
   IconLogout,
+  IconRefresh,
   IconShieldLock,
   type TablerIcon,
 } from '@tabler/icons-react';
 import { PLATFORM_ROLE_LABELS } from '@v01/shared';
 import { useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { Outlet, useLocation, useNavigate } from 'react-router';
 import { useMe } from '../lib/api.ts';
 import { clockTime } from '../lib/format.ts';
 import { signOut, useSession } from '../lib/session.tsx';
 import { useWorkspaces } from '../lib/workspace.tsx';
-import { ResetSampleData } from './AppShell.tsx';
+import { useResetSampleData } from './AppShell.tsx';
 import { ConsoleMark } from './BrandMark.tsx';
-import {
-  RailButton,
-  RailFooter,
-  RailFrame,
-  RailGroup,
-  RailInitial,
-  RailLink,
-  RailToggle,
-  useRail,
-} from './Rail.tsx';
+import { RailButton, RailFooter, RailFrame, RailGroup, RailLink, RailMark, RailPerson } from './Rail.tsx';
 
 interface ConsoleNavItem {
   to: string;
@@ -96,67 +89,33 @@ function WorkspaceLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function ConsoleFooter() {
+function ConsoleFooter({ onNavigate }: { onNavigate?: () => void }) {
   const { session } = useSession();
-  const { collapsed } = useRail();
+  const reset = useResetSampleData();
   const role = useMe().data?.platformRole;
-  const email = session?.user.email ?? '';
-  const roleText = role ? `V-01 ${PLATFORM_ROLE_LABELS[role].toLowerCase()}` : null;
-
-  if (collapsed) {
-    return (
-      <RailFooter>
-        <span aria-hidden className="mb-2 h-px w-6 bg-white/20" />
-        <RailInitial person text={email} label={[email, roleText].filter(Boolean).join(', ')} />
-        <RailButton label="Sign out" icon={IconLogout} onClick={() => void signOut()} />
-        <RailToggle />
-      </RailFooter>
-    );
-  }
+  const roleText = role ? `V-01 ${PLATFORM_ROLE_LABELS[role].toLowerCase()}` : '';
 
   return (
     <RailFooter>
-      <div className="flex flex-col gap-2.5 border-t border-white/15 px-2.5 pt-4 text-[12.5px]">
-        <div className="min-w-0">
-          <p className="truncate text-canvas" title={email}>
-            {email}
-          </p>
-          {roleText ? <p className="text-console-muted">{roleText}</p> : null}
-        </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1">
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            className="text-canvas underline-offset-4 hover:underline"
-          >
-            Sign out
-          </button>
-          <NavLink to="/console/about" className="text-console-muted underline-offset-4 hover:underline">
-            About
-          </NavLink>
-          <ResetSampleData className="text-console-muted underline-offset-4 hover:underline" />
-        </div>
-      </div>
-      <RailToggle />
+      <RailPerson email={session?.user.email ?? ''} detail={roleText} />
+      <RailButton label="Sign out" icon={IconLogout} onClick={() => void signOut()} />
+      <RailLink to="/console/about" label="About" icon={IconInfoCircle} quiet onNavigate={onNavigate} />
+      {reset ? <RailButton label="Reset sample data" icon={IconRefresh} quiet onClick={reset} /> : null}
     </RailFooter>
   );
 }
 
-/** The console's name at the top of the sidebar: in full, or folded to "V-01". */
+/** The console's name at the top of the sidebar: "V-01" in the closed rail, in full once open. */
 function ConsoleHeader() {
-  const { collapsed } = useRail();
-  if (collapsed) {
-    return (
-      <span className="mx-auto pt-1 text-[13px] font-semibold tracking-[0.06em] text-canvas">
-        <span aria-hidden>V-01</span>
-        <span className="sr-only">V-01 console</span>
-      </span>
-    );
-  }
   return (
-    <div className="px-2.5">
-      <ConsoleMark />
-    </div>
+    <RailMark
+      small={
+        <span aria-hidden className="text-[13px] font-semibold tracking-[0.06em] text-canvas">
+          V-01
+        </span>
+      }
+      full={<ConsoleMark />}
+    />
   );
 }
 
@@ -197,7 +156,7 @@ export function ConsoleShell() {
         <div id="console-menu" className="gutter flex flex-col gap-6 bg-accent py-5 min-[560px]:hidden">
           <ConsoleNavigation onNavigate={() => setMenuOpen(false)} />
           <WorkspaceLinks onNavigate={() => setMenuOpen(false)} />
-          <ConsoleFooter />
+          <ConsoleFooter onNavigate={() => setMenuOpen(false)} />
         </div>
       ) : null}
       <main

@@ -9,18 +9,44 @@ import {
 } from '@v01/shared';
 import { useId, useState } from 'react';
 import { useSetAmenities } from '../../lib/api.ts';
-import { STANDOUT_ICONS } from './icons.ts';
+import { AMENITY_ICONS } from './icons.ts';
 import { Missing, Section, SectionForm, useEditor } from './Section.tsx';
 
 function cx(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(' ');
 }
 
-const STANDOUT = AMENITIES.filter((a) => a.category === 'standout');
+export const STANDOUT = AMENITIES.filter((a) => a.category === 'standout');
 
-/** A standout feature as a tile with its picture; checked ones are outlined in ink. */
-function StandoutTile({ item, checked, onToggle }: { item: Amenity; checked: boolean; onToggle(): void }) {
-  const Icon = STANDOUT_ICONS[item.code];
+const pick = (codes: string[]) =>
+  codes.map((code) => AMENITIES.find((a) => a.code === code)).filter((a) => a !== undefined);
+
+/** What guests look for first, as Airbnb asks when a listing is made. */
+export const GUEST_FAVOURITES = pick([
+  'wifi',
+  'kitchen',
+  'washing_machine',
+  'free_parking',
+  'tv',
+  'workspace',
+  'central_heating',
+  'self_check_in',
+]);
+
+/** Safety items guests are told about before they book. */
+export const SAFETY_ITEMS = pick(['smoke_alarm', 'co_alarm', 'fire_extinguisher', 'first_aid_kit']);
+
+/** An amenity as a tile with its picture; checked ones are outlined in ink. */
+export function AmenityTile({
+  item,
+  checked,
+  onToggle,
+}: {
+  item: Amenity;
+  checked: boolean;
+  onToggle(): void;
+}) {
+  const Icon = AMENITY_ICONS[item.code];
   return (
     <label
       className={cx(
@@ -126,7 +152,7 @@ export function AmenitiesSection({
               </legend>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {STANDOUT.filter(matches).map((item) => (
-                  <StandoutTile
+                  <AmenityTile
                     key={item.code}
                     item={item}
                     checked={draft.codes.has(item.code)}
@@ -164,7 +190,7 @@ export function AmenitiesSection({
           {pickedStandout.length ? (
             <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {pickedStandout.map((item) => {
-                const Icon = STANDOUT_ICONS[item.code];
+                const Icon = AMENITY_ICONS[item.code];
                 return (
                   <li key={item.code} className="flex items-center gap-3 rounded-xl bg-paper px-3.5 py-3">
                     {Icon ? <Icon size={22} stroke={1.4} aria-hidden className="shrink-0 text-ink" /> : null}

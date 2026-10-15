@@ -34,9 +34,14 @@ across from Guesty. Northwind Stays and Brightwater Lets are made-up companies.
   - V-01 staff open a company's workspace with a reason and a time limit, and can't change anything.
   - The company sees every visit.
 - **A company's workspace**
-  - Today, Properties and Workspace settings.
-  - Adding a property: a panel slides in from the right and asks one thing at a time, in five short
-    steps. Only a name is required, and closing it keeps the draft.
+  - Today, Properties and Workspace settings. The sidebar is a row of icons that opens when your mouse
+    rests on it.
+  - Adding a property: a panel slides in from the right and asks one thing at a time, in Airbnb's three
+    stages: about the place; make it stand out (amenities, photos, title and description); then
+    pricing. Only a name is required, and closing it keeps the draft.
+  - Every property has its own page, where any part of the listing can be changed later: photos, rooms
+    and beds, amenities, description, house rules, booking rules, prices and fees, and the licence. A
+    checklist shows what the channels still need.
   - The other modules are in the menu and arrive in later phases.
 
 ![The V-01 console overview](docs/images/console-overview.png)
@@ -51,10 +56,15 @@ across from Guesty. Northwind Stays and Brightwater Lets are made-up companies.
 ![Adding a property](docs/images/add-property.png)
 *Adding a property: the steps fill with your answers, and the preview shows what you're making.*
 
+![A property's page](docs/images/property-page.png)
+*A property's page: the whole listing, every part editable, with what the channels still need.*
+
 ## Coming next
 
-Phase 1 connects V-01 to Airbnb, Booking.com and Vrbo through Channex: properties, prices and
-availability out; bookings in. It also adds the Calendar, Reservations and Channels & sync screens.
+Phase 1 connects V-01 to Airbnb, Booking.com and Vrbo through Channex: prices and availability out,
+bookings in. Channex can't send photos, descriptions or amenities to the channels yet, so for now those
+are copied across from each property's page. Phase 1 also adds the Calendar, Reservations and
+Channels & sync screens.
 
 ---
 

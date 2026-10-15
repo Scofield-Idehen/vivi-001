@@ -2,6 +2,7 @@ import { PropertyCreateSchema } from '@v01/shared';
 import { describe, expect, it } from 'vitest';
 import { V01 } from '../src/lib/format.ts';
 import {
+  amenitiesText,
   isDirty,
   limitsText,
   newDraft,
@@ -9,8 +10,12 @@ import {
   priceErrors,
   priceToMinor,
   roomsText,
+  STAGES,
+  STEPS,
   stepSummary,
+  suggestTitle,
   toCreate,
+  usualPriceText,
 } from '../src/pages/properties/draft.ts';
 
 const draft = (patch: Partial<PropertyDraft> = {}): PropertyDraft => ({ ...newDraft('GB'), ...patch });
@@ -123,5 +128,79 @@ describe('the finished draft', () => {
     expect(PropertyCreateSchema.safeParse(toCreate(draft({ name: 'The Granary' }), 'GBP')).success).toBe(
       true,
     );
+  });
+});
+
+describe('making it stand out', () => {
+  it('puts every step in exactly one of the three stages, in order', () => {
+    expect(STAGES.flatMap((stage) => stage.steps)).toEqual(STEPS.map((step) => step.id));
+    expect(STAGES.map((stage) => stage.title)).toEqual(['About the place', 'Make it stand out', 'Finish up']);
+  });
+
+  it('names amenities as guests read them, standout features first', () => {
+    expect(amenitiesText([])).toBeNull();
+    expect(amenitiesText(['wifi'])).toBe('Wi-Fi');
+    expect(amenitiesText(['wifi', 'hot_tub'])).toBe('Hot tub and Wi-Fi');
+    expect(amenitiesText(['wifi', 'hot_tub', 'smoke_alarm'], 3)).toBe('Hot tub, Wi-Fi and Smoke alarm');
+    expect(amenitiesText(['wifi', 'kitchen', 'sea_view', 'garden'])).toBe('Sea view, Garden and 2 more');
+  });
+
+  it('suggests a title from the answers, within the limit', () => {
+    const cottage = draft({
+      propertyType: 'cottage',
+      bedrooms: 3,
+      area: 'Port Seton',
+      amenities: ['wifi', 'hot_tub'],
+    });
+    expect(suggestTitle(cottage, 50)).toBe('3-bedroom cottage in Port Seton with a hot tub');
+    // Too long for the limit: the feature goes first, then the place.
+    expect(suggestTitle(cottage, 32)).toBe('3-bedroom cottage in Port Seton');
+    expect(suggestTitle(cottage, 20)).toBe('3-bedroom cottage');
+    expect(suggestTitle(draft({ propertyType: 'studio', city: 'Leith' }), 50)).toBe('Studio in Leith');
+    // Nothing to go on yet, or a kind of place that doesn't read as a title.
+    expect(suggestTitle(draft(), 50)).toBeNull();
+    expect(suggestTitle(draft({ propertyType: 'other', city: 'Leith' }), 50)).toBeNull();
+  });
+
+  it('describes the usual price and cleaning fee', () => {
+    expect(usualPriceText(draft(), 'GBP', 'en-GB')).toBeNull();
+    expect(usualPriceText(draft({ basePrice: '165', cleaningFee: '60' }), 'GBP', 'en-GB')).toBe(
+      '£165 a night, £60 cleaning',
+    );
+  });
+
+  it('sums up the new steps in the step list', () => {
+    expect(stepSummary('amenities', draft({ amenities: ['hot_tub'] }), true, 'GBP', 'en-GB')).toBe('Hot tub');
+    expect(stepSummary('amenities', draft(), true, 'GBP', 'en-GB')).toBe('None picked yet');
+    expect(stepSummary('photos', draft(), true, 'GBP', 'en-GB', 6)).toBe('6 photos');
+    expect(stepSummary('photos', draft(), false, 'GBP', 'en-GB', 0)).toBeNull();
+    expect(stepSummary('description', draft({ title: 'Harbour cottage' }), true, 'GBP', 'en-GB')).toBe(
+      'Harbour cottage',
+    );
+    expect(stepSummary('pricing', draft({ basePrice: '165' }), true, 'GBP', 'en-GB')).toBe(
+      `Set in ${V01}, £165 a night`,
+    );
+  });
+
+  it('sends the title, description, amenities and prices with the new property', () => {
+    const input = toCreate(
+      draft({
+        name: '3 Carnoustie Drive',
+        title: ' 3-bedroom cottage with a hot tub ',
+        summary: 'Two streets from the harbour.',
+        amenities: ['hot_tub', 'wifi'],
+        basePrice: '165',
+        cleaningFee: '£60',
+      }),
+      'GBP',
+    );
+    expect(input).toMatchObject({
+      title: '3-bedroom cottage with a hot tub',
+      summary: 'Two streets from the harbour.',
+      amenities: ['hot_tub', 'wifi'],
+      basePriceMinor: 16_500,
+      cleaningFeeMinor: 6_000,
+    });
+    expect(PropertyCreateSchema.safeParse(input).success).toBe(true);
   });
 });

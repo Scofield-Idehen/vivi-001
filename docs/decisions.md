@@ -3,6 +3,25 @@
 Newest first. Each entry says what was decided and why. Product decisions also live in the
 V-01 Build Playbook and Design Roadmap.
 
+## 2026-10-15
+
+- **The sidebar is a rail of icons that opens while the mouse rests on it (Alpha).** It opens over the
+  page, so nothing on the page moves, and closes when the mouse leaves. There is no button to fold or
+  unfold it. Keyboard focus inside it opens it too, and on touch screens a tap on the rail opens it and
+  a tap elsewhere closes it. Phones keep the top bar and menu. Workspaces and the console both work
+  this way. This replaces the fold button from 14 October.
+- **Adding a property follows Airbnb's three stages:** about the place (the place, name and address,
+  guests and rooms), make it stand out (amenities, photos, title and description), then finish up
+  (pricing, check and add). Amenities are offered as tiles in three groups: guest favourites, standout
+  features and safety. The rest of the list is on the property's page. The title can start from a
+  suggestion made from the answers, such as "3-bedroom cottage in Port Seton with a hot tub", always
+  within Airbnb's 50 characters. Only the name is still required.
+- **Photos chosen while adding a property upload once it exists.** Until then they are held in the
+  page, checked as they are chosen (type, and at least 800 pixels), so closing and reopening the panel
+  keeps them. A reload loses them, and the panel says so; the written draft is kept as before.
+- **On narrow screens the property list is one row per property** with its cover photo, instead of a
+  table cut off at the side.
+
 ## 2026-10-14
 
 - **Channex carries prices, availability, stay lengths and bookings to Airbnb, Booking.com and Vrbo;
@@ -27,7 +46,8 @@ V-01 Build Playbook and Design Roadmap.
 - **New listing tables carry a composite key to their property's operator** (migration 0008), so a
   room, amenity or photo can never point at another operator's property, even by mistake.
 - **The sidebar folds down to icons,** in workspaces and the console, and remembers the choice per
-  browser. It is icons by default between 560 and 1024 pixels wide; phones keep a top bar.
+  browser. It is icons by default between 560 and 1024 pixels wide; phones keep a top bar. (Replaced on
+  15 October: it now opens on hover, with no button.)
 - **A property on Guesty is never run by V-01 at the same time (Alpha).** Two managers on one listing
   means the same home can be listed or booked twice. V-01 sends nothing to Airbnb, Booking.com or Vrbo
   for a property until `managed_by` is `v01`, and a trigger (migration 0007) stops the API and worker

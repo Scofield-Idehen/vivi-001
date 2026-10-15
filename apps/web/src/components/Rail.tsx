@@ -1,12 +1,7 @@
-import {
-  IconLayoutSidebarLeftCollapse,
-  IconLayoutSidebarLeftExpand,
-  type TablerIcon,
-} from '@tabler/icons-react';
+import type { TablerIcon } from '@tabler/icons-react';
 import {
   createContext,
   type ReactNode,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -22,31 +17,22 @@ function cx(...classes: (string | false | null | undefined)[]): string {
 
 /** Below this width the sidebar becomes a top bar with a menu. */
 export const RAIL_MIN = 560;
-/** From this width the sidebar can stay open beside the page; narrower, it opens over it. */
-const DOCK_MIN = 1024;
-const STORAGE_KEY = 'v01.sidebar';
+/** How long the pointer rests on the sidebar before it opens, so passing over it does nothing. */
+const OPEN_DELAY = 120;
+/** How long it stays open after the pointer leaves, so a slip past its edge doesn't snap it shut. */
+const CLOSE_DELAY = 240;
 
 export type RailTone = 'light' | 'dark';
 
 interface RailState {
-  /** Inside a sidebar at all (false in the phone menu). */
+  /** Inside the sidebar at all (false in the phone menu, which always shows names). */
   inRail: boolean;
   /** Showing icons only. */
   collapsed: boolean;
   tone: RailTone;
-  toggle(): void;
-  showTip(target: HTMLElement, label: string): void;
-  hideTip(): void;
 }
 
-const RailContext = createContext<RailState>({
-  inRail: false,
-  collapsed: false,
-  tone: 'light',
-  toggle() {},
-  showTip() {},
-  hideTip() {},
-});
+const RailContext = createContext<RailState>({ inRail: false, collapsed: false, tone: 'light' });
 
 export function useRail(): RailState {
   return useContext(RailContext);
@@ -64,32 +50,16 @@ function useMediaQuery(query: string): boolean {
   );
 }
 
-// The choice is a convenience for this browser only, so storage failing just means the default.
-function readCollapsed(): boolean {
-  try {
-    return localStorage.getItem(STORAGE_KEY) === 'collapsed';
-  } catch {
-    return false;
-  }
-}
-
-function writeCollapsed(collapsed: boolean): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, collapsed ? 'collapsed' : 'expanded');
-  } catch {
-    // Not kept; the sidebar still works for this visit.
-  }
-}
-
-const TONES: Record<RailTone, { aside: string; overlay: string }> = {
-  light: { aside: 'border-r border-hairline bg-paper', overlay: 'bg-paper text-ink' },
-  dark: { aside: 'bg-accent', overlay: 'bg-accent text-canvas' },
+const TONES: Record<RailTone, string> = {
+  light: 'border-r border-hairline bg-paper',
+  dark: 'bg-accent',
 };
 
 /**
- * The page frame with its sidebar. On wide screens the sidebar folds down to icons and back, and
- * remembers which; on narrower ones it stays as icons and opens over the page; on phones it is a
- * top bar with a menu (drawn by the shell, above `children`).
+ * The page frame with its sidebar. The sidebar is a rail of icons that opens over the page while
+ * the pointer rests on it, or while keyboard focus is inside it, and closes again when it leaves.
+ * There is no button: on touch screens a tap on the rail opens it and a tap outside closes it.
+ * On phones it is a top bar with a menu instead (drawn by the shell, above `children`).
  */
 export function RailFrame({
   tone,
@@ -102,124 +72,93 @@ export function RailFrame({
   sidebar: ReactNode;
   children: ReactNode;
 }) {
-  const wide = useMediaQuery(`(min-width: ${DOCK_MIN}px)`);
-  const [folded, setFolded] = useState(readCollapsed);
-  const [overlayOpen, setOverlayOpen] = useState(false);
-  const [tip, setTip] = useState<{ label: string; top: number; left: number } | null>(null);
-  const overlay = useRef<HTMLDialogElement>(null);
+  const canHover = useMediaQuery('(hover: hover)');
+  const [open, setOpen] = useState(false);
+  const aside = useRef<HTMLElement>(null);
+  const pointerInside = useRef(false);
+  const timer = useRef<number | undefined>(undefined);
   const location = useLocation();
 
-  const collapsed = !wide || folded;
+  const after = (ms: number, fn: () => void) => {
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(fn, ms);
+  };
+  useEffect(() => () => window.clearTimeout(timer.current), []);
 
-  // Going somewhere closes the sidebar that opened over the page.
+  // Going somewhere closes it, unless the pointer is still resting on it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs on purpose whenever the page changes
   useEffect(() => {
-    setOverlayOpen(false);
-    setTip(null);
+    if (!pointerInside.current) setOpen(false);
   }, [location.pathname]);
 
+  // Escape closes it, and so does a tap anywhere else (touch screens have no pointer to leave).
   useEffect(() => {
-    if (wide) setOverlayOpen(false);
-  }, [wide]);
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!aside.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
 
-  useEffect(() => {
-    const dialog = overlay.current;
-    if (!dialog) return;
-    if (overlayOpen && !dialog.open) dialog.showModal();
-    if (!overlayOpen && dialog.open) dialog.close();
-  }, [overlayOpen]);
-
-  const toggle = useCallback(() => {
-    setTip(null);
-    if (wide) {
-      setFolded((was) => {
-        writeCollapsed(!was);
-        return !was;
-      });
-    } else {
-      setOverlayOpen((open) => !open);
-    }
-  }, [wide]);
-
-  const showTip = useCallback((target: HTMLElement, text: string) => {
-    const box = target.getBoundingClientRect();
-    setTip({ label: text, top: box.top + box.height / 2, left: box.right + 10 });
-  }, []);
-  const hideTip = useCallback(() => setTip(null), []);
-
-  const docked = useMemo<RailState>(
-    () => ({ inRail: true, collapsed, tone, toggle, showTip, hideTip }),
-    [collapsed, tone, toggle, showTip, hideTip],
-  );
-  const opened = useMemo<RailState>(
-    () => ({ inRail: true, collapsed: false, tone, toggle, showTip() {}, hideTip() {} }),
-    [tone, toggle],
-  );
+  const state = useMemo<RailState>(() => ({ inRail: true, collapsed: !open, tone }), [open, tone]);
 
   return (
     <div className="min-h-dvh min-[560px]:flex">
-      <RailContext.Provider value={docked}>
+      {/* Holds the rail's place, so the page never moves when the rail opens over it. */}
+      <div aria-hidden className="hidden w-16 shrink-0 min-[560px]:block" />
+      <RailContext.Provider value={state}>
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: keyboard focus opens it through onFocus; the tap is for touch screens */}
         <aside
+          ref={aside}
           aria-label={label}
+          onPointerEnter={(event) => {
+            if (event.pointerType !== 'mouse' || !canHover) return;
+            pointerInside.current = true;
+            after(OPEN_DELAY, () => setOpen(true));
+          }}
+          onPointerLeave={(event) => {
+            if (event.pointerType !== 'mouse') return;
+            pointerInside.current = false;
+            after(CLOSE_DELAY, () => setOpen(false));
+          }}
+          onFocus={(event) => {
+            // Keyboard users get the names too. A click focuses a link as well, which is fine: it's open.
+            if (event.target.matches(':focus-visible')) {
+              window.clearTimeout(timer.current);
+              setOpen(true);
+            }
+          }}
+          onBlur={(event) => {
+            if (!pointerInside.current && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setOpen(false);
+            }
+          }}
+          onClick={(event) => {
+            // A tap on the rail itself, not on a link, opens it where there is no pointer to rest.
+            if (canHover || open || (event.target as HTMLElement).closest('a, button, select')) return;
+            setOpen(true);
+          }}
           className={cx(
-            'sticky top-0 hidden h-dvh shrink-0 flex-col overflow-x-hidden overflow-y-auto transition-[width] duration-200 ease-out min-[560px]:flex',
-            collapsed ? 'w-16 gap-4 px-2 pt-4' : 'w-[244px] gap-6 px-4 pt-6',
-            TONES[tone].aside,
+            'fixed inset-y-0 left-0 z-40 hidden flex-col gap-5 overflow-x-hidden overflow-y-auto px-2 pt-4 transition-[width,box-shadow] duration-200 ease-out motion-reduce:transition-none min-[560px]:flex',
+            open ? 'w-[248px] shadow-[8px_0_28px_-10px_rgb(21_24_27/0.22)]' : 'w-16',
+            TONES[tone],
           )}
         >
           {sidebar}
         </aside>
       </RailContext.Provider>
 
-      {/* On narrower screens the full sidebar opens over the page. */}
-      <RailContext.Provider value={opened}>
-        {/* biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes it through onCancel; this only catches clicks on the dimmed page beside it */}
-        <dialog
-          ref={overlay}
-          aria-label={label}
-          onCancel={(event) => {
-            event.preventDefault();
-            setOverlayOpen(false);
-          }}
-          onClick={(event) => {
-            if (event.target === overlay.current) setOverlayOpen(false);
-          }}
-          className={cx(
-            'rail fixed inset-y-0 right-auto left-0 m-0 h-dvh max-h-dvh w-[264px] max-w-[86vw] p-0',
-            TONES[tone].overlay,
-          )}
-        >
-          {overlayOpen ? (
-            <div className="flex h-full flex-col gap-6 overflow-y-auto px-4 py-6">{sidebar}</div>
-          ) : null}
-        </dialog>
-      </RailContext.Provider>
-
       <div className="min-w-0 flex-1">{children}</div>
-
-      {tip && collapsed ? (
-        <div
-          aria-hidden
-          className="pointer-events-none fixed z-50 -translate-y-1/2 rounded-md bg-ink px-2.5 py-1 text-[12.5px] whitespace-nowrap text-canvas shadow-[0_4px_14px_rgb(21_24_27/0.18)]"
-          style={{ top: tip.top, left: tip.left }}
-        >
-          {tip.label}
-        </div>
-      ) : null}
     </div>
   );
-}
-
-/** Hover and keyboard focus show the name beside an icon while the sidebar is folded. */
-function useTip(label: string) {
-  const { collapsed, showTip, hideTip } = useRail();
-  if (!collapsed) return {};
-  return {
-    onMouseEnter: (e: { currentTarget: HTMLElement }) => showTip(e.currentTarget, label),
-    onFocus: (e: { currentTarget: HTMLElement }) => showTip(e.currentTarget, label),
-    onMouseLeave: hideTip,
-    onBlur: hideTip,
-  };
 }
 
 const ITEM: Record<RailTone, { active: string; idle: string; quiet: string }> = {
@@ -235,13 +174,29 @@ const ITEM: Record<RailTone, { active: string; idle: string; quiet: string }> = 
   },
 };
 
-function itemShape(collapsed: boolean): string {
-  return collapsed
-    ? 'mx-auto grid size-9 shrink-0 place-items-center rounded-lg transition-colors'
-    : 'flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] transition-colors';
+/**
+ * Every row keeps its icon in the same place, open or not, centred in the 64-pixel rail; the name
+ * beside it fades in as the rail widens. Nothing jumps.
+ */
+const ROW =
+  'flex min-h-9 w-full shrink-0 items-center gap-3 rounded-lg py-1.5 pr-2.5 pl-[14px] text-left text-[13.5px] transition-colors';
+
+/** The words beside an icon: always there for screen readers, shown only while the rail is open. */
+function Words({ children }: { children: ReactNode }) {
+  const { collapsed } = useRail();
+  return (
+    <span
+      className={cx(
+        'min-w-0 flex-1 truncate transition-opacity duration-150 motion-reduce:transition-none',
+        collapsed ? 'opacity-0' : 'opacity-100 delay-75',
+      )}
+    >
+      {children}
+    </span>
+  );
 }
 
-/** A page in the sidebar: icon and name, or just the icon when folded. */
+/** A page in the sidebar: its icon, and its name while the rail is open. */
 export function RailLink({
   to,
   label,
@@ -257,25 +212,23 @@ export function RailLink({
   end?: boolean;
   /** Not built yet: shown, but quieter. */
   quiet?: boolean;
-  /** What the folded sidebar says on hover, when it should say more than the name. */
+  /** Said on hover when there is more to say than the name, such as when the page arrives. */
   tip?: string;
   onNavigate?: () => void;
 }) {
-  const { collapsed, tone } = useRail();
-  const tipProps = useTip(tip ?? label);
+  const { tone } = useRail();
   return (
     <NavLink
       to={to}
       end={end}
       onClick={onNavigate}
-      title={!collapsed && tip && tip !== label ? tip : undefined}
+      title={tip && tip !== label ? tip : undefined}
       className={({ isActive }) =>
-        cx(itemShape(collapsed), isActive ? ITEM[tone].active : quiet ? ITEM[tone].quiet : ITEM[tone].idle)
+        cx(ROW, isActive ? ITEM[tone].active : quiet ? ITEM[tone].quiet : ITEM[tone].idle)
       }
-      {...tipProps}
     >
-      <Icon size={collapsed ? 19 : 17} stroke={1.6} aria-hidden className="shrink-0" />
-      {collapsed ? <span className="sr-only">{label}</span> : <span className="truncate">{label}</span>}
+      <Icon size={19} stroke={1.6} aria-hidden className="shrink-0" />
+      <Words>{label}</Words>
     </NavLink>
   );
 }
@@ -285,117 +238,141 @@ export function RailButton({
   label,
   icon: Icon,
   onClick,
+  quiet,
   children,
 }: {
   label: string;
   icon: TablerIcon;
   onClick(): void;
-  /** What the open sidebar shows instead of the plain label, such as a second line. */
+  quiet?: boolean;
+  /** What the open rail shows instead of the plain label, such as a second line. */
   children?: ReactNode;
 }) {
-  const { collapsed, tone } = useRail();
-  const tipProps = useTip(label);
+  const { tone } = useRail();
   return (
     <button
       type="button"
       onClick={onClick}
-      className={cx(itemShape(collapsed), !collapsed && 'min-h-9 py-1.5 text-left', ITEM[tone].idle)}
-      {...tipProps}
+      aria-label={children ? label : undefined}
+      className={cx(ROW, quiet ? ITEM[tone].quiet : ITEM[tone].idle)}
     >
-      <Icon size={collapsed ? 19 : 17} stroke={1.6} aria-hidden className="shrink-0" />
-      {collapsed ? <span className="sr-only">{label}</span> : (children ?? <span>{label}</span>)}
+      <Icon size={19} stroke={1.6} aria-hidden className="shrink-0" />
+      <Words>{children ?? label}</Words>
     </button>
   );
 }
 
-/** A named group of links; folded, the name becomes a short rule. */
+/** A named group of links. In the closed rail its name gives way to a short rule, in the same space. */
 export function RailGroup({ label, children }: { label: string; children: ReactNode }) {
   const { collapsed, tone } = useRail();
   return (
-    <div className={cx('flex flex-col', collapsed ? 'gap-1' : 'gap-0.5')}>
-      {collapsed ? (
+    <div className="flex flex-col gap-0.5">
+      <div className="relative h-6 shrink-0">
         <span
           aria-hidden
-          className={cx('mx-auto mb-1 h-px w-6', tone === 'dark' ? 'bg-white/20' : 'bg-hairline')}
+          className={cx(
+            'absolute top-1/2 left-[10px] h-px w-7 transition-opacity duration-150',
+            tone === 'dark' ? 'bg-white/20' : 'bg-hairline',
+            collapsed ? 'opacity-100' : 'opacity-0',
+          )}
         />
-      ) : (
-        <p className={cx('px-2.5 pb-1 text-[12px]', tone === 'dark' ? 'text-console-muted' : 'text-mist')}>
+        <p
+          className={cx(
+            'absolute inset-x-0 top-1/2 -translate-y-1/2 truncate pl-[14px] text-[12px] transition-opacity duration-150',
+            tone === 'dark' ? 'text-console-muted' : 'text-mist',
+            collapsed ? 'opacity-0' : 'opacity-100 delay-75',
+          )}
+        >
           {label}
         </p>
-      )}
+      </div>
       {children}
     </div>
   );
 }
 
-/** Folds the sidebar to icons, or opens it again. */
-export function RailToggle() {
-  const { inRail, collapsed, tone, toggle } = useRail();
-  const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
-  const tipProps = useTip(label);
-  if (!inRail) return null;
-  const Icon = collapsed ? IconLayoutSidebarLeftExpand : IconLayoutSidebarLeftCollapse;
+/**
+ * The top of the sidebar: a mark that fits the closed rail (an initial, or a short name), and the
+ * full name or logo once it opens, in the same place.
+ */
+export function RailMark({ small, full }: { small: ReactNode; full: ReactNode }) {
+  const { inRail, collapsed } = useRail();
+  if (!inRail) return <div className="px-2.5">{full}</div>;
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      aria-label={collapsed ? label : undefined}
-      className={cx(itemShape(collapsed), ITEM[tone].quiet)}
-      {...tipProps}
-    >
-      <Icon size={collapsed ? 19 : 17} stroke={1.6} aria-hidden className="shrink-0" />
-      {collapsed ? null : <span>{label}</span>}
-    </button>
+    <div className="relative h-9 shrink-0">
+      <div
+        className={cx(
+          'absolute inset-y-0 left-0 grid w-12 place-items-center transition-opacity duration-150',
+          collapsed ? 'opacity-100' : 'opacity-0',
+        )}
+      >
+        {small}
+      </div>
+      <div
+        className={cx(
+          'absolute inset-y-0 right-0 left-[14px] flex min-w-0 items-center transition-opacity duration-150',
+          collapsed ? 'opacity-0' : 'opacity-100 delay-75',
+        )}
+      >
+        {full}
+      </div>
+    </div>
   );
 }
 
 /** The bottom of the sidebar, kept in view while the links above it scroll. */
 export function RailFooter({ children }: { children: ReactNode }) {
-  const { inRail, collapsed, tone } = useRail();
+  const { inRail, tone } = useRail();
   return (
     <div
       className={cx(
-        'flex flex-col',
+        'flex flex-col gap-0.5',
         // Only inside the sidebar, which scrolls; the phone menu is part of the page.
         inRail && 'sticky bottom-0 mt-auto pb-4',
         inRail && (tone === 'dark' ? 'bg-accent' : 'bg-paper'),
-        collapsed ? 'items-center gap-1 pt-3' : 'gap-3 pt-1',
       )}
     >
+      <span aria-hidden className={cx('mx-2 mb-2 h-px', tone === 'dark' ? 'bg-white/15' : 'bg-hairline')} />
       {children}
     </div>
   );
 }
 
-/** A round initial standing in for someone or something when the sidebar is folded. */
-export function RailInitial({
-  text,
-  label,
-  person = false,
-}: {
-  text: string;
-  label: string;
-  /** People get a round, quieter mark; the operator a square, solid one. */
-  person?: boolean;
-}) {
+/** Who is signed in: their initial in the closed rail, with their email and role beside it once open. */
+export function RailPerson({ email, detail }: { email: string; detail: string }) {
   const { tone } = useRail();
-  const tipProps = useTip(label);
-  const look = person
-    ? tone === 'dark'
-      ? 'rounded-full bg-white/14 text-canvas'
-      : 'rounded-full bg-linen text-ink'
-    : tone === 'dark'
-      ? 'rounded-lg bg-white/14 text-canvas'
-      : 'rounded-lg bg-ink text-canvas';
+  return (
+    <div className="flex min-h-11 items-center gap-3 pr-2.5 pl-[8px] text-[12.5px]">
+      <span
+        aria-hidden
+        className={cx(
+          'grid size-8 shrink-0 place-items-center rounded-full text-[13px] font-semibold uppercase',
+          tone === 'dark' ? 'bg-white/14 text-canvas' : 'bg-linen text-ink',
+        )}
+      >
+        {email.trim().charAt(0) || '?'}
+      </span>
+      <Words>
+        <span className={cx('block truncate', tone === 'dark' ? 'text-canvas' : 'text-ink')} title={email}>
+          {email}
+        </span>
+        <span className={cx('block truncate', tone === 'dark' ? 'text-console-muted' : 'text-mist')}>
+          {detail}
+        </span>
+      </Words>
+    </div>
+  );
+}
+
+/** The operator's initial, standing in for their name in the closed rail. */
+export function RailInitial({ text, tone }: { text: string; tone: RailTone }) {
   return (
     <span
-      role="img"
-      aria-label={label}
+      aria-hidden
       className={cx(
-        'mx-auto grid size-8 shrink-0 place-items-center text-[13px] font-semibold uppercase',
-        look,
+        'grid size-8 shrink-0 place-items-center rounded-lg text-[13px] font-semibold uppercase',
+        tone === 'dark' ? 'bg-white/14 text-canvas' : 'bg-ink text-canvas',
       )}
-      {...tipProps}
     >
       {text.trim().charAt(0) || '?'}
     </span>

@@ -1,26 +1,53 @@
-import { IconCheck, IconCircleCheck, IconCloudCheck, IconX } from '@tabler/icons-react';
+import { IconCheck, IconCircleCheck, IconCloudCheck, IconPhotoPlus, IconX } from '@tabler/icons-react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
+  type Amenity,
   can,
+  PHOTO_MAX_COUNT,
+  PHOTO_MIN_TO_LIST,
   PRICE_OWNERS,
   PROPERTY_TYPE_LABELS,
   PROPERTY_TYPES,
   type PriceOwner,
-  type Property,
+  type PropertyDetail,
   type PropertyType,
   SPACE_TYPE_LABELS,
   SPACE_TYPES,
   type SpaceType,
+  SUMMARY_MAX,
   suggestPropertyCode,
+  TITLE_MAX,
 } from '@v01/shared';
-import { type FormEvent, type ReactNode, type Ref, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  type DragEvent,
+  type FormEvent,
+  type ReactNode,
+  type Ref,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { OptionRow, OptionTile, Stepper } from '../../components/choices.tsx';
-import { Field, Notice } from '../../components/ui.tsx';
-import { ApiError, useAddProperty, useProperties, useWorkspace } from '../../lib/api.ts';
-import { V01 } from '../../lib/format.ts';
+import { MoneyField, SelectField, TextArea, TextField } from '../../components/fields.tsx';
+import { Button, Field, Notice } from '../../components/ui.tsx';
+import {
+  ApiError,
+  uploadPhotos,
+  useAddProperty,
+  useApiToken,
+  useProperties,
+  useWorkspace,
+} from '../../lib/api.ts';
+import { plural, V01 } from '../../lib/format.ts';
+import { PHOTO_ACCEPT } from '../../lib/images.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
+import { AmenityTile, GUEST_FAVOURITES, SAFETY_ITEMS, STANDOUT } from './AmenitiesSection.tsx';
 import {
   addressText,
+  amenitiesText,
   clearDraft,
   countryOptions,
   isDirty,
@@ -32,12 +59,17 @@ import {
   priceErrors,
   priceOwnerText,
   roomsText,
+  STAGES,
   STEPS,
+  type StepId,
   saveDraft,
   stepSummary,
+  suggestTitle,
   TIMES,
   toCreate,
+  usualPriceText,
 } from './draft.ts';
+import { clearHeldPhotos, type HeldPhoto, holdPhotos, setHeldPhotos, useHeldPhotos } from './heldPhotos.ts';
 import { PRICE_OWNER_ICONS, PROPERTY_TYPE_ICONS, SPACE_TYPE_ICONS } from './icons.ts';
 import { ListingPreview } from './ListingPreview.tsx';
 
@@ -56,10 +88,14 @@ const PRICE_OWNER_CHOICES: Record<PriceOwner, { label: string; description: stri
   pricelabs: { label: 'PriceLabs', description: "Prices come in from PriceLabs once it's connected." },
 };
 
-const STEP_INDEX = Object.fromEntries(STEPS.map((s, i) => [s.id, i])) as Record<
-  (typeof STEPS)[number]['id'],
-  number
->;
+const STEP_INDEX = Object.fromEntries(STEPS.map((s, i) => [s.id, i])) as Record<StepId, number>;
+
+function move<T>(list: T[], from: number, to: number): T[] {
+  const next = [...list];
+  const [item] = next.splice(from, 1);
+  if (item !== undefined) next.splice(to, 0, item);
+  return next;
+}
 
 /** Opens over the property list at /properties/new, for people who may add properties. */
 export function NewPropertyPanel() {
@@ -91,86 +127,11 @@ function Question({
   );
 }
 
-function SubQuestion({ children }: { children: ReactNode }) {
-  return <h4 className="mt-12 font-serif text-[23px] leading-tight font-normal text-ink">{children}</h4>;
-}
-
-function SelectField({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange(value: string): void;
-  options: { value: string; label: string }[];
-}) {
-  const id = useId();
+function SubQuestion({ children, first = false }: { children: ReactNode; first?: boolean }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-[13px] text-slate">
-        {label}
-      </label>
-      <select
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-9 rounded-md border border-edge bg-white px-2.5 text-[14px] text-ink focus:border-accent focus:outline-none"
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-function MoneyField({
-  label,
-  value,
-  onChange,
-  symbol,
-  error,
-}: {
-  label: string;
-  value: string;
-  onChange(value: string): void;
-  symbol: string;
-  error?: string;
-}) {
-  const id = useId();
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-[13px] text-slate">
-        {label}
-      </label>
-      <div className="relative">
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[14px] text-mist"
-        >
-          {symbol}
-        </span>
-        <input
-          id={id}
-          inputMode="decimal"
-          autoComplete="off"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `${id}-error` : undefined}
-          className="h-9 w-full rounded-md border border-edge bg-white pr-3 pl-7 text-[14px] text-ink placeholder:text-mist focus:border-accent focus:outline-none aria-invalid:border-urgent"
-        />
-      </div>
-      {error ? (
-        <p id={`${id}-error`} className="text-[12.5px] text-urgent">
-          {error}
-        </p>
-      ) : null}
-    </div>
+    <h4 className={cx('font-serif text-[23px] leading-tight font-normal text-ink', first ? 'mt-9' : 'mt-12')}>
+      {children}
+    </h4>
   );
 }
 
@@ -192,23 +153,237 @@ function ReviewRow({ title, children, onChange }: { title: string; children: Rea
   );
 }
 
+/** A group of amenities as tiles: the ones guests look for, so picking takes seconds. */
+function AmenityTiles({
+  label,
+  items,
+  chosen,
+  onToggle,
+}: {
+  label: string;
+  items: Amenity[];
+  chosen: string[];
+  onToggle(code: string): void;
+}) {
+  return (
+    <fieldset className="mt-4 grid grid-cols-2 gap-3 @md:grid-cols-4">
+      <legend className="sr-only">{label}</legend>
+      {items.map((item) => (
+        <AmenityTile
+          key={item.code}
+          item={item}
+          checked={chosen.includes(item.code)}
+          onToggle={() => onToggle(item.code)}
+        />
+      ))}
+    </fieldset>
+  );
+}
+
+/** The photos chosen so far, held until the property exists: cover first, drag to reorder. */
+function PhotoPicker({
+  orgId,
+  photos,
+  problems,
+  onProblems,
+}: {
+  orgId: string;
+  photos: HeldPhoto[];
+  problems: string[];
+  onProblems(problems: string[]): void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [checking, setChecking] = useState(false);
+  const [dropping, setDropping] = useState(false);
+  const [dragged, setDragged] = useState<string | null>(null);
+  const full = photos.length >= PHOTO_MAX_COUNT;
+
+  async function add(files: File[]) {
+    if (!files.length) return;
+    setChecking(true);
+    try {
+      onProblems(await holdPhotos(orgId, files));
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  const onDrop = (event: DragEvent) => {
+    event.preventDefault();
+    setDropping(false);
+    if (dragged) return;
+    void add([...event.dataTransfer.files]);
+  };
+
+  const choose = () => input.current?.click();
+  const missing = PHOTO_MIN_TO_LIST - photos.length;
+
+  return (
+    <div className="mt-8">
+      <input
+        ref={input}
+        type="file"
+        accept={PHOTO_ACCEPT}
+        multiple
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden
+        onChange={(e) => {
+          void add([...(e.target.files ?? [])]);
+          e.target.value = '';
+        }}
+      />
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: dropping files is a shortcut; the buttons do the same */}
+      <div
+        onDragOver={(e) => {
+          if (dragged || full) return;
+          e.preventDefault();
+          setDropping(true);
+        }}
+        onDragLeave={() => setDropping(false)}
+        onDrop={onDrop}
+        className={cx('rounded-2xl transition-shadow', dropping && 'shadow-[0_0_0_2px_var(--color-accent)]')}
+      >
+        {photos.length === 0 ? (
+          <div className="grid place-items-center gap-3 rounded-2xl border border-dashed border-edge bg-paper px-6 py-14 text-center">
+            <IconPhotoPlus size={36} stroke={1.2} aria-hidden className="text-edge" />
+            <p className="max-w-[40ch] text-[14.5px] text-ink">
+              Drop photos here, or choose them from your device.
+            </p>
+            <p className="text-[13px] text-mist">JPEG, PNG or WebP, at least 800 pixels wide.</p>
+            <Button variant="primary" onClick={choose} disabled={checking}>
+              {checking ? 'Checking the photos' : 'Choose photos'}
+            </Button>
+          </div>
+        ) : (
+          <ol className="grid grid-cols-2 gap-3 @md:grid-cols-3">
+            {photos.map((photo, index) => (
+              <li
+                key={photo.id}
+                draggable
+                onDragStart={(e) => {
+                  setDragged(photo.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onDragEnd={() => setDragged(null)}
+                onDragOver={(e) => {
+                  if (dragged) e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  if (!dragged || dragged === photo.id) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const ids = photos.map((p) => p.id);
+                  setHeldPhotos(orgId, move(photos, ids.indexOf(dragged), index));
+                  setDragged(null);
+                }}
+                className={cx(
+                  'relative aspect-[4/3] cursor-grab overflow-hidden rounded-xl bg-paper active:cursor-grabbing',
+                  dragged === photo.id && 'opacity-40',
+                )}
+              >
+                <img
+                  src={photo.url}
+                  alt={`${index === 0 ? 'Cover, ' : ''}${index + 1} of ${photos.length}`}
+                  className="h-full w-full object-cover"
+                />
+                {index === 0 ? (
+                  <span className="absolute top-2 left-2 rounded-md bg-canvas px-2 py-0.5 text-[12px] font-medium text-ink shadow-[0_1px_4px_rgb(21_24_27/0.16)]">
+                    Cover
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setHeldPhotos(orgId, move(photos, index, 0))}
+                    className="absolute bottom-2 left-2 rounded-md bg-canvas/95 px-2 py-0.5 text-[12px] font-medium text-ink shadow-[0_1px_4px_rgb(21_24_27/0.16)] hover:bg-canvas"
+                  >
+                    Make cover<span className="sr-only">: photo {index + 1}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  aria-label={`Remove photo ${index + 1}`}
+                  onClick={() =>
+                    setHeldPhotos(
+                      orgId,
+                      photos.filter((p) => p.id !== photo.id),
+                    )
+                  }
+                  className="absolute top-2 right-2 grid size-7 place-items-center rounded-full bg-canvas/95 text-ink shadow-[0_1px_4px_rgb(21_24_27/0.16)] hover:bg-canvas"
+                >
+                  <IconX size={14} stroke={2} aria-hidden />
+                </button>
+              </li>
+            ))}
+            {full ? null : (
+              <li>
+                <button
+                  type="button"
+                  onClick={choose}
+                  disabled={checking}
+                  className="grid aspect-[4/3] w-full place-items-center rounded-xl border border-dashed border-edge text-[13.5px] text-slate transition-colors hover:border-ink hover:text-ink disabled:opacity-60"
+                >
+                  <span className="flex flex-col items-center gap-2">
+                    <IconPhotoPlus size={24} stroke={1.4} aria-hidden />
+                    {checking ? 'Checking' : 'Add more'}
+                  </span>
+                </button>
+              </li>
+            )}
+          </ol>
+        )}
+      </div>
+      {photos.length ? (
+        <p role="status" className="mt-4 text-[13.5px] text-slate">
+          {plural(photos.length, 'photo')}.{' '}
+          {missing > 0
+            ? `Airbnb needs at least ${PHOTO_MIN_TO_LIST}, so add ${missing} more when you can.`
+            : 'They upload when you add the property.'}
+        </p>
+      ) : null}
+      {problems.length ? (
+        <div className="mt-4">
+          <Notice tone="urgent">
+            <ul className="flex flex-col gap-1">
+              {problems.map((problem) => (
+                <li key={problem}>{problem}</li>
+              ))}
+            </ul>
+          </Notice>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Panel({ orgId, organisationName }: { orgId: string; organisationName: string }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const token = useApiToken();
   const workspace = useWorkspace(orgId);
   const existing = useProperties(orgId);
   const add = useAddProperty(orgId);
+  const photos = useHeldPhotos(orgId);
   const currency = workspace.data?.settings.currency ?? 'GBP';
   const locale = workspace.data?.settings.locale ?? 'en-GB';
   const ownCountry = workspace.data?.settings.countryCode ?? 'GB';
 
   const [restored] = useState(() => loadDraft(orgId));
   const [draft, setDraft] = useState<PropertyDraft>(() => restored?.draft ?? newDraft(ownCountry));
-  const [step, setStep] = useState(() => restored?.step ?? 0);
+  const [step, setStep] = useState(() => Math.min(restored?.step ?? 0, STEPS.length - 1));
   const [visited, setVisited] = useState<number[]>(() => restored?.visited ?? [0]);
   const [showRestored, setShowRestored] = useState(() => Boolean(restored && isDirty(restored.draft)));
+  // Photos chosen before the page was reloaded are gone; say so rather than let them vanish quietly.
+  const [photosLost] = useState(() => (restored?.photoCount ?? 0) > 0 && photos.length === 0);
   const [nameError, setNameError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [created, setCreated] = useState<Property | null>(null);
+  const [photoProblems, setPhotoProblems] = useState<string[]>([]);
+  const [upload, setUpload] = useState<{ done: number; total: number } | null>(null);
+  const [created, setCreated] = useState<{
+    property: PropertyDetail;
+    photosAdded: number;
+    photoProblems: string[];
+  } | null>(null);
 
   const dialog = useRef<HTMLDialogElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -228,9 +403,13 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
     [currency, locale],
   );
   const prices = priceErrors(draft, currency);
+  const titleTooLong = draft.title.trim().length > TITLE_MAX;
+  const summaryTooLong = draft.summary.trim().length > SUMMARY_MAX;
   const furthest = Math.max(...visited);
   const current = STEPS[step] ?? STEPS[0];
   const isLast = step === STEPS.length - 1;
+  const busy = add.isPending || upload !== null;
+  const suggestion = suggestTitle(draft, TITLE_MAX);
 
   // Open as a modal: focus stays inside, Escape closes, and the page behind doesn't scroll.
   useEffect(() => {
@@ -253,11 +432,18 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
   // Keep the draft in this browser as it changes, so closing never loses an answer.
   useEffect(() => {
     if (created) return;
-    if (isDirty(draft) || step > 0) saveDraft(orgId, { draft, step, visited });
-  }, [orgId, draft, step, visited, created]);
+    if (isDirty(draft) || step > 0 || photos.length > 0) {
+      saveDraft(orgId, { draft, step, visited, photoCount: photos.length });
+    }
+  }, [orgId, draft, step, visited, created, photos.length]);
 
   const close = () => navigate('/properties');
   const update = (patch: Partial<PropertyDraft>) => setDraft((d) => ({ ...d, ...patch }));
+  const toggleAmenity = (code: string) =>
+    setDraft((d) => ({
+      ...d,
+      amenities: d.amenities.includes(code) ? d.amenities.filter((c) => c !== code) : [...d.amenities, code],
+    }));
 
   function go(index: number) {
     setStep(index);
@@ -268,15 +454,22 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
 
   function isComplete(index: number): boolean {
     if (created) return true;
+    const passed = visited.includes(index) && furthest > index;
     switch (STEPS[index]?.id) {
       case 'place':
         return draft.propertyType !== null;
       case 'name':
         return draft.name.trim() !== '';
       case 'rooms':
-        return visited.includes(index) && furthest > index;
+        return passed;
+      case 'amenities':
+        return draft.amenities.length > 0;
+      case 'photos':
+        return photos.length > 0;
+      case 'description':
+        return draft.title.trim() !== '' && !titleTooLong && !summaryTooLong;
       case 'pricing':
-        return visited.includes(index) && furthest > index && Object.keys(prices).length === 0;
+        return passed && Object.keys(prices).length === 0;
       default:
         return false;
     }
@@ -291,23 +484,55 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
       go(STEP_INDEX.pricing);
       return;
     }
+    if (titleTooLong || summaryTooLong) {
+      go(STEP_INDEX.description);
+      return;
+    }
+    let property: PropertyDetail;
     try {
-      const property = await add.mutateAsync(toCreate(draft, currency));
-      clearDraft(orgId);
-      setCreated(property);
+      property = await add.mutateAsync(toCreate(draft, currency));
     } catch (error) {
       setSubmitError(
         error instanceof ApiError ? error.message : 'The property could not be added. Try again.',
       );
+      return;
     }
+    clearDraft(orgId);
+
+    // The property exists now, so the photos held so far can go to it, one at a time.
+    let photosAdded = 0;
+    let problems: string[] = [];
+    const files = photos.map((p) => p.file);
+    if (files.length && token) {
+      setUpload({ done: 0, total: files.length });
+      try {
+        const result = await uploadPhotos(token, orgId, property.id, files, (detail, done) => {
+          if (detail) queryClient.setQueryData(['property', orgId, property.id], detail);
+          setUpload({ done, total: files.length });
+        });
+        problems = result.problems;
+        photosAdded = files.length - result.problems.length;
+        if (result.detail) property = result.detail;
+      } catch {
+        problems = ['The photos could not be added. Add them on its page.'];
+      } finally {
+        setUpload(null);
+        void queryClient.invalidateQueries({ queryKey: ['properties', orgId] });
+        void queryClient.invalidateQueries({ queryKey: ['console'] });
+      }
+    }
+    clearHeldPhotos(orgId);
+    setCreated({ property, photosAdded, photoProblems: problems });
   }
 
   function next(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     if (current.id === 'name' && !draft.name.trim()) {
       setNameError('Give the property a name to continue');
       return;
     }
+    if (current.id === 'description' && (titleTooLong || summaryTooLong)) return;
     if (current.id === 'pricing' && Object.keys(prices).length > 0) return;
     if (isLast) void addProperty();
     else go(step + 1);
@@ -315,12 +540,14 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
 
   function startOver() {
     clearDraft(orgId);
+    clearHeldPhotos(orgId);
     setDraft(newDraft(ownCountry));
     setStep(0);
     setVisited([0]);
     setShowRestored(false);
     setNameError(null);
     setSubmitError(null);
+    setPhotoProblems([]);
     setCreated(null);
   }
 
@@ -335,6 +562,13 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
 
   let body: ReactNode;
   if (created) {
+    const { property, photosAdded, photoProblems: failed } = created;
+    const withWhat = [
+      property.internalCode ? `the short code ${property.internalCode}` : null,
+      photosAdded ? plural(photosAdded, 'photo') : null,
+    ]
+      .filter(Boolean)
+      .join(' and ');
     body = (
       <div className="pt-4">
         <IconCircleCheck size={48} stroke={1.2} aria-hidden className="text-accent" />
@@ -343,12 +577,27 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
           tabIndex={-1}
           className="mt-6 font-serif text-[34px] leading-[1.1] font-light text-ink outline-none md:text-[42px]"
         >
-          {created.name} is added
+          {property.name} is added
         </h3>
         <p className="mt-4 max-w-[52ch] text-[15px] leading-relaxed text-slate">
-          It's on the property list now
-          {created.internalCode ? `, with the short code ${created.internalCode}` : ''}. Nothing goes to
-          Airbnb, Booking.com or Vrbo until its listings are connected.
+          It's on the property list now{withWhat ? `, with ${withWhat}` : ''}. Nothing goes to Airbnb,
+          Booking.com or Vrbo until its listings are connected.
+        </p>
+        {failed.length ? (
+          <div className="mt-6 max-w-[56ch]">
+            <Notice tone="urgent">
+              <p>Some photos didn't upload. Add them again on its page.</p>
+              <ul className="mt-1 flex flex-col gap-0.5">
+                {failed.map((problem) => (
+                  <li key={problem}>{problem}</li>
+                ))}
+              </ul>
+            </Notice>
+          </div>
+        ) : null}
+        <p className="mt-8 max-w-[52ch] border-t border-hairline pt-6 text-[14.5px] leading-relaxed text-ink">
+          Next, on its page: house rules, how guests get in, the beds in each room and the licence number. Its
+          checklist shows what the channels still need.
         </p>
       </div>
     );
@@ -397,7 +646,7 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
       <>
         <Question
           headingRef={heading}
-          hint="Your team sees this name. Each channel listing keeps its own title."
+          hint="Your team sees this name. Guests see the listing's title, which comes a little later."
         >
           What do you call it?
         </Question>
@@ -511,13 +760,122 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
         </div>
       </>
     );
+  } else if (current.id === 'amenities') {
+    body = (
+      <>
+        <Question
+          headingRef={heading}
+          hint="Pick everything that's there. Guests filter their searches by these, and standout features lead the listing."
+        >
+          What does it offer?
+        </Question>
+        <SubQuestion first>Guest favourites</SubQuestion>
+        <AmenityTiles
+          label="Guest favourites"
+          items={GUEST_FAVOURITES}
+          chosen={draft.amenities}
+          onToggle={toggleAmenity}
+        />
+        <SubQuestion>Standout features</SubQuestion>
+        <AmenityTiles
+          label="Standout features"
+          items={STANDOUT}
+          chosen={draft.amenities}
+          onToggle={toggleAmenity}
+        />
+        <SubQuestion>Safety</SubQuestion>
+        <AmenityTiles label="Safety" items={SAFETY_ITEMS} chosen={draft.amenities} onToggle={toggleAmenity} />
+        <p className="mt-8 max-w-[56ch] text-[13.5px] leading-relaxed text-slate">
+          The full list, from a cot to a boot room, is on its page once it's added.
+        </p>
+      </>
+    );
+  } else if (current.id === 'photos') {
+    body = (
+      <>
+        <Question
+          headingRef={heading}
+          hint={`Airbnb asks for at least ${PHOTO_MIN_TO_LIST}. Lead with the best room in daylight. The first is the cover, and you can drag them into any order.`}
+        >
+          What does it look like?
+        </Question>
+        {photosLost ? (
+          <div className="mt-6">
+            <Notice>The photos chosen before the page was reloaded need choosing again.</Notice>
+          </div>
+        ) : null}
+        <PhotoPicker orgId={orgId} photos={photos} problems={photoProblems} onProblems={setPhotoProblems} />
+      </>
+    );
+  } else if (current.id === 'description') {
+    body = (
+      <>
+        <Question
+          headingRef={heading}
+          hint={`The title is the first thing guests read, so keep it short. Airbnb allows ${TITLE_MAX} characters.`}
+        >
+          How should the listing read?
+        </Question>
+        <div className="mt-8 flex flex-col gap-5">
+          <div className="flex flex-col gap-2">
+            <TextField
+              label="Title"
+              value={draft.title}
+              onChange={(title) => update({ title })}
+              max={TITLE_MAX}
+              placeholder={suggestion ?? 'Harbour cottage with a hot tub'}
+              error={titleTooLong ? `Shorten the title to ${TITLE_MAX} characters or fewer` : undefined}
+            />
+            {suggestion && !draft.title.trim() ? (
+              <button
+                type="button"
+                onClick={() => update({ title: suggestion })}
+                className="self-start rounded-full border border-hairline bg-paper px-3 py-1 text-left text-[13px] text-ink transition-colors hover:border-edge"
+              >
+                Use “{suggestion}”
+              </button>
+            ) : null}
+          </div>
+          <TextArea
+            label="Description"
+            value={draft.summary}
+            onChange={(summary) => update({ summary })}
+            max={SUMMARY_MAX}
+            rows={6}
+            placeholder="What is it like to stay here? The space, the light, what's close by."
+            hint="The space, what guests can use and the neighbourhood each have their own part on its page."
+          />
+        </div>
+      </>
+    );
   } else if (current.id === 'pricing') {
     body = (
       <>
-        <Question headingRef={heading} hint="This decides where each night's price comes from.">
-          Who sets the nightly price?
+        <Question
+          headingRef={heading}
+          hint="Your usual price for a night. Each date's price is set on the calendar, or comes from PriceLabs."
+        >
+          What does a night cost?
         </Question>
-        <div role="radiogroup" aria-label="Who sets the price" className="mt-8 grid gap-3">
+        <div className="mt-8 grid gap-4 @md:grid-cols-2">
+          <MoneyField
+            label="Usual nightly price"
+            value={draft.basePrice}
+            onChange={(basePrice) => update({ basePrice })}
+            symbol={symbol}
+            error={prices.basePrice}
+          />
+          <MoneyField
+            label="Cleaning fee"
+            value={draft.cleaningFee}
+            onChange={(cleaningFee) => update({ cleaningFee })}
+            symbol={symbol}
+            error={prices.cleaningFee}
+            hint="Charged once a stay"
+          />
+        </div>
+        <SubQuestion>Who sets the nightly price?</SubQuestion>
+        <div role="radiogroup" aria-label="Who sets the price" className="mt-4 grid gap-3">
           {PRICE_OWNERS.map((owner) => (
             <OptionRow
               key={owner}
@@ -556,14 +914,22 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
     );
   } else {
     const limits = limitsText(draft, currency, locale);
+    const usual = usualPriceText(draft, currency, locale);
     const address = addressText(draft);
+    const features = amenitiesText(draft.amenities, 3);
     body = (
       <>
         <Question headingRef={heading} hint="Change anything before you add it.">
           Does this look right?
         </Question>
         <div className="mt-8 xl:hidden">
-          <ListingPreview draft={draft} currency={currency} locale={locale} compact />
+          <ListingPreview
+            draft={draft}
+            currency={currency}
+            locale={locale}
+            coverUrl={photos[0]?.url}
+            compact
+          />
         </div>
         <dl className="mt-8 divide-y divide-hairline border-y border-hairline">
           <ReviewRow title="The place" onChange={() => go(STEP_INDEX.place)}>
@@ -592,13 +958,63 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
               Check-in from {draft.checkInTime}, check-out by {draft.checkOutTime}
             </span>
           </ReviewRow>
+          <ReviewRow title="Amenities" onChange={() => go(STEP_INDEX.amenities)}>
+            {features ?? <span className="text-mist">None picked yet</span>}
+          </ReviewRow>
+          <ReviewRow title="Photos" onChange={() => go(STEP_INDEX.photos)}>
+            {photos.length ? (
+              <span className="flex flex-col gap-2">
+                <span className="flex gap-1.5">
+                  {photos.slice(0, 5).map((photo, index) => (
+                    <img
+                      key={photo.id}
+                      src={photo.url}
+                      alt={index === 0 ? 'Cover photo' : ''}
+                      className="h-11 w-14 rounded-md object-cover"
+                    />
+                  ))}
+                </span>
+                <span className="text-slate">
+                  {plural(photos.length, 'photo')}
+                  {photos.length < PHOTO_MIN_TO_LIST ? `, of the ${PHOTO_MIN_TO_LIST} Airbnb asks for` : ''}
+                </span>
+              </span>
+            ) : (
+              <span className="text-mist">None yet. Airbnb asks for at least {PHOTO_MIN_TO_LIST}.</span>
+            )}
+          </ReviewRow>
+          <ReviewRow title="Title and description" onChange={() => go(STEP_INDEX.description)}>
+            {draft.title.trim() ? (
+              <>
+                {draft.title.trim()}
+                {draft.summary.trim() ? (
+                  <>
+                    <br />
+                    <span className="line-clamp-2 text-slate">{draft.summary.trim()}</span>
+                  </>
+                ) : null}
+              </>
+            ) : (
+              <span className="text-mist">No title yet</span>
+            )}
+          </ReviewRow>
           <ReviewRow title="Pricing" onChange={() => go(STEP_INDEX.pricing)}>
-            {priceOwnerText(draft)}
+            {usual ?? priceOwnerText(draft)}
+            {usual ? (
+              <>
+                <br />
+                <span className="text-slate">{priceOwnerText(draft)}</span>
+              </>
+            ) : null}
             <br />
             {Object.keys(prices).length > 0 ? (
-              <span className="text-urgent">The price limits need fixing</span>
+              <span className="text-urgent">The prices need fixing</span>
             ) : (
-              <span className="text-slate">{limits ?? 'No price limits yet'}</span>
+              <span className="text-slate">
+                {limits
+                  ? `Limits ${limits.charAt(0).toLowerCase()}${limits.slice(1)}`
+                  : 'No price limits yet'}
+              </span>
             )}
           </ReviewRow>
         </dl>
@@ -625,6 +1041,12 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
     );
   }
 
+  const addLabel = upload
+    ? `Adding photos, ${upload.done + 1 > upload.total ? upload.total : upload.done + 1} of ${upload.total}`
+    : add.isPending
+      ? 'Adding'
+      : 'Add property';
+
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes the panel through onCancel; this only catches clicks on the dimmed page beside it
     <dialog
@@ -632,11 +1054,11 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();
-        close();
+        if (!busy) close();
       }}
       onClick={(event) => {
         // A click on the dimmed page beside the panel closes it; the draft is kept.
-        if (event.target === dialog.current) close();
+        if (event.target === dialog.current && !busy) close();
       }}
       className="sheet fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-dvh w-full max-w-none border-l border-hairline bg-canvas p-0 text-ink md:w-[calc(100vw-56px)] xl:w-[min(1280px,calc(100vw-96px))]"
     >
@@ -661,7 +1083,8 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
             <button
               type="button"
               onClick={close}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline px-3 text-[13.5px] text-ink transition-colors hover:bg-linen"
+              disabled={busy}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline px-3 text-[13.5px] text-ink transition-colors hover:bg-linen disabled:opacity-50"
             >
               <IconX size={16} stroke={1.75} aria-hidden />
               Close
@@ -670,68 +1093,90 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
         </header>
 
         <div className="grid min-h-0 flex-1 md:grid-cols-[264px_minmax(0,1fr)] xl:grid-cols-[264px_minmax(0,1fr)_340px] 2xl:grid-cols-[264px_minmax(0,1fr)_380px]">
-          {/* The spine: every step, with the answers so far. Any step is one click away. */}
+          {/* The spine: every step in its stage, with the answers so far. Any step is one click away. */}
           <nav
             aria-label="Steps"
-            className="hidden min-h-0 flex-col overflow-y-auto border-r border-hairline bg-paper px-3 py-8 md:flex"
+            className="hidden min-h-0 flex-col overflow-y-auto border-r border-hairline bg-paper px-3 py-6 md:flex"
           >
             <ol>
               {STEPS.map((s, i) => {
                 const done = isComplete(i);
                 const here = i === step && !created;
+                const stage = STAGES.find((g) => g.steps[0] === s.id);
                 const summary = stepSummary(
                   s.id,
                   draft,
                   visited.includes(i) && furthest > i,
                   currency,
                   locale,
+                  created ? created.photosAdded : photos.length,
+                );
+                // The line runs through every marker, and through each stage's name between them.
+                const line = (filled: boolean, place: string) => (
+                  <span
+                    aria-hidden
+                    className={cx(
+                      'absolute left-6 w-px transition-colors duration-300',
+                      filled ? 'bg-accent' : 'bg-hairline',
+                      place,
+                    )}
+                  />
                 );
                 return (
-                  <li key={s.id} className="relative">
-                    {i < STEPS.length - 1 ? (
-                      <span
-                        aria-hidden
+                  <li key={s.id}>
+                    {stage ? (
+                      <p
                         className={cx(
-                          'absolute top-[38px] bottom-[-6px] left-[25px] w-px transition-colors duration-300',
-                          done ? 'bg-accent' : 'bg-hairline',
-                        )}
-                      />
-                    ) : null}
-                    <button
-                      type="button"
-                      disabled={Boolean(created)}
-                      onClick={() => go(i)}
-                      aria-current={here ? 'step' : undefined}
-                      className={cx(
-                        'relative grid w-full grid-cols-[28px_minmax(0,1fr)] gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors disabled:cursor-default',
-                        here ? 'bg-canvas' : 'hover:bg-linen/70',
-                      )}
-                    >
-                      <span
-                        aria-hidden
-                        className={cx(
-                          'grid size-7 place-items-center rounded-full text-[12.5px] font-medium transition-colors duration-300',
-                          done && !here && 'bg-accent text-canvas',
-                          here && 'bg-canvas text-accent shadow-[inset_0_0_0_1.5px_var(--color-accent)]',
-                          !done && !here && 'border border-edge text-mist',
+                          'relative pr-2 pb-1.5 pl-[48px] text-[12px] text-mist',
+                          i === 0 ? 'pt-0' : 'pt-5',
                         )}
                       >
-                        {done && !here ? <IconCheck size={14} stroke={2.5} /> : i + 1}
-                      </span>
-                      <span className="min-w-0 pt-[3px]">
-                        <span className={cx('block text-[14px]', here ? 'font-medium text-ink' : 'text-ink')}>
-                          {s.title}
+                        {i > 0 ? line(isComplete(i - 1), 'inset-y-0') : null}
+                        {stage.title}
+                      </p>
+                    ) : null}
+                    <div className="relative">
+                      {i > 0 ? line(isComplete(i - 1), 'top-0 h-6') : null}
+                      {i < STEPS.length - 1 ? line(done, 'top-6 bottom-0') : null}
+                      <button
+                        type="button"
+                        disabled={Boolean(created) || busy}
+                        onClick={() => go(i)}
+                        aria-current={here ? 'step' : undefined}
+                        className={cx(
+                          'relative grid w-full grid-cols-[28px_minmax(0,1fr)] gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors disabled:cursor-default',
+                          here ? 'bg-canvas' : 'hover:bg-linen/70',
+                        )}
+                      >
+                        <span
+                          aria-hidden
+                          className={cx(
+                            'grid size-7 place-items-center rounded-full text-[12.5px] font-medium transition-colors duration-300',
+                            done && !here && 'bg-accent text-canvas',
+                            here && 'bg-canvas text-accent shadow-[inset_0_0_0_1.5px_var(--color-accent)]',
+                            !done && !here && 'border border-edge bg-paper text-mist',
+                          )}
+                        >
+                          {done && !here ? <IconCheck size={14} stroke={2.5} /> : i + 1}
                         </span>
-                        {summary ? (
+                        <span className="min-w-0 pt-[3px]">
                           <span
-                            className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-slate"
-                            title={summary}
+                            className={cx('block text-[14px]', here ? 'font-medium text-ink' : 'text-ink')}
                           >
-                            {summary}
+                            {s.title}
+                            {done && !here ? <span className="sr-only">, done</span> : null}
                           </span>
-                        ) : null}
-                      </span>
-                    </button>
+                          {summary ? (
+                            <span
+                              className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-slate"
+                              title={summary}
+                            >
+                              {summary}
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                    </div>
                   </li>
                 );
               })}
@@ -749,7 +1194,7 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
             <div className="@container max-w-[620px]">
               {!created ? (
                 <div className="mb-8 md:hidden">
-                  <div className="flex gap-1.5" aria-hidden>
+                  <div className="flex gap-1" aria-hidden>
                     {STEPS.map((s, i) => (
                       <span
                         key={s.id}
@@ -787,28 +1232,39 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
             aria-label="Preview"
             className="hidden min-h-0 overflow-y-auto border-l border-hairline px-7 py-12 xl:block 2xl:px-8"
           >
-            <ListingPreview draft={draft} currency={currency} locale={locale} />
+            <ListingPreview
+              draft={draft}
+              currency={currency}
+              locale={locale}
+              coverUrl={photos[0]?.url ?? created?.property.photos[0]?.url}
+            />
           </aside>
         </div>
 
         <footer className="flex items-center justify-between gap-3 border-t border-hairline bg-canvas px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] md:px-6">
           {created ? (
             <>
-              <span />
+              <button
+                type="button"
+                onClick={startOver}
+                className="h-10 rounded-lg px-4 text-[14px] font-medium text-ink underline-offset-4 hover:underline"
+              >
+                Add another
+              </button>
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={startOver}
+                  onClick={close}
                   className="h-10 rounded-lg border border-hairline px-4 text-[14px] font-medium text-ink transition-colors hover:bg-linen"
                 >
-                  Add another
+                  Done
                 </button>
                 <button
                   type="button"
-                  onClick={close}
+                  onClick={() => navigate(`/properties/${created.property.id}`)}
                   className="h-10 rounded-lg bg-ink px-5 text-[14px] font-medium text-canvas transition-colors hover:bg-ink/88"
                 >
-                  Done
+                  Open its page
                 </button>
               </div>
             </>
@@ -817,8 +1273,9 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
               <button
                 type="button"
                 onClick={() => go(Math.max(0, step - 1))}
+                disabled={busy}
                 className={cx(
-                  'h-10 rounded-lg px-4 text-[14px] font-medium text-ink underline-offset-4 hover:underline',
+                  'h-10 rounded-lg px-4 text-[14px] font-medium text-ink underline-offset-4 hover:underline disabled:opacity-50',
                   step === 0 && 'invisible',
                 )}
               >
@@ -827,10 +1284,10 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
               <button
                 type="submit"
                 form={formId}
-                disabled={add.isPending}
+                disabled={busy}
                 className="h-10 rounded-lg bg-ink px-6 text-[14px] font-medium text-canvas transition-colors hover:bg-ink/88 disabled:opacity-60"
               >
-                {isLast ? (add.isPending ? 'Adding' : 'Add property') : 'Continue'}
+                {isLast ? addLabel : 'Continue'}
               </button>
             </>
           )}

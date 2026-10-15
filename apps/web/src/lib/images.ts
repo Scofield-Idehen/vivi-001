@@ -12,10 +12,10 @@ export interface PreparedPhoto {
 
 export class PhotoError extends Error {}
 
-const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp'];
+export const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp'];
 export const PHOTO_ACCEPT = ACCEPTED.join(',');
 /** Below this, channels show a photo blurred or refuse it. */
-const MIN_EDGE = 800;
+export const MIN_EDGE = 800;
 
 export async function preparePhoto(file: File, maxEdge = 2560): Promise<PreparedPhoto> {
   if (!ACCEPTED.includes(file.type)) {

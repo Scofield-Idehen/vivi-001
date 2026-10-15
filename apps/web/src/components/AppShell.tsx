@@ -1,8 +1,8 @@
-import { IconArrowLeft, IconLock, IconLogout } from '@tabler/icons-react';
+import { IconArrowLeft, IconInfoCircle, IconLock, IconLogout, IconRefresh } from '@tabler/icons-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { PLATFORM_ROLE_LABELS, ROLE_LABELS } from '@v01/shared';
 import { useState } from 'react';
-import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router';
 import { useEndSupportAccess, useMe, useWorkspace } from '../lib/api.ts';
 import { config } from '../lib/config.ts';
 import { resetDemoData } from '../lib/demo.ts';
@@ -19,43 +19,32 @@ import {
   RailGroup,
   RailInitial,
   RailLink,
-  RailToggle,
+  RailMark,
+  RailPerson,
   useRail,
 } from './Rail.tsx';
 import { Button, EmptyState } from './ui.tsx';
 
 /** The top of the sidebar: whose workspace this is, and the way back to the console for V-01 staff. */
-function WorkspaceHeader() {
+function WorkspaceHeader({ onNavigate }: { onNavigate?: () => void }) {
   const { orgId, entry, entries, choose } = useCurrentWorkspace();
   const { collapsed } = useRail();
   const platformRole = useMe().data?.platformRole ?? null;
   const workspace = useWorkspace(orgId);
   const name = workspace.data?.brand.displayName ?? entry.organisationName;
 
-  if (collapsed) {
-    return (
-      <div className="flex flex-col items-center gap-2">
-        {platformRole ? <RailLink to="/console" label="V-01 console" icon={IconArrowLeft} end /> : null}
-        <RailInitial text={name} label={name} />
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-3 px-2.5">
+    <div className="flex flex-col gap-1">
       {platformRole ? (
-        <Link
-          to="/console"
-          className="inline-flex items-center gap-1.5 text-[12.5px] text-accent underline-offset-4 hover:underline"
-        >
-          <IconArrowLeft size={14} stroke={1.75} aria-hidden />
-          V-01 console
-        </Link>
+        <RailLink to="/console" label="V-01 console" icon={IconArrowLeft} end onNavigate={onNavigate} />
       ) : null}
-      <OperatorMark name={name} logoUrl={workspace.data?.brand.logoLightUrl} />
+      <RailMark
+        small={<RailInitial text={name} tone="light" />}
+        full={<OperatorMark name={name} logoUrl={workspace.data?.brand.logoLightUrl} />}
+      />
       {/* People in more than one company switch here. V-01 staff switch from the console instead. */}
-      {!platformRole && entries.length > 1 ? (
-        <>
+      {!platformRole && entries.length > 1 && !collapsed ? (
+        <div className="px-2.5 pt-1">
           <label htmlFor="workspace" className="sr-only">
             Switch company
           </label>
@@ -71,7 +60,7 @@ function WorkspaceHeader() {
               </option>
             ))}
           </select>
-        </>
+        </div>
       ) : null}
     </div>
   );
@@ -79,7 +68,7 @@ function WorkspaceHeader() {
 
 function Navigation({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <nav aria-label="Modules" className="flex flex-col gap-5">
+    <nav aria-label="Modules" className="flex flex-col gap-3">
       {MODULE_GROUPS.map((group) => (
         <RailGroup key={group.label} label={group.label}>
           {group.items.map((item) => (
@@ -100,65 +89,31 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 /** Demo only: puts the sample data back the way it started. */
-export function ResetSampleData({ className }: { className?: string }) {
+export function useResetSampleData(): (() => void) | null {
   const queryClient = useQueryClient();
   if (!config.demo) return null;
-  return (
-    <button
-      type="button"
-      className={className ?? 'text-[12.5px] text-mist underline-offset-4 hover:underline'}
-      onClick={() => {
-        resetDemoData();
-        void queryClient.invalidateQueries();
-      }}
-    >
-      Reset sample data
-    </button>
-  );
+  return () => {
+    resetDemoData();
+    void queryClient.invalidateQueries();
+  };
 }
 
-function AccountFooter() {
+function AccountFooter({ onNavigate }: { onNavigate?: () => void }) {
   const { session } = useSession();
   const { entry } = useCurrentWorkspace();
-  const { collapsed } = useRail();
+  const reset = useResetSampleData();
   const platformRole = useMe().data?.platformRole ?? null;
   const roles = [ROLE_LABELS[entry.role]];
   if (platformRole && entry.role !== 'v01_support') {
     roles.push(`V-01 ${PLATFORM_ROLE_LABELS[platformRole].toLowerCase()}`);
   }
-  const email = session?.user.email ?? '';
-
-  if (collapsed) {
-    return (
-      <RailFooter>
-        <span aria-hidden className="mb-2 h-px w-6 bg-hairline" />
-        <RailInitial person text={email} label={`${email}, ${roles.join(', ')}`} />
-        <RailButton label="Sign out" icon={IconLogout} onClick={() => void signOut()} />
-        <RailToggle />
-      </RailFooter>
-    );
-  }
 
   return (
     <RailFooter>
-      <div className="flex flex-col gap-2.5 border-t border-hairline px-2.5 pt-4 text-[12.5px]">
-        <div className="min-w-0">
-          <p className="truncate text-ink" title={email}>
-            {email}
-          </p>
-          <p className="text-mist">{roles.join(' · ')}</p>
-        </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1">
-          <Button variant="quiet" className="text-[12.5px]" onClick={() => void signOut()}>
-            Sign out
-          </Button>
-          <NavLink to="/about" className="text-[12.5px] text-mist underline-offset-4 hover:underline">
-            About
-          </NavLink>
-          <ResetSampleData />
-        </div>
-      </div>
-      <RailToggle />
+      <RailPerson email={session?.user.email ?? ''} detail={roles.join(', ')} />
+      <RailButton label="Sign out" icon={IconLogout} onClick={() => void signOut()} />
+      <RailLink to="/about" label="About" icon={IconInfoCircle} quiet onNavigate={onNavigate} />
+      {reset ? <RailButton label="Reset sample data" icon={IconRefresh} quiet onClick={reset} /> : null}
     </RailFooter>
   );
 }
@@ -255,9 +210,9 @@ function WorkspaceFrame() {
           id="mobile-menu"
           className="gutter flex flex-col gap-6 border-b border-hairline bg-paper py-5 min-[560px]:hidden"
         >
-          <WorkspaceHeader />
+          <WorkspaceHeader onNavigate={() => setMenuOpen(false)} />
           <Navigation onNavigate={() => setMenuOpen(false)} />
-          <AccountFooter />
+          <AccountFooter onNavigate={() => setMenuOpen(false)} />
         </div>
       ) : null}
       <main
