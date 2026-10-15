@@ -1,13 +1,26 @@
-import type {
-  AvailabilityUpdate,
-  BookingChannel,
-  BookingRevision,
-  ChannelProvider,
-  PushResult,
-  RestrictionUpdate,
-  RevisionStatus,
+import {
+  type AvailabilityUpdate,
+  type BookingChannel,
+  type BookingRevision,
+  ChannelError,
+  type ChannelProvider,
+  type ExternalPropertyRef,
+  type ListingSetup,
+  type PushResult,
+  type RestrictionUpdate,
+  type RevisionStatus,
 } from '../provider.ts';
 import { ChannexClient, type ChannexConfig, type ChannexEnvelope } from './client.ts';
+
+/** The id Channex gave something it just created. */
+function createdId(envelope: ChannexEnvelope<unknown>, what: string): string {
+  const data = envelope.data;
+  const id = data && typeof data === 'object' && 'id' in data ? data.id : undefined;
+  if (typeof id !== 'string' || !id) {
+    throw new ChannelError(`Channex made the ${what} but sent back no id for it.`, 'validation');
+  }
+  return id;
+}
 
 /**
  * Channex adapter. Payload shapes follow docs.channex.io (ARI and bookings collections).
@@ -76,6 +89,78 @@ export class ChannexProvider implements ChannelProvider {
 
   async acknowledgeBookingRevision(revisionId: string): Promise<void> {
     await this.client.request('POST', `/booking_revisions/${encodeURIComponent(revisionId)}/ack`);
+  }
+
+  async createListing(setup: ListingSetup): Promise<ExternalPropertyRef> {
+    const property = await this.client.request('POST', '/properties', {
+      property: {
+        title: setup.title,
+        currency: setup.currency,
+        country: setup.countryCode,
+        timezone: setup.timeZone,
+        ...(setup.city ? { city: setup.city } : {}),
+        ...(setup.address ? { address: setup.address } : {}),
+        ...(setup.postcode ? { zip_code: setup.postcode } : {}),
+        settings: {
+          // Channex closes a night itself the moment a booking arrives, so it is never sold twice
+          // while V-01 is catching up, or down (recovery runbook).
+          allow_availability_autoupdate_on_confirmation: true,
+          allow_availability_autoupdate_on_modification: true,
+          allow_availability_autoupdate_on_cancellation: true,
+          // V-01's minimum stay applies to the night a guest arrives.
+          min_stay_type: 'arrival',
+        },
+      },
+    });
+    const propertyId = createdId(property, 'property');
+    try {
+      const roomType = await this.client.request('POST', '/room_types', {
+        room_type: {
+          property_id: propertyId,
+          title: 'Whole place',
+          count_of_rooms: 1,
+          occ_adults: setup.maxGuests,
+          occ_children: 0,
+          occ_infants: 0,
+          default_occupancy: setup.maxGuests,
+          room_kind: 'room',
+        },
+      });
+      const roomTypeId = createdId(roomType, 'unit');
+      const ratePlan = await this.client.request('POST', '/rate_plans', {
+        rate_plan: {
+          title: 'Standard',
+          property_id: propertyId,
+          room_type_id: roomTypeId,
+          currency: setup.currency,
+          sell_mode: 'per_room',
+          rate_mode: 'manual',
+          options: [{ occupancy: setup.maxGuests, is_primary: true, rate: 0 }],
+        },
+      });
+      return {
+        externalPropertyId: propertyId,
+        externalRoomTypeId: roomTypeId,
+        externalRatePlanId: createdId(ratePlan, 'rate plan'),
+      };
+    } catch (error) {
+      // Leave nothing half made. If even that fails, say which property is left over.
+      const cleanedUp = await this.client
+        .request('DELETE', `/properties/${encodeURIComponent(propertyId)}`)
+        .then(() => true)
+        .catch(() => false);
+      if (error instanceof ChannelError) {
+        throw new ChannelError(
+          cleanedUp
+            ? `${error.message} The property it had made is removed again.`
+            : `${error.message} Property ${propertyId} was left in Channex: remove it there.`,
+          error.kind,
+          error.status,
+          error.retryAfterMs,
+        );
+      }
+      throw error;
+    }
   }
 
   parseRevision(raw: unknown): BookingRevision {

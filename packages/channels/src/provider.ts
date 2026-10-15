@@ -35,6 +35,20 @@ export interface RestrictionUpdate {
   stopSell?: boolean;
 }
 
+/** What the channel manager needs to hold one holiday home's prices, availability and bookings. */
+export interface ListingSetup {
+  /** The name the team knows it by. Guests see each channel's own listing, never this. */
+  title: string;
+  currency: string;
+  countryCode: string;
+  timeZone: string;
+  /** The most guests it sleeps. */
+  maxGuests: number;
+  city?: string | null;
+  address?: string | null;
+  postcode?: string | null;
+}
+
 export interface PushResult {
   /** The provider's task id, stored in the sync log so any change can be traced. */
   taskId: string | null;
@@ -87,6 +101,13 @@ export interface ChannelProvider {
   acknowledgeBookingRevision(revisionId: string): Promise<void>;
   /** Reads a stored payload back into a revision, so a stored booking can be imported, or replayed. */
   parseRevision(raw: unknown): BookingRevision;
+  /**
+   * Creates the property at the channel manager: the property, one unit (a whole home is booked once
+   * a night) and one rate plan. The channels' existing listings are then linked to it in the channel
+   * manager, so they keep their reviews. Leaves nothing half made: if a part is refused, what was
+   * created is removed again before the error is thrown.
+   */
+  createListing(setup: ListingSetup): Promise<ExternalPropertyRef>;
 }
 
 export type ChannelErrorKind = 'rate_limited' | 'server' | 'auth' | 'validation' | 'network';

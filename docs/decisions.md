@@ -5,6 +5,13 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-15
 
+- **Each property is made in Channex as one property, one unit and one rate plan** ("Whole place" and
+  "Standard"): a holiday home is booked once a night. Channex closes a night itself as soon as a booking
+  arrives, so a home is never sold twice while V-01 catches up or is down, and minimum stays apply to the
+  night a guest arrives. If Channex refuses any part, what was made is removed again. The channels'
+  existing listings are then linked to the property in Channex, so they keep their reviews.
+- **The Channex staging key works** (Alpha ran `pnpm channex:check`). The account is empty, so the check
+  can now make a test property on staging, through V-01's own code, and send it a test night.
 - **Bookings from Channex are saved before they are acknowledged** (integration step 5). Each revision
   is stored as received, then saved as a reservation with its guest, party and total; only once that has
   committed is it acknowledged, so Channex keeps anything V-01 hasn't saved in its feed. A booking whose

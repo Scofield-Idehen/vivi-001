@@ -3,6 +3,8 @@ import type {
   BookingRevision,
   ChannelError,
   ChannelProvider,
+  ExternalPropertyRef,
+  ListingSetup,
   PushResult,
   RestrictionUpdate,
 } from './provider.ts';
@@ -16,6 +18,7 @@ export class FakeChannelProvider implements ChannelProvider {
   readonly availabilityCalls: AvailabilityUpdate[][] = [];
   readonly restrictionCalls: RestrictionUpdate[][] = [];
   readonly acknowledged: string[] = [];
+  readonly listings: ListingSetup[] = [];
   feed: BookingRevision[] = [];
   private nextFailure: ChannelError | null = null;
   private taskCounter = 0;
@@ -56,6 +59,17 @@ export class FakeChannelProvider implements ChannelProvider {
   async acknowledgeBookingRevision(revisionId: string): Promise<void> {
     this.maybeFail();
     this.acknowledged.push(revisionId);
+  }
+
+  async createListing(setup: ListingSetup): Promise<ExternalPropertyRef> {
+    this.maybeFail();
+    this.listings.push(setup);
+    const n = this.listings.length;
+    return {
+      externalPropertyId: `fake-property-${n}`,
+      externalRoomTypeId: `fake-room-${n}`,
+      externalRatePlanId: `fake-rate-${n}`,
+    };
   }
 
   /** The stand-in stores a revision as itself, so reading it back is the revision less its payload. */

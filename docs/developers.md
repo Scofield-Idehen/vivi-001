@@ -117,6 +117,11 @@ On staging, `pnpm channex:check --round-trip <Channex property id>` sends one te
 and closed night, about 300 days ahead, through V-01's own adapter, reads them back, then puts the night
 back as it was. That proves the adapter's requests before certification.
 
+An empty staging account has nothing to send to, so `pnpm channex:check --make-test-property` first
+makes a property called "V-01 test property" through the adapter, the way V-01 will make each property
+it connects (one unit, one rate plan), then runs the round trip on it. Run again, it uses the same one.
+It never makes anything on live.
+
 ## Supabase and Render
 
 Not set up yet. These are the steps for when the staging and production accounts exist.

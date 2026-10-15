@@ -20,6 +20,10 @@ interface Stub {
   /** Turn down every price with a warning, the way Channex does with a 200. */
   warnOnRates?: boolean;
   properties?: number;
+  /** The account already has the test property, from an earlier run. */
+  testPropertyMade?: boolean;
+  /** Turn down a new rate plan, to prove a half-made property is cleaned up. */
+  refuseRatePlans?: boolean;
 }
 
 function stubChannex(stub: Stub) {
@@ -29,7 +33,19 @@ function stubChannex(stub: Stub) {
     attributes: { title: `Test cottage ${n}`, currency: 'GBP', timezone: 'Europe/London' },
   });
   const state = {
-    properties: Array.from({ length: stub.properties ?? 1 }, (_, i) => property(i + 1)),
+    properties: [
+      ...Array.from({ length: stub.properties ?? 1 }, (_, i) => property(i + 1)),
+      ...(stub.testPropertyMade
+        ? [
+            {
+              id: 'prop-test',
+              type: 'property',
+              attributes: { title: 'V-01 test property', currency: 'GBP' },
+            },
+          ]
+        : []),
+    ],
+    made: {} as Record<string, unknown>,
     rates: new Map<string, string>(),
     minStays: new Map<string, number>(),
     availability: new Map<string, number>(),
@@ -130,6 +146,40 @@ function stubChannex(stub: Stub) {
         meta: { message: 'Success', warnings: [] },
       });
     }
+    if (method === 'POST' && path === '/properties') {
+      const body = JSON.parse(String(init?.body)) as { property: { title: string; currency: string } };
+      state.made.property = body;
+      const made = {
+        id: `prop-${state.properties.length + 1}`,
+        type: 'property',
+        attributes: { title: body.property.title, currency: body.property.currency },
+      };
+      state.properties.push(made);
+      return json(201, { data: made });
+    }
+    if (method === 'POST' && path === '/room_types') {
+      const body = JSON.parse(String(init?.body)) as { room_type: { property_id: string } };
+      state.made.roomType = body;
+      return json(201, { data: { id: `${body.room_type.property_id}-room`, type: 'room_type' } });
+    }
+    if (method === 'POST' && path === '/rate_plans') {
+      const body = JSON.parse(String(init?.body)) as { rate_plan: { property_id: string } };
+      state.made.ratePlan = body;
+      if (stub.refuseRatePlans) {
+        return json(422, {
+          errors: {
+            code: 'validation_error',
+            title: 'Validation Error',
+            details: { options: ['is invalid'] },
+          },
+        });
+      }
+      return json(201, { data: { id: `${body.rate_plan.property_id}-rate`, type: 'rate_plan' } });
+    }
+    if (method === 'DELETE' && path.startsWith('/properties/')) {
+      state.properties = state.properties.filter((p) => p.id !== path.split('/')[2]);
+      return json(200, { meta: { message: 'Success' } });
+    }
     if (method === 'POST' && path === '/availability') {
       const body = JSON.parse(String(init?.body)) as { values: Record<string, unknown>[] };
       state.bodies.push(body);
@@ -149,12 +199,13 @@ function stubChannex(stub: Stub) {
 
 async function check(
   stub: ReturnType<typeof stubChannex>,
-  extra: { roundTrip?: string; apiKey?: string; exampleEnv?: string } = {},
+  extra: { roundTrip?: string; makeTestProperty?: boolean; apiKey?: string; exampleEnv?: string } = {},
 ) {
   const lines: string[] = [];
   const passed = await runChannexCheck({
     apiKey: extra.apiKey ?? KEY,
     roundTrip: extra.roundTrip,
+    makeTestProperty: extra.makeTestProperty,
     exampleEnv: extra.exampleEnv ?? null,
     fetch: stub.fetch,
     now: NOW,
@@ -250,6 +301,92 @@ describe('pnpm channex:check', () => {
     const { passed, output } = await check(stubChannex({ knownOn: 'staging' }), { roundTrip: 'prop-9' });
     expect(passed).toBe(false);
     expect(output).toContain('Channex has no property with the id prop-9.');
+  });
+
+  it('offers to make a test property when a staging account has none', async () => {
+    const { passed, output } = await check(stubChannex({ knownOn: 'staging', properties: 0 }));
+    expect(passed).toBe(true);
+    expect(output).toContain('The account has no properties yet.');
+    expect(output).toContain('pnpm channex:check --make-test-property');
+    expect(output).not.toContain('--round-trip');
+  });
+
+  it('makes a test property through the adapter, then sends it a test night', async () => {
+    const stub = stubChannex({ knownOn: 'staging', properties: 0 });
+    const { passed, output } = await check(stub, { makeTestProperty: true });
+    expect(output).toContain('Made "V-01 test property" on staging, with one unit and one rate plan.');
+    expect(output).toContain('Channex id: prop-1');
+    expect(output).toContain('Channex shows £151.00 a night, minimum stay 2, closed.');
+    expect(passed).toBe(true);
+    expect(stub.state.made).toEqual({
+      property: {
+        property: {
+          title: 'V-01 test property',
+          currency: 'GBP',
+          country: 'GB',
+          timezone: 'Europe/London',
+          settings: {
+            allow_availability_autoupdate_on_confirmation: true,
+            allow_availability_autoupdate_on_modification: true,
+            allow_availability_autoupdate_on_cancellation: true,
+            min_stay_type: 'arrival',
+          },
+        },
+      },
+      roomType: {
+        room_type: {
+          property_id: 'prop-1',
+          title: 'Whole place',
+          count_of_rooms: 1,
+          occ_adults: 4,
+          occ_children: 0,
+          occ_infants: 0,
+          default_occupancy: 4,
+          room_kind: 'room',
+        },
+      },
+      ratePlan: {
+        rate_plan: {
+          title: 'Standard',
+          property_id: 'prop-1',
+          room_type_id: 'prop-1-room',
+          currency: 'GBP',
+          sell_mode: 'per_room',
+          rate_mode: 'manual',
+          options: [{ occupancy: 4, is_primary: true, rate: 0 }],
+        },
+      },
+    });
+  });
+
+  it('uses the test property made before rather than making another', async () => {
+    const stub = stubChannex({ knownOn: 'staging', testPropertyMade: true });
+    const { passed, output } = await check(stub, { makeTestProperty: true });
+    expect(output).toContain('Using "V-01 test property", made before.');
+    expect(output).toContain('Channex id: prop-test');
+    expect(passed).toBe(true);
+    expect(stub.state.calls).not.toContain('POST staging /properties');
+  });
+
+  it('never makes a test property on live', async () => {
+    const stub = stubChannex({ knownOn: 'live', properties: 0 });
+    const { passed, output } = await check(stub, { makeTestProperty: true });
+    expect(passed).toBe(false);
+    expect(output).toContain(
+      'A test property is only made on Channex staging. This key is for Channex live.',
+    );
+    expect(stub.state.calls.filter((c) => !c.startsWith('GET'))).toEqual([]);
+  });
+
+  it('removes a half-made property when Channex turns down part of it, and says why', async () => {
+    const stub = stubChannex({ knownOn: 'staging', properties: 0, refuseRatePlans: true });
+    const { passed, output } = await check(stub, { makeTestProperty: true });
+    expect(passed).toBe(false);
+    expect(output).toContain(
+      'The test property stopped: Channex POST /rate_plans returned 422: Validation Error {"options":["is invalid"]} The property it had made is removed again.',
+    );
+    expect(stub.state.calls).toContain('DELETE staging /properties/prop-1');
+    expect(stub.state.properties).toEqual([]);
   });
 
   it('warns when the key was pasted into the example file, which git tracks', async () => {

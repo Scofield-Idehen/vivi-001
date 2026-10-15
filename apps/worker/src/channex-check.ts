@@ -20,6 +20,10 @@ import { addDays, formatMoney, minorDigits } from '@v01/shared';
  *     Staging only. Sends a test price, minimum stay and closed night for one date about 300 days
  *     ahead through V-01's own adapter, reads them back from Channex, then puts the night back.
  *
+ *   pnpm channex:check --make-test-property
+ *     Staging only. Makes a property called "V-01 test property" through V-01's adapter (one unit,
+ *     one rate plan), or uses the one made before, then runs the round trip on it.
+ *
  * It never prints the key, and never acknowledges a booking, so nothing leaves the feed.
  */
 
@@ -29,6 +33,8 @@ export interface CheckOptions {
   baseUrl?: string | undefined;
   /** A Channex property id to run the round trip on. */
   roundTrip?: string | undefined;
+  /** Make (or reuse) the test property on staging, then run the round trip on it. */
+  makeTestProperty?: boolean;
   /** The text of apps/worker/.env.example, to catch a key pasted there by mistake. */
   exampleEnv?: string | null;
   print: (line: string) => void;
@@ -48,6 +54,8 @@ const SERVER_NAMES: Record<Server, string> = {
 
 /** How many properties get their room types, rate plans and channels listed. */
 const DETAILED = 10;
+/** The one property the check may make, on staging only. Its name says what it is. */
+export const TEST_PROPERTY = 'V-01 test property';
 const ROUND_TRIP_DAYS_AHEAD = 300;
 const READ_BACK_TRIES = 5;
 
@@ -109,13 +117,21 @@ export async function runChannexCheck(options: CheckOptions): Promise<boolean> {
   if (!connection) return false;
   const { client, server } = connection;
 
+  let properties = 0;
   try {
-    await describeAccount(client, out);
+    properties = await describeAccount(client, out);
   } catch (error) {
     out.fail(`Couldn't read the account: ${messageOf(error)}`);
   }
 
-  if (options.roundTrip) {
+  if (options.makeTestProperty) {
+    try {
+      const id = await testProperty(client, server, out);
+      if (id) await roundTrip(client, server, id, options, out);
+    } catch (error) {
+      out.fail(`The test property stopped: ${messageOf(error)}`);
+    }
+  } else if (options.roundTrip) {
     try {
       await roundTrip(client, server, options.roundTrip, options, out);
     } catch (error) {
@@ -123,8 +139,13 @@ export async function runChannexCheck(options: CheckOptions): Promise<boolean> {
     }
   } else if (server === 'staging') {
     out.line();
-    out.line('To send a test price to one of these properties and read it back (staging only):');
-    out.line('  pnpm channex:check --round-trip <Channex property id>');
+    if (properties === 0) {
+      out.line('To make a test property here and send it a test night (staging only):');
+      out.line('  pnpm channex:check --make-test-property');
+    } else {
+      out.line('To send a test price to one of these properties and read it back (staging only):');
+      out.line('  pnpm channex:check --round-trip <Channex property id>');
+    }
   }
 
   out.line();
@@ -185,7 +206,8 @@ async function connect(
   return null;
 }
 
-async function describeAccount(client: ChannexClient, out: Report): Promise<void> {
+/** Lists what the account holds. Returns how many properties it has. */
+async function describeAccount(client: ChannexClient, out: Report): Promise<number> {
   const properties = await list(client, '/properties');
   if (properties.length === 0) {
     out.ok('The account has no properties yet.');
@@ -238,6 +260,38 @@ async function describeAccount(client: ChannexClient, out: Report): Promise<void
     out.ok(`${count} booking change${waiting === 1 ? ' is' : 's are'} waiting in the feed.`);
     out.note('Left where they are: V-01 acknowledges each one only after saving it.');
   }
+  return properties.length;
+}
+
+/**
+ * Makes the test property through V-01's own adapter, the way V-01 will make each property it
+ * connects, or finds the one made before. Staging only. Returns its Channex id.
+ */
+async function testProperty(client: ChannexClient, server: Server, out: Report): Promise<string | null> {
+  out.line();
+  out.line('Test property');
+  if (server !== 'staging') {
+    out.fail(
+      `A test property is only made on Channex staging. This key is for ${server === 'live' ? 'Channex live' : 'another server'}.`,
+    );
+    return null;
+  }
+  const made = (await list(client, '/properties')).find((p) => text(p, 'title') === TEST_PROPERTY);
+  if (made) {
+    out.ok(`Using "${TEST_PROPERTY}", made before.`);
+    out.note(`Channex id: ${made.id}`);
+    return made.id;
+  }
+  const ref = await new ChannexProvider(client).createListing({
+    title: TEST_PROPERTY,
+    currency: 'GBP',
+    countryCode: 'GB',
+    timeZone: 'Europe/London',
+    maxGuests: 4,
+  });
+  out.ok(`Made "${TEST_PROPERTY}" on staging, with one unit and one rate plan.`);
+  out.note(`Channex id: ${ref.externalPropertyId}`);
+  return ref.externalPropertyId;
 }
 
 async function roundTrip(
