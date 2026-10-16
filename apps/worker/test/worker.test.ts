@@ -12,6 +12,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { availabilityRanges } from '../src/availability.ts';
 import { importBookings, processWebhooks, sweepBookingFeed } from '../src/bookings.ts';
+import { markDirtyAfterCheckOut } from '../src/cleaning.ts';
 import { silentLogger, type WorkerDeps } from '../src/deps.ts';
 import { enqueueFullSync, FULL_SYNC_DAYS } from '../src/full-sync.ts';
 import { startJobs } from '../src/jobs.ts';
@@ -623,6 +624,63 @@ describe('bringing bookings in', () => {
   });
 });
 
+describe('clean and dirty', () => {
+  let cottage: string;
+  const at = (iso: string) => ({ ...deps, now: () => new Date(iso) });
+  const state = async () => {
+    const [row] = await owner<{ status: string; changed_at: string | null; by: string | null }>(
+      `select cleaning_status as status, (cleaning_changed_at at time zone 'UTC')::text as changed_at,
+              cleaning_changed_by as by
+         from app.properties where id = $1`,
+      [cottage],
+    );
+    return row;
+  };
+
+  beforeAll(async () => {
+    cottage = await addProperty('Orchard Cottage', 'guesty', 'cx-orc');
+    // Check-out on Friday 16 October at the usual 10:00, London time (09:00 UTC).
+    await owner(
+      `insert into app.reservations (organisation_id, property_id, channel, status, check_in, check_out)
+       values ($1, $2, 'vrbo', 'confirmed', '2026-10-13', '2026-10-16')`,
+      [op.orgId, cottage],
+    );
+  });
+
+  it('marks a property dirty once the guest has checked out, not before', async () => {
+    expect(await markDirtyAfterCheckOut(at('2026-10-16T08:59:00Z'))).toBe(0);
+    expect((await state())?.status).toBe('clean');
+    expect(await markDirtyAfterCheckOut(at('2026-10-16T09:10:00Z'))).toBe(1);
+    // Dirty from the check-out itself, by nobody in particular.
+    expect(await state()).toEqual({ status: 'dirty', changed_at: '2026-10-16 09:00:00', by: null });
+    // Running again changes nothing.
+    expect(await markDirtyAfterCheckOut(at('2026-10-16T09:25:00Z'))).toBe(0);
+  });
+
+  it('leaves a property someone marked clean after the check-out, and old check-outs alone', async () => {
+    await owner(
+      `update app.properties set cleaning_status = 'clean', cleaning_changed_at = '2026-10-16 11:30+00',
+              cleaning_changed_by = $2 where id = $1`,
+      [cottage, op.userId],
+    );
+    expect(await markDirtyAfterCheckOut(at('2026-10-16T12:00:00Z'))).toBe(0);
+    expect((await state())?.status).toBe('clean');
+    // A day on, the cleaned property isn't made dirty by Friday's check-out again.
+    expect(await markDirtyAfterCheckOut(at('2026-10-17T12:00:00Z'))).toBe(0);
+  });
+
+  it('uses a check-out time agreed for the stay', async () => {
+    await owner(
+      `insert into app.reservations (organisation_id, property_id, channel, status, check_in, check_out, check_out_time)
+       values ($1, $2, 'direct', 'confirmed', '2026-10-18', '2026-10-20', '13:00')`,
+      [op.orgId, cottage],
+    );
+    expect(await markDirtyAfterCheckOut(at('2026-10-20T11:30:00Z'))).toBe(0);
+    expect(await markDirtyAfterCheckOut(at('2026-10-20T12:05:00Z'))).toBe(1);
+    expect((await state())?.changed_at).toBe('2026-10-20 12:00:00');
+  });
+});
+
 describe('scheduled jobs', () => {
   it('starts pg-boss with its own restricted role and registers the schedules', async () => {
     const boss = await startJobs({
@@ -632,12 +690,14 @@ describe('scheduled jobs', () => {
         'booking-feed-sweep': async () => 0,
         'nightly-full-sync': async () => 0,
         'nightly-cross-check': async () => 0,
+        'cleaning-after-check-out': async () => 0,
       },
     });
     const schedules = await boss.getSchedules();
     await boss.stop({ graceful: false });
     expect(schedules.map((s) => s.name).sort()).toEqual([
       'booking-feed-sweep',
+      'cleaning-after-check-out',
       'nightly-cross-check',
       'nightly-full-sync',
     ]);

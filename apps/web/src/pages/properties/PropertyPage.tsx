@@ -10,6 +10,7 @@ import {
   type PropertyUpdate,
 } from '@v01/shared';
 import { Link, useParams } from 'react-router';
+import { PageLoading } from '../../components/Spinner.tsx';
 import { Badge, EmptyState } from '../../components/ui.tsx';
 import { ApiError, useProperty, useUpdateProperty, useWorkspace } from '../../lib/api.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
@@ -188,7 +189,7 @@ export function PropertyPage() {
   const currency = workspace.data?.settings.currency ?? 'GBP';
   const locale = workspace.data?.settings.locale ?? 'en-GB';
 
-  if (property.isPending) return <p className="text-[14px] text-mist">Loading the property</p>;
+  if (property.isPending) return <PageLoading>Loading the property</PageLoading>;
   if (property.error || !property.data) {
     const gone = property.error instanceof ApiError && property.error.status === 404;
     return (

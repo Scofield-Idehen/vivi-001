@@ -3,6 +3,43 @@
 Newest first. Each entry says what was decided and why. Product decisions also live in the
 V-01 Build Playbook and Design Roadmap.
 
+## 2026-10-16
+
+- **Every property is clean or dirty, shown under its name on the Calendar (Alpha).** A guest's
+  check-out makes it dirty by itself, at the time agreed for that stay or the property's usual
+  check-out time, in the operator's time zone; the worker looks every 15 minutes. A check-out never
+  undoes a later change by hand: a property marked clean after the guest left stays clean. One click
+  on the label marks it clean or dirty, and the label says who did it and when, or which guest's
+  check-out made it dirty. Dirty is amber, and red with "guest arriving" when a guest arrives that day.
+  Admins, operations and the field team can change it; the rest of the team sees it. A Cleaning filter
+  sits with the others. Migration 0016 adds the status, when it changed and who changed it, and every
+  change is in the audit trail.
+- **The Calendar is one long timeline, from a year back to two years ahead (Alpha).** It scrolls
+  sideways with a trackpad, the scrollbar or Shift and the mouse wheel, and with the plain wheel when
+  every property already fits on screen; on a phone, a swipe. Not everyone uses the arrows: they stay,
+  and move a week at a time. Today comes back to today, and the dates beside the arrows open a date
+  picker to jump anywhere. Nights load four weeks at a time as they come into view, with a soft grey
+  pulse while they load, and only what is on screen is drawn, so a long portfolio stays quick. A
+  booking that started off screen keeps its mark and name at the left edge.
+- **Free dates is now Availability and comes first in the filters (Alpha):** "Available 23 to 25 Oct,
+  4 guests" shows only the properties with no booking or block on those nights and room for everyone,
+  so nobody checks property by property. The calendar moves to the stay when it is applied.
+- **Selecting nights opens a short list of actions, as Guesty's panel does (Alpha: "ours is too
+  confusing").** The panel's title is the property, with the nights under it, then what is there now.
+  Below that: Set a price, Set a minimum stay and Back to the usual price and stay; Block the nights,
+  Owner staying and Open the blocked nights; and Close to arrivals or departures. Choosing one shows
+  only what that one needs, with All actions to go back. Its button says what will happen: "Block 2
+  nights" when one of three is booked, or "Nothing to block" when all are taken.
+- **Pages open with a turning ring, as Guesty's do (Alpha),** in the accent colour on a quiet track,
+  with a line saying what is loading. The app's own start shows the brand above it. With reduced motion
+  it turns slowly rather than not at all, so it still says "working".
+- **Closing the Calendar's panel gives the keyboard back to the night or booking it came from,** and
+  arrow keys pressed quickly are all counted, however fast the view moves.
+- **The demo's sample properties have pictures,** two drawn rooms each, so the names column, the
+  Properties list and each property's page show a cover. They are illustrations made for the demo, not
+  photos of real places.
+- **Direct bookings stay in Phase 4 (Alpha).** The Calendar and booking panel don't add them now.
+
 ## 2026-10-15
 
 - **The Calendar after Alpha's review.** Anyone leaving Guesty should find their way around it as

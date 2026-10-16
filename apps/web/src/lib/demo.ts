@@ -12,6 +12,8 @@ import {
   CalendarQuerySchema,
   type CalendarStay,
   type Channel,
+  type CleaningState,
+  CleaningUpdateSchema,
   type ConsoleOperator,
   type ConsoleOperatorDetail,
   type ConsoleOperatorList,
@@ -57,6 +59,7 @@ import {
 } from '@v01/shared';
 import { clearDemoPhotos, deleteDemoPhoto, demoPhotoUrl, putDemoPhoto } from './demo-photos.ts';
 import { ApiError } from './errors.ts';
+import { SAMPLE_PHOTOS } from './sample-photos.ts';
 
 /**
  * Demo mode's stand-in for the API. It answers the same routes with the same shapes and
@@ -111,6 +114,8 @@ interface DemoOperator {
   channelAccounts: { channel: Channel; connected: boolean }[];
   live: DemoLive;
   calendar: DemoCalendar;
+  /** Each property's cleaning, by property id. Missing: clean, never marked. */
+  cleaning?: Record<string, CleaningState>;
 }
 
 /** A booking as the API keeps it: what the calendar shows, and what the reservation page adds. */
@@ -160,7 +165,7 @@ interface DemoSyncError {
 
 interface DemoState {
   /** Raised whenever the shape changes, so a browser holding older sample data starts fresh. */
-  version: 7;
+  version: 8;
   /** The day the sample bookings were laid out from. They are laid out afresh each week. */
   calendarFrom: string;
   operators: DemoOperator[];
@@ -247,6 +252,8 @@ function sampleProperty(p: {
   title?: string;
   amenities?: string[];
   tags?: string[];
+  /** Drawn sample rooms, by key (see sample-photos.ts), the first as the cover. */
+  photos?: string[];
 }): PropertyDetail {
   const createdAt = new Date('2026-10-14T09:00:00Z').toISOString();
   return {
@@ -271,7 +278,7 @@ function sampleProperty(p: {
     minPriceMinor: p.prices ? p.prices[0] : null,
     maxPriceMinor: p.prices ? p.prices[1] : null,
     coverPhotoUrl: null,
-    photoCount: 0,
+    photoCount: p.photos?.length ?? 0,
     tags: p.tags ?? [],
     createdAt,
     ...listingDefaults(),
@@ -280,6 +287,15 @@ function sampleProperty(p: {
     basePriceMinor: p.usual?.base ?? null,
     weekendPriceMinor: p.usual?.weekend ?? null,
     minNights: p.usual?.minNights ?? 1,
+    photos: (p.photos ?? []).map((key, position) => ({
+      id: crypto.randomUUID(),
+      url: `sample-photo:${key}`,
+      caption: null,
+      position,
+      roomId: null,
+      width: 960,
+      height: 640,
+    })),
     updatedAt: createdAt,
   };
 }
@@ -426,6 +442,18 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
         guests: 2,
         channel: 'airbnb',
         reference: 'HMK1C5V8QA',
+      },
+      // Left early this morning; Claire Dubois arrives this afternoon, so the cottage needs cleaning.
+      {
+        property: 2,
+        from: -2,
+        nights: 2,
+        guest: 'Leo Hartmann',
+        guests: 2,
+        channel: 'airbnb',
+        reference: 'HMV3R8P2LD',
+        checkOutTime: '07:00',
+        notes: 'Leaving early for an 08:30 flight.',
       },
       {
         property: 2,
@@ -687,7 +715,7 @@ function operatorWorkspace(
 function seed(): DemoState {
   const pastVisit = Date.now() - (2 * 24 * 60 + 190) * MINUTE;
   const state: DemoState = {
-    version: 7,
+    version: 8,
     calendarFrom: demoToday(),
     operators: [
       {
@@ -736,6 +764,7 @@ function seed(): DemoState {
             managedBy: 'v01',
             title: 'Harbourside house with sea views',
             amenities: ['sea_view', 'log_burner', 'wifi', 'kitchen', 'washing_machine', 'free_parking'],
+            photos: ['room2', 'room1'],
           }),
           sampleProperty({
             name: 'Mill Street Flat',
@@ -750,6 +779,7 @@ function seed(): DemoState {
             usual: { base: 8_500, weekend: 9_500, minNights: 1 },
             tags: ['City centre', 'Owner: Patel'],
             managedBy: 'v01',
+            photos: ['room5', 'room3'],
           }),
           sampleProperty({
             name: 'Orchard Cottage',
@@ -764,6 +794,7 @@ function seed(): DemoState {
             usual: { base: 12_000, weekend: 14_500, minNights: 2 },
             tags: ['Family', 'Owner: Ellis'],
             managedBy: 'guesty',
+            photos: ['room4', 'room1'],
           }),
           sampleProperty({
             name: 'The Granary',
@@ -778,6 +809,7 @@ function seed(): DemoState {
             usual: { base: 24_000, minNights: 3 },
             tags: ['Large groups', 'Family'],
             managedBy: 'guesty',
+            photos: ['room3', 'room6'],
           }),
         ],
         createdAt: '2026-09-02T10:00:00.000Z',
@@ -858,6 +890,7 @@ function seed(): DemoState {
             prices: [11_000, 28_000],
             usual: { base: 15_000, weekend: 17_500, minNights: 2 },
             managedBy: 'guesty',
+            photos: ['room6', 'room2'],
           }),
           sampleProperty({
             name: 'Linden Court, Flat 2',
@@ -871,6 +904,7 @@ function seed(): DemoState {
             prices: [8_000, 18_000],
             usual: { base: 10_500, minNights: 1 },
             managedBy: 'guesty',
+            photos: ['room1', 'room5'],
           }),
           sampleProperty({
             name: 'The Old Bakery',
@@ -884,6 +918,7 @@ function seed(): DemoState {
             prices: null,
             usual: { base: null, minNights: 2 },
             managedBy: 'guesty',
+            photos: ['room4', 'room3'],
           }),
         ],
         createdAt: '2026-10-08T11:30:00.000Z',
@@ -948,13 +983,65 @@ function seed(): DemoState {
   return state;
 }
 
-/** The invented operators' bookings, laid out from today. */
+/** The invented operators' bookings, laid out from today, with every property cleaned yesterday. */
 function layOutSamples(s: DemoState): void {
   s.calendarFrom = demoToday();
   for (const operator of s.operators) {
     const id = operator.workspace.organisation.id;
-    if (SAMPLE_CALENDARS[id]) operator.calendar = sampleCalendar(id, operator.properties, s.calendarFrom);
+    if (!SAMPLE_CALENDARS[id]) continue;
+    operator.calendar = sampleCalendar(id, operator.properties, s.calendarFrom);
+    const tz = operator.workspace.settings.timeZone;
+    const cleaned = zonedInstant(addDays(s.calendarFrom, -1), '16:20', tz).toISOString();
+    const by = operator.team[0]?.fullName ?? null;
+    operator.cleaning = Object.fromEntries(
+      operator.properties.map((p) => [p.id, { status: 'clean' as const, changedAt: cleaned, changedBy: by }]),
+    );
   }
+}
+
+/** The moment a wall-clock time happens on a date somewhere: "2026-10-16" at "07:00" in London. */
+function zonedInstant(date: string, time: string, timeZone: string): Date {
+  const [y = 0, m = 1, d = 1] = date.split('-').map(Number);
+  const [h = 0, min = 0] = time.split(':').map(Number);
+  const guess = Date.UTC(y, m - 1, d, h, min);
+  // What the time zone's clock shows at that instant, read as if it were UTC: the gap is its offset.
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(guess));
+  const part = (type: string) => Number(parts.find((x) => x.type === type)?.value ?? 0);
+  const shown = Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'));
+  return new Date(guess - (shown - guess));
+}
+
+/**
+ * The worker's rule, run whenever the demo calendar is read: a property goes dirty at a guest's
+ * check-out time, unless someone marked it since.
+ */
+function sweepCleaning(operator: DemoOperator): void {
+  const tz = operator.workspace.settings.timeZone;
+  const today = todayIn(tz);
+  const now = Date.now();
+  const cleaning = operator.cleaning ?? {};
+  operator.cleaning = cleaning;
+  let changed = false;
+  for (const stay of operator.calendar.stays) {
+    if (stay.status !== 'confirmed' || stay.checkOut < addDays(today, -1) || stay.checkOut > today) continue;
+    const property = operator.properties.find((p) => p.id === stay.propertyId);
+    if (!property) continue;
+    const left = zonedInstant(stay.checkOut, stay.checkOutTime ?? property.checkOutTime, tz).getTime();
+    if (left > now || left <= now - 24 * 60 * MINUTE) continue;
+    const current = cleaning[property.id];
+    if (current?.changedAt && Date.parse(current.changedAt) >= left) continue;
+    cleaning[property.id] = { status: 'dirty', changedAt: new Date(left).toISOString(), changedBy: null };
+    changed = true;
+  }
+  if (changed) save();
 }
 
 let state: DemoState | null = null;
@@ -965,7 +1052,7 @@ function load(): DemoState {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved) as DemoState;
-      if (parsed.version === 7) {
+      if (parsed.version === 8) {
         // A week on, the sample bookings would all be in the past: lay them out again from today.
         if (parsed.calendarFrom <= addDays(demoToday(), -7)) {
           layOutSamples(parsed);
@@ -1198,7 +1285,11 @@ function findProperty(operator: DemoOperator, id: string): PropertyDetail {
 async function resolved(detail: PropertyDetail): Promise<PropertyDetail> {
   const photos: PropertyDetail['photos'] = [];
   for (const photo of detail.photos) {
-    const url = photo.url.startsWith('demo-photo:') ? await demoPhotoUrl(photo.url.slice(11)) : photo.url;
+    const url = photo.url.startsWith('demo-photo:')
+      ? await demoPhotoUrl(photo.url.slice(11))
+      : photo.url.startsWith('sample-photo:')
+        ? (SAMPLE_PHOTOS[photo.url.slice(13)] ?? null)
+        : photo.url;
     if (url) photos.push({ ...photo, url, position: photos.length });
   }
   return { ...detail, photos, coverPhotoUrl: photos[0]?.url ?? null, photoCount: photos.length };
@@ -1270,6 +1361,7 @@ async function demoCalendar(
   to: string,
   free: { from: string; to: string; guests: number | undefined } | null,
 ): Promise<Calendar> {
+  sweepCleaning(operator);
   const { stays: allStays, blocks: allBlocks } = operator.calendar;
   // Free for the stay: no booking or block on any of its nights, and room for everyone.
   const freeFor = (p: PropertyDetail) =>
@@ -1299,6 +1391,7 @@ async function demoCalendar(
       bedrooms: p.bedrooms,
       maxGuests: p.maxGuests,
       tags: p.tags,
+      cleaning: operator.cleaning?.[p.id] ?? { status: 'clean', changedAt: null, changedBy: null },
       managedBy: p.managedBy,
       priceOwner: p.priceOwner,
       basePriceMinor: p.basePriceMinor,
@@ -1515,6 +1608,7 @@ const END_PATH = /^\/v1\/console\/support-access\/([0-9a-f-]{36})\/end$/;
 // Reservations -----------------------------------------------------------------------------------
 
 const RESERVATION_PATH = /^\/v1\/reservations\/([0-9a-f-]{36})$/;
+const CLEANING_PATH = /^\/v1\/properties\/([0-9a-f-]{36})\/cleaning$/;
 
 function reservationSummary(operator: DemoOperator, x: DemoStay): ReservationSummary {
   return {
@@ -1861,6 +1955,22 @@ export async function demoFetch<T>(
     const { operator } = access(options.orgId, 'reservations.read');
     const query = Object.fromEntries(new URLSearchParams(path.split('?')[1] ?? ''));
     return demoReservations(operator, query) as T;
+  }
+
+  const cleaningMatch = CLEANING_PATH.exec(path);
+  if (method === 'PUT' && cleaningMatch?.[1]) {
+    const { operator } = access(options.orgId, 'cleaning.write');
+    const property = findProperty(operator, cleaningMatch[1]);
+    const parsed = CleaningUpdateSchema.safeParse(options.body);
+    if (!parsed.success) invalid(parsed.error.issues);
+    const marked: CleaningState = {
+      status: parsed.data.status,
+      changedAt: new Date().toISOString(),
+      changedBy: 'Demo user',
+    };
+    operator.cleaning = { ...operator.cleaning, [property.id]: marked };
+    save();
+    return marked as T;
   }
 
   const reservationMatch = RESERVATION_PATH.exec(path);

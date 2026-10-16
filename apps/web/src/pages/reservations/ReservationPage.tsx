@@ -2,6 +2,7 @@ import { IconArrowLeft, IconCalendarMonth, IconPencil } from '@tabler/icons-reac
 import { can, formatMoney, nightsBetween, type Reservation } from '@v01/shared';
 import { type ReactNode, useEffect, useId, useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { PageLoading } from '../../components/Spinner.tsx';
 import { Button, EmptyState, Notice } from '../../components/ui.tsx';
 import { ApiError, useReservation, useWorkspace } from '../../lib/api.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
@@ -107,7 +108,7 @@ export function ReservationPage() {
     </Link>
   );
 
-  if (booking.isPending) return <p className="text-[14px] text-mist">Loading the booking</p>;
+  if (booking.isPending) return <PageLoading>Loading the booking</PageLoading>;
   if (booking.error || !booking.data) {
     const gone = booking.error instanceof ApiError && booking.error.status === 404;
     return (

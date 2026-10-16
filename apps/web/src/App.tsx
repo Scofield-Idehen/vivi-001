@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { createBrowserRouter, createMemoryRouter, Navigate, Outlet, RouterProvider } from 'react-router';
 import { AppShell } from './components/AppShell.tsx';
 import { ConsoleShell } from './components/ConsoleShell.tsx';
+import { StartLoading } from './components/Spinner.tsx';
 import { Button, Notice, Splash } from './components/ui.tsx';
 import { ApiError, useMe } from './lib/api.ts';
 import { config } from './lib/config.ts';
@@ -30,9 +31,19 @@ function Gate() {
   const me = useMe();
   const entries = useMemo(() => (me.data ? workspaceEntries(me.data) : []), [me.data]);
 
-  if (loading) return <Splash>Loading</Splash>;
+  if (loading)
+    return (
+      <Splash>
+        <StartLoading>Signing you in</StartLoading>
+      </Splash>
+    );
   if (!session) return <Navigate to="/sign-in" replace />;
-  if (me.isPending) return <Splash>Opening your workspace</Splash>;
+  if (me.isPending)
+    return (
+      <Splash>
+        <StartLoading>Opening your workspace</StartLoading>
+      </Splash>
+    );
   if (me.error) {
     return (
       <Splash>

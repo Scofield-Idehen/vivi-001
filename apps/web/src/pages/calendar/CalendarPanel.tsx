@@ -1,4 +1,4 @@
-import { IconPencil, IconX } from '@tabler/icons-react';
+import { IconArrowLeft, IconCheck, IconChevronRight, IconPencil, IconX } from '@tabler/icons-react';
 import {
   addDays,
   CALENDAR_DAYS_AHEAD,
@@ -24,6 +24,7 @@ import {
   hasChanges,
   money,
   newForm,
+  nightsToChange,
   priceRange,
   propertyNames,
   rangeLabel,
@@ -62,54 +63,6 @@ interface PanelProps {
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const BLOCK_REASONS = ['Owner staying', 'Maintenance', 'Deep clean'];
 
-/** A choice of a few, shown side by side. Real radio buttons underneath, so keyboards work as usual. */
-function Segmented<V extends string>({
-  legend,
-  value,
-  options,
-  onChange,
-  disabled,
-  children,
-}: {
-  legend: string;
-  value: V;
-  options: readonly { value: V; label: string }[];
-  onChange(value: V): void;
-  disabled?: boolean;
-  children?: ReactNode;
-}) {
-  const name = useId();
-  return (
-    <fieldset disabled={disabled} className="flex flex-col gap-2 disabled:opacity-60">
-      <legend className="mb-2 text-[13px] text-slate">{legend}</legend>
-      <div className="flex w-full rounded-lg bg-linen/80 p-[3px]">
-        {options.map((o) => (
-          <label
-            key={o.value}
-            className={cx(
-              'flex-1 cursor-pointer rounded-md px-2 py-1.5 text-center text-[13px] transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent',
-              o.value === value
-                ? 'bg-canvas font-medium text-ink shadow-[0_1px_2px_rgb(21_24_27/0.12)]'
-                : 'text-slate hover:text-ink',
-            )}
-          >
-            <input
-              type="radio"
-              name={name}
-              value={o.value}
-              checked={o.value === value}
-              onChange={() => onChange(o.value)}
-              className="sr-only"
-            />
-            {o.label}
-          </label>
-        ))}
-      </div>
-      {children}
-    </fieldset>
-  );
-}
-
 function Hint({ children }: { children: ReactNode }) {
   return <p className="text-[12.5px] leading-snug text-mist">{children}</p>;
 }
@@ -143,6 +96,103 @@ function limits(p: CalendarProperty, currency: string, locale: string): string |
   return null;
 }
 
+/** What someone can do with the nights they chose, one at a time. */
+type Action = 'price' | 'minStay' | 'usual' | 'block' | 'owner' | 'open' | 'arrivals';
+
+const ACTION_TITLES: Record<Action, string> = {
+  price: 'Set a price',
+  minStay: 'Set a minimum stay',
+  usual: 'Back to the usual price and stay',
+  block: 'Block the nights',
+  owner: 'Owner staying',
+  open: 'Open the blocked nights',
+  arrivals: 'Close to arrivals or departures',
+};
+
+/** One line of the list of actions: what it does, what's there now, and an arrow. */
+function ActionRow({
+  label,
+  detail,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  detail?: string | null;
+  disabled?: boolean;
+  onClick(): void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onClick}
+        className="flex w-full items-center justify-between gap-4 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-linen disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-transparent"
+      >
+        <span className="min-w-0">
+          <span className="block text-[14.5px] text-ink">{label}</span>
+          {detail ? (
+            <span className="mt-0.5 block text-[12.5px] leading-snug text-mist">{detail}</span>
+          ) : null}
+        </span>
+        <IconChevronRight size={17} stroke={1.75} aria-hidden className="shrink-0 text-mist" />
+      </button>
+    </li>
+  );
+}
+
+function ActionGroup({ title, children }: { title: string; children: ReactNode }) {
+  const id = useId();
+  return (
+    <section aria-labelledby={id} className="border-t border-hairline pt-3 first:border-t-0 first:pt-0">
+      <h4 id={id} className="mb-1 px-3 text-[12.5px] text-slate">
+        {title}
+      </h4>
+      <ul className="flex flex-col">{children}</ul>
+    </section>
+  );
+}
+
+function Check({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  checked: boolean;
+  onChange(checked: boolean): void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-hairline px-3.5 py-3 has-[:checked]:border-ink has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="sr-only"
+      />
+      <span
+        aria-hidden
+        className={cx(
+          'mt-0.5 grid size-[18px] shrink-0 place-items-center rounded-[5px] border',
+          checked ? 'border-ink bg-ink' : 'border-edge bg-canvas',
+        )}
+      >
+        {checked ? <IconCheck size={13} stroke={2.6} className="text-canvas" /> : null}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[14px] text-ink">{label}</span>
+        {hint ? <span className="mt-0.5 block text-[12.5px] leading-snug text-mist">{hint}</span> : null}
+      </span>
+    </label>
+  );
+}
+
+/**
+ * The nights someone chose: when they are, what's there now, and a short list of what can be done
+ * with them (as Guesty lays it out). Choosing one shows only what that one needs.
+ */
 function ChangeBody({
   selection,
   orgId,
@@ -154,12 +204,15 @@ function ChangeBody({
   onCancel,
   onDone,
 }: Omit<PanelProps, 'target' | 'editable' | 'onClose'> & { selection: Selection; onCancel(): void }) {
-  const summary = useMemo(() => summarise(selection, rows), [selection, rows]);
+  const summary = useMemo(() => summarise(selection, rows, today), [selection, rows, today]);
+  const [action, setAction] = useState<Action | null>(null);
   const [form, setForm] = useState<ChangeForm>(() => newForm(summary));
   const [tried, setTried] = useState(false);
   const save = useChangeCalendar(orgId);
   const firstId = useId();
   const lastId = useId();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
   const symbol = useMemo(
     () =>
       new Intl.NumberFormat(locale, { style: 'currency', currency })
@@ -175,6 +228,34 @@ function ChangeBody({
   const allPricedElsewhere = summary.pricedByPriceLabs.length === summary.properties.length;
   const nights = summary.nights;
 
+  // Moving between the list and an action takes the keyboard (and a screen reader) along.
+  useEffect(() => {
+    if (action) heading.current?.focus();
+    else menu.current?.querySelector<HTMLElement>('button:not(:disabled)')?.focus();
+  }, [action]);
+
+  const choose = (next: Action) => {
+    const base = newForm(summary);
+    const allNoArrivals = summary.cells > 0 && summary.noArrivals === summary.cells;
+    const allNoDepartures = summary.cells > 0 && summary.noDepartures === summary.cells;
+    const forms: Record<Action, Partial<ChangeForm>> = {
+      price: { price: 'set' },
+      minStay: { minStay: 'set' },
+      usual: { price: allPricedElsewhere ? 'keep' : 'usual', minStay: 'usual' },
+      block: { availability: 'block' },
+      owner: { availability: 'block', blockReason: 'Owner staying' },
+      open: { availability: 'open' },
+      arrivals: {
+        arrivals: allNoArrivals ? 'closed' : 'allowed',
+        departures: allNoDepartures ? 'closed' : 'allowed',
+      },
+    };
+    setForm({ ...base, ...forms[next] });
+    setTried(false);
+    save.reset();
+    setAction(next);
+  };
+
   const submit = () => {
     setTried(true);
     if (!change) return;
@@ -182,19 +263,35 @@ function ChangeBody({
   };
 
   const now: string[] = [];
-  if (summary.prices) {
-    now.push(`${priceRange(summary.prices, currency, locale)} a night`);
-  }
+  if (summary.prices) now.push(`${priceRange(summary.prices, currency, locale)} a night`);
   if (summary.minNights) {
     const { low, high } = summary.minNights;
     now.push(
       low === high ? `minimum stay ${plural(low, 'night')}` : `minimum stays ${low} to ${high} nights`,
     );
   }
+  const priceNow = summary.prices ? `Now ${priceRange(summary.prices, currency, locale)}` : null;
+  const stayNow = summary.minNights
+    ? summary.minNights.low === summary.minNights.high
+      ? `Now ${plural(summary.minNights.low, 'night')}`
+      : `Now ${summary.minNights.low} to ${summary.minNights.high} nights`
+    : null;
+  // The button says what will happen: "Block 2 nights" when one of three is booked.
+  const changing = nightsToChange(form, selection, rows, today);
+  const blocking = action === 'block' || action === 'owner';
+  const verb = blocking ? 'Block' : action === 'open' ? 'Open' : 'Save';
+  const nothingLeft = form.days.length > 0 && changing === 0 && (blocking || action === 'open');
+  const saveLabel = nothingLeft
+    ? blocking
+      ? 'Nothing to block'
+      : 'Nothing to open'
+    : changing > 0
+      ? `${verb} ${plural(changing, 'night')}`
+      : verb;
 
   return (
     <>
-      <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto px-5 py-6 md:px-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-6 md:px-6">
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
             <label htmlFor={firstId} className="text-[13px] text-slate">
@@ -255,202 +352,276 @@ function ChangeBody({
           </div>
         ) : null}
 
-        {summary.notSent.length ? <Notice>{notSentLine(summary.notSent)}</Notice> : null}
-
-        <Segmented
-          legend="Price a night"
-          value={form.price}
-          onChange={(v) => set('price', v)}
-          disabled={allPricedElsewhere}
-          options={[
-            { value: 'keep', label: 'As it is' },
-            { value: 'set', label: 'Set a price' },
-            { value: 'usual', label: 'Usual price' },
-          ]}
-        >
-          {allPricedElsewhere ? (
-            <Hint>PriceLabs sets the prices here. Change them in PriceLabs.</Hint>
-          ) : summary.pricedByPriceLabs.length ? (
-            <Hint>
-              PriceLabs sets the prices for {propertyNames(summary.pricedByPriceLabs)}. Leave the price as it
-              is, or choose only properties whose prices are set here.
-            </Hint>
-          ) : null}
-          {form.price === 'set' && !allPricedElsewhere ? (
-            <MoneyField
-              label="Price"
-              symbol={symbol}
-              value={form.priceText}
-              onChange={(v) => set('priceText', v)}
-              error={tried ? errors.price : undefined}
-              hint={
-                one && limits(one, currency, locale)
-                  ? `For ${one.name}, ${limits(one, currency, locale)}.`
-                  : summary.properties.length > 1
-                    ? "Each property's lowest and highest prices still apply."
-                    : undefined
-              }
-            />
-          ) : null}
-          {form.price === 'usual' && !allPricedElsewhere ? (
-            <Hint>
-              {one
-                ? `Back to ${usualPrice(one, currency, locale)}.`
-                : 'Each property goes back to its own usual price.'}
-            </Hint>
-          ) : null}
-        </Segmented>
-
-        <Segmented
-          legend="Minimum stay"
-          value={form.minStay}
-          onChange={(v) => set('minStay', v)}
-          options={[
-            { value: 'keep', label: 'As it is' },
-            { value: 'set', label: 'Set' },
-            { value: 'usual', label: 'Usual' },
-          ]}
-        >
-          {form.minStay === 'set' ? (
-            <Stepper
-              label="Nights"
-              hint="For guests arriving on these nights"
-              value={form.minNights}
-              min={1}
-              max={60}
-              onChange={(v) => set('minNights', v)}
-            />
-          ) : null}
-          {form.minStay === 'usual' ? (
-            <Hint>
-              {one
-                ? `Back to ${plural(one.minNights, 'night')}.`
-                : 'Each property goes back to its own usual minimum.'}
-            </Hint>
-          ) : null}
-        </Segmented>
-
-        <div className="grid gap-5 sm:grid-cols-2">
-          <Segmented
-            legend="Arrivals"
-            value={form.arrivals}
-            onChange={(v) => set('arrivals', v)}
-            options={[
-              { value: 'keep', label: 'As is' },
-              { value: 'allowed', label: 'Allowed' },
-              { value: 'closed', label: 'Closed' },
-            ]}
-          />
-          <Segmented
-            legend="Departures"
-            value={form.departures}
-            onChange={(v) => set('departures', v)}
-            options={[
-              { value: 'keep', label: 'As is' },
-              { value: 'allowed', label: 'Allowed' },
-              { value: 'closed', label: 'Closed' },
-            ]}
-          />
-        </div>
-
-        <Segmented
-          legend="Availability"
-          value={form.availability}
-          onChange={(v) => set('availability', v)}
-          options={[
-            { value: 'keep', label: 'As it is' },
-            { value: 'block', label: 'Block' },
-            { value: 'open', label: 'Open' },
-          ]}
-        >
-          {form.availability === 'block' ? (
-            <>
-              <Hint>Free nights are blocked. Booked nights stay as they are.</Hint>
-              <div className="flex flex-wrap gap-2">
-                {BLOCK_REASONS.map((reason) => (
-                  <button
-                    key={reason}
-                    type="button"
-                    aria-pressed={form.blockReason === reason}
-                    onClick={() => set('blockReason', reason)}
-                    className={cx(
-                      'h-8 rounded-full border px-3 text-[13px] transition-colors',
-                      form.blockReason === reason
-                        ? 'border-accent bg-accent-tint font-medium text-accent'
-                        : 'border-hairline text-slate hover:border-edge hover:text-ink',
-                    )}
-                  >
-                    {reason}
-                  </button>
-                ))}
-              </div>
-              <TextField
-                label="Reason"
-                value={form.blockReason}
-                onChange={(v) => set('blockReason', v)}
-                max={200}
-                hint="Shown on the calendar. Guests never see it."
+        {action === null ? (
+          <div ref={menu} className="flex flex-col gap-3">
+            <h3 className="text-[15px] font-medium text-ink">Choose what to do</h3>
+            <ActionGroup title="Price and minimum stay">
+              <ActionRow
+                label={ACTION_TITLES.price}
+                detail={allPricedElsewhere ? 'PriceLabs sets the prices here' : priceNow}
+                disabled={allPricedElsewhere}
+                onClick={() => choose('price')}
               />
-            </>
-          ) : null}
-          {form.availability === 'open' ? (
-            <Hint>Blocked nights open again. Bookings stay as they are.</Hint>
-          ) : null}
-        </Segmented>
-
-        {nights > 1 ? (
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-2 text-[13px] text-slate">On these days</legend>
-            <div className="grid grid-cols-7 gap-1.5">
-              {ALL_DAYS.map((day) => {
-                const on = form.days.includes(day);
-                return (
-                  <label
-                    key={day}
-                    className={cx(
-                      'cursor-pointer rounded-md border py-1.5 text-center text-[12.5px] transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent',
-                      on
-                        ? 'border-accent bg-accent-tint font-medium text-accent'
-                        : 'border-hairline text-mist hover:border-edge',
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={() =>
-                        set('days', on ? form.days.filter((d) => d !== day) : [...form.days, day].sort())
-                      }
-                      className="sr-only"
-                    />
-                    {DAY_NAMES[day - 1]}
-                  </label>
-                );
-              })}
+              <ActionRow label={ACTION_TITLES.minStay} detail={stayNow} onClick={() => choose('minStay')} />
+              {summary.own ? (
+                <ActionRow
+                  label={ACTION_TITLES.usual}
+                  detail={`${plural(summary.own, 'night')} with a price or stay of their own`}
+                  onClick={() => choose('usual')}
+                />
+              ) : null}
+            </ActionGroup>
+            <ActionGroup title="Availability">
+              <ActionRow
+                label={ACTION_TITLES.block}
+                detail="For maintenance, a deep clean or anything else"
+                onClick={() => choose('block')}
+              />
+              <ActionRow
+                label={ACTION_TITLES.owner}
+                detail="Blocks the nights for the owner"
+                onClick={() => choose('owner')}
+              />
+              {summary.blocked ? (
+                <ActionRow
+                  label={ACTION_TITLES.open}
+                  detail={`${plural(summary.blocked, 'night')} blocked now`}
+                  onClick={() => choose('open')}
+                />
+              ) : null}
+            </ActionGroup>
+            <ActionGroup title="Arrivals and departures">
+              <ActionRow
+                label={ACTION_TITLES.arrivals}
+                detail={
+                  summary.noArrivals || summary.noDepartures
+                    ? [
+                        summary.noArrivals ? `no arrivals on ${plural(summary.noArrivals, 'night')}` : null,
+                        summary.noDepartures
+                          ? `no departures on ${plural(summary.noDepartures, 'night')}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(', ')
+                        .replace(/^./, (c) => c.toUpperCase())
+                    : 'Guests can arrive and leave on any of these nights'
+                }
+                onClick={() => choose('arrivals')}
+              />
+            </ActionGroup>
+            {summary.notSent.length ? <Hint>{notSentLine(summary.notSent)}</Hint> : null}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-5">
+            <div>
+              <button
+                type="button"
+                onClick={() => setAction(null)}
+                className="inline-flex items-center gap-1.5 text-[13px] text-accent underline-offset-4 hover:underline"
+              >
+                <IconArrowLeft size={15} stroke={1.75} aria-hidden />
+                All actions
+              </button>
+              <h3 ref={heading} tabIndex={-1} className="mt-3 text-[17px] font-medium text-ink outline-none">
+                {ACTION_TITLES[action]}
+              </h3>
             </div>
-            {tried && errors.days ? (
-              <p className="text-[12.5px] text-urgent">{errors.days}</p>
-            ) : (
-              <Hint>Untick a day to leave it out.</Hint>
-            )}
-          </fieldset>
-        ) : null}
+
+            {action === 'price' ? (
+              <>
+                {summary.pricedByPriceLabs.length ? (
+                  <Hint>
+                    PriceLabs sets the prices for {propertyNames(summary.pricedByPriceLabs)}, so theirs stay
+                    as they are.
+                  </Hint>
+                ) : null}
+                <MoneyField
+                  label="Price a night"
+                  symbol={symbol}
+                  value={form.priceText}
+                  onChange={(v) => set('priceText', v)}
+                  error={tried ? errors.price : undefined}
+                  hint={
+                    one && limits(one, currency, locale)
+                      ? `For ${one.name}, ${limits(one, currency, locale)}.`
+                      : summary.properties.length > 1
+                        ? "Each property's lowest and highest prices still apply."
+                        : undefined
+                  }
+                />
+              </>
+            ) : null}
+
+            {action === 'minStay' ? (
+              <div className="border-y border-hairline">
+                <Stepper
+                  label="Minimum stay"
+                  hint="Nights, for guests arriving on these nights"
+                  value={form.minNights}
+                  min={1}
+                  max={60}
+                  onChange={(v) => set('minNights', v)}
+                />
+              </div>
+            ) : null}
+
+            {action === 'usual' ? (
+              <div className="flex flex-col gap-2.5">
+                <Check
+                  label="The price"
+                  hint={
+                    allPricedElsewhere
+                      ? 'PriceLabs sets the prices here.'
+                      : one
+                        ? `Back to ${usualPrice(one, currency, locale)}.`
+                        : 'Each property goes back to its own usual price.'
+                  }
+                  checked={form.price === 'usual'}
+                  onChange={(on) => set('price', on && !allPricedElsewhere ? 'usual' : 'keep')}
+                />
+                <Check
+                  label="The minimum stay"
+                  hint={
+                    one
+                      ? `Back to ${plural(one.minNights, 'night')}.`
+                      : 'Each property goes back to its own usual minimum.'
+                  }
+                  checked={form.minStay === 'usual'}
+                  onChange={(on) => set('minStay', on ? 'usual' : 'keep')}
+                />
+              </div>
+            ) : null}
+
+            {action === 'block' || action === 'owner' ? (
+              <>
+                <Hint>Free nights are blocked on every channel. Booked nights stay as they are.</Hint>
+                {action === 'block' ? (
+                  <div className="flex flex-wrap gap-2">
+                    {BLOCK_REASONS.map((reason) => (
+                      <button
+                        key={reason}
+                        type="button"
+                        aria-pressed={form.blockReason === reason}
+                        onClick={() => set('blockReason', reason)}
+                        className={cx(
+                          'h-8 rounded-full border px-3 text-[13px] transition-colors',
+                          form.blockReason === reason
+                            ? 'border-accent bg-accent-tint font-medium text-accent'
+                            : 'border-hairline text-slate hover:border-edge hover:text-ink',
+                        )}
+                      >
+                        {reason}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <TextField
+                  label="Reason"
+                  value={form.blockReason}
+                  onChange={(v) => set('blockReason', v)}
+                  max={200}
+                  hint="Shown on the calendar. Guests never see it."
+                />
+              </>
+            ) : null}
+
+            {action === 'open' ? (
+              <Hint>The blocked nights open again on every channel. Bookings stay as they are.</Hint>
+            ) : null}
+
+            {action === 'arrivals' ? (
+              <div className="flex flex-col gap-2.5">
+                <Check
+                  label="No arrivals"
+                  hint="Guests can't start a stay on these nights."
+                  checked={form.arrivals === 'closed'}
+                  onChange={(on) => set('arrivals', on ? 'closed' : 'allowed')}
+                />
+                <Check
+                  label="No departures"
+                  hint="Guests can't end a stay on these days."
+                  checked={form.departures === 'closed'}
+                  onChange={(on) => set('departures', on ? 'closed' : 'allowed')}
+                />
+              </div>
+            ) : null}
+
+            {nights > 1 ? (
+              <details
+                className="group rounded-lg border border-hairline px-3.5 py-2.5"
+                open={form.days.length < ALL_DAYS.length}
+              >
+                <summary className="cursor-pointer text-[13.5px] text-ink marker:text-mist">
+                  Only on some days of the week
+                </summary>
+                <fieldset className="mt-3 flex flex-col gap-2">
+                  <legend className="sr-only">Days of the week</legend>
+                  <div className="grid grid-cols-7 gap-1.5">
+                    {ALL_DAYS.map((day) => {
+                      const on = form.days.includes(day);
+                      return (
+                        <label
+                          key={day}
+                          className={cx(
+                            'cursor-pointer rounded-md border py-1.5 text-center text-[12.5px] transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent',
+                            on
+                              ? 'border-accent bg-accent-tint font-medium text-accent'
+                              : 'border-hairline text-mist hover:border-edge',
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={() =>
+                              set(
+                                'days',
+                                on ? form.days.filter((d) => d !== day) : [...form.days, day].sort(),
+                              )
+                            }
+                            className="sr-only"
+                          />
+                          {DAY_NAMES[day - 1]}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {tried && errors.days ? (
+                    <p className="text-[12.5px] text-urgent">{errors.days}</p>
+                  ) : (
+                    <Hint>Untick a day to leave it out.</Hint>
+                  )}
+                </fieldset>
+              </details>
+            ) : null}
+
+            {summary.notSent.length ? <Notice>{notSentLine(summary.notSent)}</Notice> : null}
+          </div>
+        )}
       </div>
 
-      <footer className="flex flex-col gap-3 border-t border-hairline px-5 py-4 md:px-6">
-        {save.error ? (
-          <Notice tone="urgent">
-            {save.error instanceof ApiError ? save.error.message : 'The change was not saved. Try again.'}
-          </Notice>
-        ) : null}
-        <div className="flex items-center justify-between gap-3">
-          <Button variant="quiet" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={submit} disabled={!hasChanges(form) || save.isPending}>
-            {save.isPending ? 'Saving' : `Save ${plural(nights * summary.properties.length, 'night')}`}
-          </Button>
-        </div>
-      </footer>
+      {action ? (
+        <footer className="flex flex-col gap-3 border-t border-hairline px-5 py-4 md:px-6">
+          {save.error ? (
+            <Notice tone="urgent">
+              {save.error instanceof ApiError ? save.error.message : 'The change was not saved. Try again.'}
+            </Notice>
+          ) : tried && errors.form ? (
+            <p className="text-[12.5px] text-urgent">{errors.form}</p>
+          ) : null}
+          <div className="flex items-center justify-between gap-3">
+            <Button variant="quiet" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={submit}
+              disabled={!hasChanges(form) || save.isPending || nothingLeft}
+            >
+              {save.isPending ? 'Saving' : saveLabel}
+            </Button>
+          </div>
+        </footer>
+      ) : null}
     </>
   );
 }
@@ -653,7 +824,12 @@ export function CalendarPanel(props: PanelProps) {
   const titleId = useId();
 
   useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialog.current?.showModal();
+    // Closed, the keyboard goes back to the night, booking or block it was opened from.
+    return () => {
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
   }, []);
 
   const propertyOf = (id: string) => rows.find((r) => r.property.id === id)?.property ?? null;
@@ -662,9 +838,10 @@ export function CalendarPanel(props: PanelProps) {
   if (target.kind === 'change') {
     const s = target.selection;
     const count = nightsBetween(s.firstNight, s.lastNight) + 1;
-    title = count === 1 ? shortNight(s.firstNight) : `${rangeLabel(s.firstNight, s.lastNight)}`;
     const chosen = rows.filter((r) => s.propertyIds.includes(r.property.id)).map((r) => r.property);
-    subtitle = `${plural(count, 'night')}, ${propertyNames(chosen)}`;
+    // The property first, as on Guesty; the nights under it.
+    title = chosen.length === 1 ? (chosen[0]?.name ?? '') : `${chosen.length} properties`;
+    subtitle = `${plural(count, 'night')}, ${count === 1 ? shortNight(s.firstNight) : rangeLabel(s.firstNight, s.lastNight)}${chosen.length > 1 ? `: ${propertyNames(chosen)}` : ''}`;
   } else if (target.kind === 'stay') {
     title = target.stay.guestName ?? 'Guest';
     subtitle = `${plural(nightsBetween(target.stay.checkIn, target.stay.checkOut), 'night')}, ${rangeLabel(target.stay.checkIn, target.stay.checkOut)}`;

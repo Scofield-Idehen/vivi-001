@@ -20,7 +20,8 @@ with a soft white page.
 | V-01 staff and read-only support access, logged and visible to the operator | `packages/db/migrations/0003_console_security.sql` | Done |
 | Booking import into reservations, then acknowledgement | `apps/worker/src/bookings.ts` | Done, tested against the stand-in |
 | Calendar: nightly prices, stay rules and blocks | `apps/api/src/routes/calendar.ts`, `packages/shared/src/calendar.ts` | Done |
-| Calendar screen, with filters, free dates and the channel marks | `apps/web/src/pages/calendar` | Done; awaiting design sign-off |
+| Calendar screen: one scrolling timeline (a year back, two ahead, loaded four weeks at a time), Availability, filters, channel marks and the actions panel | `apps/web/src/pages/calendar` | Done; awaiting design sign-off |
+| Clean and dirty: marked by hand, or dirty after a check-out | `apps/api/src/routes/cleaning.ts`, `apps/worker/src/cleaning.ts`, `packages/db/migrations/0016_cleaning_status.sql` | Done |
 | Property tags | `packages/db/migrations/0014_property_tags.sql`, `apps/web/src/pages/properties/Tags.tsx` | Done |
 | Reservations: list, one booking's page, and its edits | `apps/api/src/routes/reservations.ts`, `apps/web/src/pages/reservations` | Done; awaiting design sign-off |
 | Changes queued for the channels by the database | `packages/db/migrations/0012_channel_queue.sql` | Done |

@@ -2,6 +2,7 @@ import { IconChevronRight, IconSearch, IconX } from '@tabler/icons-react';
 import { formatMoney, nightsBetween, type ReservationSummary, type ReservationView } from '@v01/shared';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { PageLoading } from '../../components/Spinner.tsx';
 import { EmptyState, Notice, PageHeader } from '../../components/ui.tsx';
 import { ApiError, useReservations, useWorkspace } from '../../lib/api.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
@@ -126,7 +127,7 @@ export function Reservations() {
           {list.error instanceof ApiError ? list.error.message : 'Could not load the bookings.'}
         </Notice>
       ) : !list.data ? (
-        <p className="text-[14px] text-mist">Loading bookings</p>
+        <PageLoading>Loading bookings</PageLoading>
       ) : rows.length === 0 ? (
         <EmptyState title={query.trim() ? 'No booking matches' : 'Nothing here yet'}>
           {query.trim()

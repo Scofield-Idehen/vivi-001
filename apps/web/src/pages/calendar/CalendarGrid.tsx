@@ -6,15 +6,18 @@ import {
   type CalendarStay,
   CHANNEL_LABELS,
   isWeekendNight,
-  MANAGED_BY_LABELS,
+  nightsBetween,
 } from '@v01/shared';
 import {
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
+  type Ref,
   useCallback,
   useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -26,6 +29,7 @@ import {
   barFor,
   barLabel,
   type CalendarRow,
+  cellFor,
   dayOfMonth,
   type GridPoint,
   isSelected,
@@ -48,17 +52,35 @@ function cx(...classes: (string | false | null | undefined)[]): string {
 const MONTHS_HEIGHT = 26;
 const DAYS_HEIGHT = 46;
 export const HEADER_HEIGHT = MONTHS_HEIGHT + DAYS_HEIGHT;
-/** Rows drawn above and below the ones in view, so scrolling never shows a gap. */
+/** Rows, and nights, drawn either side of the ones in view, so scrolling never shows a gap. */
 const OVERSCAN = 6;
+const OVERSCAN_NIGHTS = 8;
 
 export type BarTarget = { kind: 'stay'; stay: CalendarStay } | { kind: 'block'; block: CalendarBlock };
 
+/** What the page can ask of the grid: move through the nights. */
+export interface GridHandle {
+  /** Scrolls so `night` is the first in view after the names. */
+  scrollToNight(night: string, smooth?: boolean): void;
+  /** Scrolls by some nights: forward, or back for a negative count. */
+  scrollByNights(count: number): void;
+}
+
 interface GridProps {
+  ref?: Ref<GridHandle>;
   rows: CalendarRow[];
+  /** Every night the grid can scroll through (the timeline). Only those in view are drawn. */
   nights: string[];
   today: string;
+  /** Nights whose prices, bookings and blocks have arrived. Others show as loading. */
+  loaded(night: string): boolean;
+  /** The night at the left edge when the grid first appears. */
+  startAt: string;
+  /** The nights in view changed, as someone scrolled. */
+  onView(first: string, last: string): void;
+  /** The cleaning badge under a property's name. */
+  cleaning(row: CalendarRow): ReactNode;
   nameWidth: number;
-  /** A night's width: the usual one, or wider when that fills the space exactly. */
   cellWidth: number;
   currency: string;
   locale: string;
@@ -221,24 +243,36 @@ function stayTitle(stay: CalendarStay): string {
 function Bars({
   row,
   nights,
+  from,
+  to,
+  viewLeft,
+  viewWidth,
   nameWidth,
   cellWidth,
   onOpen,
 }: {
   row: CalendarRow;
   nights: string[];
+  /** The nights drawn, by column: bars outside them aren't. */
+  from: number;
+  to: number;
+  /** How far the nights have scrolled, and how wide the part in view is, in pixels. */
+  viewLeft: number;
+  viewWidth: number;
   nameWidth: number;
   cellWidth: number;
   onOpen(target: BarTarget): void;
 }) {
   const items: { item: BarTarget; bar: Bar }[] = [];
+  const near = (bar: Bar | null): bar is Bar =>
+    bar !== null && bar.start < to + 1 && bar.start + bar.length > from;
   for (const stay of row.stays) {
     const bar = barFor(stay.checkIn, stay.checkOut, nights);
-    if (bar) items.push({ item: { kind: 'stay', stay }, bar });
+    if (near(bar)) items.push({ item: { kind: 'stay', stay }, bar });
   }
   for (const block of row.blocks) {
     const bar = barFor(block.startsOn, block.endsOn, nights);
-    if (bar) items.push({ item: { kind: 'block', block }, bar });
+    if (near(bar)) items.push({ item: { kind: 'block', block }, bar });
   }
   // A bar on its own is full height; overlapping ones share the space, thinner.
   const top = 34;
@@ -259,8 +293,13 @@ function Bars({
         const size = roomy ? 13 : 11;
         const mark = roomy ? 22 : height - 4;
         const showMark = mark >= 12;
-        // Room for words: the bar less its padding and the mark.
-        const room = style.width - (roomy ? 17 : 10) - (showMark ? mark + 8 : 0);
+        // A bar that began before the nights in view keeps its mark and name at the edge, where
+        // they can be read, rather than under the property names.
+        const startPx = bar.start * cellWidth;
+        const hidden = Math.max(0, Math.min(viewLeft - startPx, style.width - (mark + 24)));
+        const shown = Math.min(startPx + style.width, viewLeft + viewWidth) - Math.max(startPx, viewLeft);
+        // Room for words: the part in view less its padding and the mark.
+        const room = Math.min(style.width, shown) - (roomy ? 17 : 10) - (showMark ? mark + 8 : 0);
         const fullName = item.kind === 'stay' ? guestLabel(item.stay) : (item.block.reason ?? 'Blocked');
         const firstName = item.kind === 'stay' ? (item.stay.guestName?.trim().split(/\s+/)[0] ?? null) : null;
         // As much of the name as fits: whole, the first name, or (a one-night stay) the mark alone,
@@ -278,6 +317,7 @@ function Bars({
             {label !== fullName ? <span className="sr-only">{fullName}</span> : null}
           </>
         );
+        const along = hidden > 0 ? { paddingLeft: hidden + (roomy ? 5 : 2) } : null;
         if (item.kind === 'stay') {
           const { stay } = item;
           const conflict = stay.status === 'conflict';
@@ -287,7 +327,7 @@ function Bars({
               type="button"
               title={stayTitle(stay)}
               onClick={() => onOpen(item)}
-              style={style}
+              style={{ ...style, ...along }}
               className={cx(
                 shape,
                 'font-semibold',
@@ -311,7 +351,7 @@ function Bars({
             type="button"
             title={`${fullName}, ${rangeLabel(block.startsOn, addDays(block.endsOn, -1))}`}
             onClick={() => onOpen(item)}
-            style={style}
+            style={{ ...style, ...along }}
             className={cx(
               shape,
               'border border-edge/45 bg-[repeating-linear-gradient(135deg,var(--color-linen)_0_5px,var(--color-paper)_5px_10px)] font-medium text-slate hover:border-edge',
@@ -432,16 +472,56 @@ function Cell({
   );
 }
 
+/** A night whose prices and bookings are still on their way: an empty box, never a guessed price. */
+function LoadingCell({ night, cellWidth }: { night: string; cellWidth: number }) {
+  return (
+    <div
+      className={cx(
+        'relative h-full shrink-0 border-r border-hairline/70',
+        isWeekendNight(night) ? 'bg-paper/55' : 'bg-canvas',
+      )}
+      style={{ width: cellWidth }}
+    >
+      <span
+        aria-hidden
+        className="absolute top-[9px] left-2 h-[9px] w-8 animate-pulse rounded-full bg-linen"
+      />
+    </div>
+  );
+}
+
+/** Who runs a property's channels, in as few words as the names column has room for. */
+const RUN_BY: Record<Exclude<CalendarProperty['managedBy'], 'v01'>, string> = {
+  guesty: 'On Guesty',
+  none: 'Not connected',
+};
+
+/** "HVL, min 2 nights", or "On Guesty, min 2 nights". */
+function metaLine(property: CalendarProperty): string {
+  const who = property.managedBy === 'v01' ? property.internalCode : RUN_BY[property.managedBy];
+  const stay = `min ${property.minNights} ${property.minNights === 1 ? 'night' : 'nights'}`;
+  return who ? `${who}, ${stay}` : stay.charAt(0).toUpperCase() + stay.slice(1);
+}
+
 /**
- * Every property by night: prices and minimum stays in the cells, bookings and blocks as bars from
- * arrival to departure. Drag across nights (and down across properties) to choose some; arrows move,
- * Shift and the arrows choose, Enter opens the change. Rows outside the view aren't drawn, so a long
- * portfolio scrolls smoothly.
+ * Every property by night, as one long timeline: prices and minimum stays in the cells, bookings
+ * and blocks as bars from arrival to departure. It scrolls sideways through the nights with a
+ * trackpad, Shift and the mouse wheel, the scrollbar, or the plain wheel when every property is
+ * already in view. Only the rows and nights in view are drawn, so it stays quick for a long
+ * portfolio and two years of nights.
+ *
+ * Drag across nights (and down across properties) to choose some; arrows move, Shift and the arrows
+ * choose, Enter opens the change.
  */
 export function CalendarGrid({
+  ref,
   rows,
   nights,
   today,
+  loaded,
+  startAt,
+  onView,
+  cleaning,
   nameWidth,
   cellWidth,
   currency,
@@ -460,28 +540,44 @@ export function CalendarGrid({
   const scroller = useRef<HTMLDivElement>(null);
   const cells = useRef(new Map<string, HTMLElement>());
   const anchor = useRef<GridPoint | null>(null);
+  /** Where the keyboard is headed while the view catches up: keys pressed fast carry on from there. */
+  const heading = useRef<GridPoint | null>(null);
   const dragging = useRef(false);
   const pointerType = useRef<string>('none');
-  const [focus, setFocus] = useState<GridPoint>({ row: 0, col: 0 });
-  const [view, setView] = useState({ top: 0, height: 800 });
+  const [view, setView] = useState({ top: 0, height: 800, left: 0, width: 1200 });
 
-  const todayCol = Math.max(0, nights.indexOf(today));
+  const colOf = useCallback(
+    (night: string) => Math.max(0, Math.min(nights.length - 1, nightsBetween(nights[0] ?? night, night))),
+    [nights],
+  );
+  const todayCol = colOf(today);
+  const [focus, setFocus] = useState<GridPoint>({ row: 0, col: todayCol });
   const months = useMemo(() => monthSpans(nights), [nights]);
   const width = nameWidth + nights.length * cellWidth;
 
-  // Keep the focused cell inside the grid when the window or the properties change.
-  useEffect(() => {
-    setFocus((f) => ({
-      row: Math.min(f.row, Math.max(0, rows.length - 1)),
-      col: Math.min(Math.max(f.col, todayCol), nights.length - 1),
-    }));
-  }, [rows.length, nights.length, todayCol]);
+  const measure = useCallback(() => {
+    const element = scroller.current;
+    if (!element) return;
+    setView({
+      top: element.scrollTop,
+      height: element.clientHeight,
+      left: element.scrollLeft,
+      width: element.clientWidth,
+    });
+  }, []);
+
+  // Where it opens: the night asked for at the left edge, just after the names.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only when the grid first appears
+  useLayoutEffect(() => {
+    const element = scroller.current;
+    if (!element) return;
+    element.scrollLeft = colOf(startAt) * cellWidth;
+    measure();
+  }, []);
 
   useEffect(() => {
     const element = scroller.current;
     if (!element) return;
-    const measure = () => setView({ top: element.scrollTop, height: element.clientHeight });
-    measure();
     let frame = 0;
     const onScroll = () => {
       cancelAnimationFrame(frame);
@@ -490,12 +586,64 @@ export function CalendarGrid({
     element.addEventListener('scroll', onScroll, { passive: true });
     const observer = new ResizeObserver(measure);
     observer.observe(element);
+    // The wheel: sideways through the nights. A trackpad's sideways swipe already scrolls; Shift
+    // and the wheel does too, everywhere; and the plain wheel does when all the properties fit, so
+    // a mouse with one wheel can always move through time.
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+      const rowsScroll = element.scrollHeight > element.clientHeight + 1;
+      if (rowsScroll && !event.shiftKey) return;
+      element.scrollLeft += event.deltaY * (event.deltaMode === 1 ? 36 : 1);
+      event.preventDefault();
+    };
+    element.addEventListener('wheel', onWheel, { passive: false });
     return () => {
       cancelAnimationFrame(frame);
       element.removeEventListener('scroll', onScroll);
+      element.removeEventListener('wheel', onWheel);
       observer.disconnect();
     };
-  }, []);
+  }, [measure]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      scrollToNight(night, smooth = true) {
+        scroller.current?.scrollTo({ left: colOf(night) * cellWidth, behavior: smooth ? 'smooth' : 'auto' });
+      },
+      scrollByNights(count) {
+        scroller.current?.scrollBy({ left: count * cellWidth, behavior: 'smooth' });
+      },
+    }),
+    [colOf, cellWidth],
+  );
+
+  // The nights in view, and those drawn either side.
+  const inView = Math.max(1, view.width - nameWidth);
+  const firstVisible = Math.min(nights.length - 1, Math.max(0, Math.floor(view.left / cellWidth)));
+  const lastVisible = Math.min(
+    nights.length - 1,
+    Math.max(firstVisible, Math.ceil((view.left + inView) / cellWidth) - 1),
+  );
+  const from = Math.max(0, firstVisible - OVERSCAN_NIGHTS);
+  const to = Math.min(nights.length - 1, lastVisible + OVERSCAN_NIGHTS);
+  const columns = useMemo(() => Array.from({ length: to - from + 1 }, (_, i) => from + i), [from, to]);
+
+  const firstNight = nights[firstVisible];
+  const lastNight = nights[lastVisible];
+  useEffect(() => {
+    if (firstNight && lastNight) onView(firstNight, lastNight);
+  }, [firstNight, lastNight, onView]);
+
+  // Keep the cell that takes the keyboard among those drawn, and inside the properties shown.
+  useEffect(() => {
+    setFocus((f) => {
+      const row = Math.min(f.row, Math.max(0, rows.length - 1));
+      const col =
+        f.col < from || f.col > to ? Math.max(firstVisible, Math.min(lastVisible, todayCol)) : f.col;
+      return row === f.row && col === f.col ? f : { row, col };
+    });
+  }, [rows.length, from, to, firstVisible, lastVisible, todayCol]);
 
   const register = useCallback((point: GridPoint, element: HTMLElement | null) => {
     const key = `${point.row}:${point.col}`;
@@ -523,14 +671,14 @@ export function CalendarGrid({
     return () => window.removeEventListener('pointerup', finish);
   }, [selection, onChoose]);
 
-  const pastOrMissing = (point: GridPoint) => {
+  const unusable = (point: GridPoint) => {
     const night = nights[point.col];
-    return !night || night < today;
+    return !night || night < today || !loaded(night);
   };
 
   const onPointerDown = (event: PointerEvent, point: GridPoint) => {
     pointerType.current = event.pointerType;
-    if (event.pointerType !== 'mouse' || event.button !== 0 || pastOrMissing(point)) return;
+    if (event.pointerType !== 'mouse' || event.button !== 0 || unusable(point)) return;
     event.preventDefault();
     if (event.shiftKey && anchor.current) {
       select(anchor.current, point);
@@ -545,6 +693,13 @@ export function CalendarGrid({
 
   const onPointerMove = (event: PointerEvent) => {
     if (!dragging.current || !anchor.current) return;
+    // Dragging to an edge carries on through the nights beyond it.
+    const element = scroller.current;
+    if (element) {
+      const box = element.getBoundingClientRect();
+      if (event.clientX > box.right - 36) element.scrollLeft += 18;
+      else if (event.clientX < box.left + nameWidth + 36) element.scrollLeft -= 18;
+    }
     // Bookings and blocks sit over the cells; look underneath them for the night.
     const target = document
       .elementsFromPoint(event.clientX, event.clientY)
@@ -559,37 +714,56 @@ export function CalendarGrid({
   // A tap on a phone or tablet chooses one night; the panel can stretch it to more. A mouse chose
   // already, on the way down and up; a screen reader's click comes with no pointer at all.
   const onClick = (point: GridPoint) => {
-    const from = pointerType.current;
+    const by = pointerType.current;
     pointerType.current = 'none';
-    if (from === 'mouse' || pastOrMissing(point)) return;
+    if (by === 'mouse' || unusable(point)) return;
     anchor.current = point;
     const chosen = select(point, point);
     if (chosen) onChoose(chosen);
   };
 
+  /** Brings a cell into view (scrolling only as far as needed) and gives it the keyboard. */
   const moveTo = (point: GridPoint) => {
     const next = {
       row: Math.max(0, Math.min(rows.length - 1, point.row)),
       col: Math.max(0, Math.min(nights.length - 1, point.col)),
     };
+    const element = scroller.current;
+    if (element) {
+      const x = next.col * cellWidth;
+      const across = element.clientWidth - nameWidth;
+      if (x < element.scrollLeft) element.scrollLeft = x;
+      else if (x + cellWidth > element.scrollLeft + across) element.scrollLeft = x + cellWidth - across;
+      const y = next.row * ROW_HEIGHT;
+      const down = element.clientHeight - HEADER_HEIGHT;
+      if (y < element.scrollTop) element.scrollTop = y;
+      else if (y + ROW_HEIGHT > element.scrollTop + down) element.scrollTop = y + ROW_HEIGHT - down;
+      measure();
+    }
     setFocus(next);
-    // The row may not be drawn yet; focus it once it is.
-    requestAnimationFrame(() => {
-      const element = cells.current.get(`${next.row}:${next.col}`);
-      element?.focus({ preventScroll: true });
-      element?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    });
+    heading.current = next;
+    // The cell may not be drawn until the view catches up; focus it once it is.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        cells.current.get(`${next.row}:${next.col}`)?.focus({ preventScroll: true });
+        if (heading.current === next) heading.current = null;
+      }),
+    );
     return next;
   };
 
-  const onKeyDown = (event: KeyboardEvent, point: GridPoint) => {
+  const onKeyDown = (event: KeyboardEvent, from: GridPoint) => {
+    // A key pressed before the last move's cell took the keyboard goes on from that cell.
+    const point = heading.current ?? from;
     const steps: Record<string, GridPoint> = {
       ArrowRight: { row: point.row, col: point.col + 1 },
       ArrowLeft: { row: point.row, col: point.col - 1 },
       ArrowDown: { row: point.row + 1, col: point.col },
       ArrowUp: { row: point.row - 1, col: point.col },
+      PageDown: { row: point.row, col: point.col + 7 },
+      PageUp: { row: point.row, col: point.col - 7 },
       Home: { row: point.row, col: todayCol },
-      End: { row: point.row, col: nights.length - 1 },
+      End: { row: point.row, col: lastVisible },
     };
     const step = steps[event.key];
     if (step) {
@@ -605,7 +779,7 @@ export function CalendarGrid({
     }
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      if (pastOrMissing(point)) return;
+      if (unusable(point)) return;
       const chosen =
         selection && isSelected(selection, rows[point.row]?.property.id ?? '', nights[point.col] ?? '')
           ? selection
@@ -621,13 +795,12 @@ export function CalendarGrid({
   };
 
   // Only the rows in view (and a few either side) are drawn; the focused row always is.
-  const first = Math.max(0, Math.floor((view.top - HEADER_HEIGHT) / ROW_HEIGHT) - OVERSCAN);
-  const last = Math.min(rows.length - 1, Math.ceil((view.top + view.height) / ROW_HEIGHT) + OVERSCAN);
+  const firstRow = Math.max(0, Math.floor((view.top - HEADER_HEIGHT) / ROW_HEIGHT) - OVERSCAN);
+  const lastRow = Math.min(rows.length - 1, Math.ceil((view.top + view.height) / ROW_HEIGHT) + OVERSCAN);
   const drawn = rows
     .map((row, index) => ({ row, index }))
-    .filter(({ index }) => {
-      return (index >= first && index <= last) || index === focus.row;
-    });
+    .filter(({ index }) => (index >= firstRow && index <= lastRow) || index === focus.row);
+  const spacer = <div aria-hidden className="shrink-0" style={{ width: from * cellWidth }} />;
 
   return (
     <div
@@ -645,15 +818,17 @@ export function CalendarGrid({
               style={{ width: nameWidth }}
             />
             <div className="relative grow">
-              {months.map((m) => (
-                <span
-                  key={m.label}
-                  className="absolute top-0 flex h-full items-end border-l border-hairline/70 pb-1 pl-2 text-[12px] font-medium whitespace-nowrap text-slate first:border-l-0"
-                  style={{ left: m.start * cellWidth, width: m.length * cellWidth }}
-                >
-                  <span className="sticky left-[calc(var(--name-width)+8px)]">{m.label}</span>
-                </span>
-              ))}
+              {months
+                .filter((m) => m.start <= to && m.start + m.length > from)
+                .map((m) => (
+                  <span
+                    key={m.label}
+                    className="absolute top-0 flex h-full items-end border-l border-hairline/70 pb-1 pl-2 text-[12px] font-medium whitespace-nowrap text-slate first:border-l-0"
+                    style={{ left: m.start * cellWidth, width: m.length * cellWidth }}
+                  >
+                    <span className="sticky left-[calc(var(--name-width)+8px)]">{m.label}</span>
+                  </span>
+                ))}
             </div>
           </div>
           <div className="flex" style={{ height: DAYS_HEIGHT }}>
@@ -663,7 +838,9 @@ export function CalendarGrid({
             >
               <Search value={search} onChange={onSearch} narrow={nameWidth < 160} />
             </div>
-            {nights.map((night) => {
+            {spacer}
+            {columns.map((col) => {
+              const night = nights[col] ?? '';
               const isToday = night === today;
               const isMarked = marked !== null && night >= marked.from && night < marked.to;
               return (
@@ -728,37 +905,42 @@ export function CalendarGrid({
                     {row.property.name}
                   </Link>
                   <p className="mt-0.5 truncate text-[11.5px] leading-snug text-mist">
-                    {row.property.managedBy === 'v01'
-                      ? row.property.internalCode
-                      : MANAGED_BY_LABELS[row.property.managedBy]}
+                    {metaLine(row.property)}
                   </p>
-                  <p className="truncate text-[11.5px] leading-snug text-mist">
-                    Min {row.property.minNights} {row.property.minNights === 1 ? 'night' : 'nights'}
-                  </p>
+                  <div className="mt-1">{cleaning(row)}</div>
                 </div>
               </div>
-              {row.cells.map((cell, col) => (
-                <Cell
-                  key={cell.night}
-                  property={row.property}
-                  cell={cell}
-                  point={{ row: index, col }}
-                  selected={isSelected(selection, row.property.id, cell.night)}
-                  focusable={focus.row === index && focus.col === col}
-                  editable={editable}
-                  currency={currency}
-                  locale={locale}
-                  nameWidth={nameWidth}
-                  cellWidth={cellWidth}
-                  register={register}
-                  onKeyDown={onKeyDown}
-                  onPointerDown={onPointerDown}
-                  onClick={onClick}
-                />
-              ))}
+              {spacer}
+              {columns.map((col) => {
+                const night = nights[col] ?? '';
+                if (!loaded(night)) return <LoadingCell key={night} night={night} cellWidth={cellWidth} />;
+                return (
+                  <Cell
+                    key={night}
+                    property={row.property}
+                    cell={cellFor(row, night, today)}
+                    point={{ row: index, col }}
+                    selected={isSelected(selection, row.property.id, night)}
+                    focusable={focus.row === index && focus.col === col}
+                    editable={editable}
+                    currency={currency}
+                    locale={locale}
+                    nameWidth={nameWidth}
+                    cellWidth={cellWidth}
+                    register={register}
+                    onKeyDown={onKeyDown}
+                    onPointerDown={onPointerDown}
+                    onClick={onClick}
+                  />
+                );
+              })}
               <Bars
                 row={row}
                 nights={nights}
+                from={from}
+                to={to}
+                viewLeft={view.left}
+                viewWidth={inView}
                 nameWidth={nameWidth}
                 cellWidth={cellWidth}
                 onOpen={onOpenBar}

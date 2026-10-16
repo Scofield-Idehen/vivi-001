@@ -15,6 +15,7 @@ import type { Env } from './env.ts';
 import { errorBody, HttpError } from './errors.ts';
 import { NO_PHOTO_STORE, type PhotoStore, SupabasePhotoStore } from './photos.ts';
 import { calendarRoutes } from './routes/calendar.ts';
+import { cleaningRoutes } from './routes/cleaning.ts';
 import { consoleRoutes } from './routes/console.ts';
 import { meRoutes } from './routes/me.ts';
 import { propertyRoutes } from './routes/properties.ts';
@@ -108,6 +109,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   propertyRoutes(app, { scope, photos: deps.photos ?? photoStoreFrom(deps.env) });
   calendarRoutes(app, { scope });
   reservationRoutes(app, { scope });
+  cleaningRoutes(app, { scope });
   consoleRoutes(app, { scope });
   await webhookRoutes(app, { db: deps.db, channexSecret: deps.env.CHANNEX_WEBHOOK_SECRET });
 

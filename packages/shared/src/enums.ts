@@ -107,6 +107,15 @@ export const SPACE_TYPE_LABELS: Record<SpaceType, string> = {
 };
 
 /** Who owns the price for a property: our own rules, or PriceLabs (playbook, Section 15). */
+/** A property's housekeeping state: dirty from a guest's check-out until someone marks it clean. */
+export const CLEANING_STATUSES = ['clean', 'dirty'] as const;
+export type CleaningStatus = (typeof CLEANING_STATUSES)[number];
+
+export const CLEANING_STATUS_LABELS: Record<CleaningStatus, string> = {
+  clean: 'Clean',
+  dirty: 'Dirty',
+};
+
 export const PRICE_OWNERS = ['v01', 'pricelabs'] as const;
 export type PriceOwner = (typeof PRICE_OWNERS)[number];
 

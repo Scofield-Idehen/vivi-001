@@ -24,7 +24,7 @@ let reader: { orgId: string; userId: string };
 const today = todayIn('Europe/London');
 const night = (n: number) => addDays(today, n);
 
-type Method = 'GET' | 'PATCH' | 'POST';
+type Method = 'GET' | 'PATCH' | 'POST' | 'PUT';
 type Who = { userId: string; email: string; orgId: string };
 
 async function call(
@@ -495,6 +495,56 @@ describe('finding a property', () => {
     ]);
     expect((await free(`freeFrom=${night(100)}`)).status).toBe(400);
     expect((await free(`freeFrom=${night(103)}&freeTo=${night(100)}`)).status).toBe(400);
+  });
+});
+
+describe('clean and dirty', () => {
+  const window = `from=${night(1)}&to=${night(2)}`;
+  const cleaningOf = async (who: Who = asA()) => {
+    const { body } = await call('GET', `/v1/calendar?${window}`, { as: who });
+    return Object.fromEntries(
+      (body.properties as { name: string; cleaning: unknown }[]).map((p) => [p.name, p.cleaning]),
+    );
+  };
+  const mark = (id: string, status: string, who: Who = asA()) =>
+    call('PUT', `/v1/properties/${id}/cleaning`, { as: who, body: { status } });
+
+  it('starts every property clean, with nobody having marked it', async () => {
+    expect((await cleaningOf())['Mill Street Flat']).toEqual({
+      status: 'clean',
+      changedAt: null,
+      changedBy: null,
+    });
+  });
+
+  it('records who marked a property, and when, and shows it on the calendar', async () => {
+    const { status, body } = await mark(flat, 'dirty');
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ status: 'dirty', changedBy: 'admin-a@example.test' });
+    expect(Date.now() - Date.parse(body.changedAt)).toBeLessThan(60_000);
+    expect((await cleaningOf())['Mill Street Flat']).toEqual(body);
+  });
+
+  it('lets the field team mark it clean, but not the guest team, and never another operator', async () => {
+    const [cleaner] = await owner<{ id: string }>(
+      `insert into app.app_users (id, email, full_name) values (gen_random_uuid(), 'field-a@example.test', 'Ade Cleaner') returning id`,
+    );
+    await owner(`insert into app.memberships (organisation_id, user_id, role) values ($1, $2, 'field')`, [
+      a.orgId,
+      cleaner!.id,
+    ]);
+    const asCleaner: Who = { orgId: a.orgId, userId: cleaner!.id, email: 'field-a@example.test' };
+    expect((await mark(flat, 'clean', asCleaner)).body).toMatchObject({
+      status: 'clean',
+      changedBy: 'Ade Cleaner',
+    });
+    expect((await mark(flat, 'dirty', asReader())).status).toBe(403);
+    expect((await mark(flat, 'dirty', asB())).status).toBe(404);
+    expect((await mark(flat, 'sparkling')).status).toBe(400);
+    expect((await cleaningOf())['Mill Street Flat']).toMatchObject({
+      status: 'clean',
+      changedBy: 'Ade Cleaner',
+    });
   });
 });
 

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { addDays, isIsoDate, nightsBetween } from './dates.ts';
-import { CHANNELS, MANAGED_BY, PRICE_OWNERS } from './enums.ts';
+import { CHANNELS, CLEANING_STATUSES, MANAGED_BY, PRICE_OWNERS } from './enums.ts';
 import { IsoDate, Uuid } from './schemas.ts';
 
 /**
@@ -131,6 +131,19 @@ export const CalendarQuerySchema = z
   });
 export type CalendarQuery = z.infer<typeof CalendarQuerySchema>;
 
+/** A property's cleaning state, as the calendar shows it under the name. */
+export const CleaningStateSchema = z.object({
+  status: z.enum(CLEANING_STATUSES),
+  /** When it last changed: someone marking it, or a guest's check-out. */
+  changedAt: z.string().nullable(),
+  /** Who marked it, by name or email; null when a check-out made it dirty. */
+  changedBy: z.string().nullable(),
+});
+export type CleaningState = z.infer<typeof CleaningStateSchema>;
+
+export const CleaningUpdateSchema = z.object({ status: z.enum(CLEANING_STATUSES) });
+export type CleaningUpdate = z.infer<typeof CleaningUpdateSchema>;
+
 export const CalendarPropertySchema = z.object({
   id: Uuid,
   name: z.string(),
@@ -141,6 +154,7 @@ export const CalendarPropertySchema = z.object({
   bedrooms: z.number().int().nullable(),
   maxGuests: z.number().int(),
   tags: z.array(z.string()),
+  cleaning: CleaningStateSchema,
   managedBy: z.enum(MANAGED_BY),
   priceOwner: z.enum(PRICE_OWNERS),
   basePriceMinor: z.number().int().nullable(),

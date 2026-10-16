@@ -1,6 +1,7 @@
 import { IconChevronRight, IconHome } from '@tabler/icons-react';
 import { can, formatMoney, MANAGED_BY_LABELS, PROPERTY_TYPE_LABELS, type Property } from '@v01/shared';
 import { Link, Outlet, useNavigate } from 'react-router';
+import { PageLoading } from '../components/Spinner.tsx';
 import { Badge, Button, EmptyState, Notice, PageHeader } from '../components/ui.tsx';
 import { ApiError, useProperties, useWorkspace } from '../lib/api.ts';
 import { useCurrentWorkspace } from '../lib/workspace.tsx';
@@ -64,7 +65,7 @@ export function Properties() {
         action={properties.length > 0 ? addButton : undefined}
       />
 
-      {list.isPending ? <p className="text-[14px] text-mist">Loading properties</p> : null}
+      {list.isPending ? <PageLoading>Loading properties</PageLoading> : null}
       {list.error ? (
         <Notice tone="urgent">
           {list.error instanceof ApiError ? list.error.message : 'Could not load properties.'}

@@ -8,6 +8,7 @@ import { WorkerDatabase } from '@v01/db';
 import { type AlertSink, LogSink, SlackWebhookSink } from '@v01/integrations';
 import { pino } from 'pino';
 import { processWebhooks, sweepBookingFeed } from './bookings.ts';
+import { markDirtyAfterCheckOut } from './cleaning.ts';
 import type { WorkerDeps } from './deps.ts';
 import { loadEnv } from './env.ts';
 import { enqueueFullSync } from './full-sync.ts';
@@ -73,6 +74,7 @@ const boss = env.JOBS_DATABASE_URL
         'nightly-full-sync': () => enqueueFullSync(deps),
         // Phase 1: compare every calendar with the channel manager for the next 90 days.
         'nightly-cross-check': async () => ({ skipped: 'cross-check is built in Phase 1' }),
+        'cleaning-after-check-out': () => markDirtyAfterCheckOut(deps),
       },
     })
   : null;

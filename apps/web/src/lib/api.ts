@@ -1,8 +1,10 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   Calendar,
   CalendarChange,
   CalendarChangeResult,
+  CleaningState,
+  CleaningUpdate,
   ConsoleOperatorDetail,
   ConsoleOperatorList,
   ConsoleOverview,
@@ -282,28 +284,60 @@ export function useAddPhotos(orgId: string | null, id: string) {
 
 // The calendar ----------------------------------------------------------------------------------
 
-/**
- * Every property's nights from `from` to `to`, optionally only properties free for a stay. The last
- * window stays on screen while the next loads.
- */
-export function useCalendar(
-  orgId: string | null,
-  from: string,
-  to: string,
-  free?: { from: string; to: string; guests: number } | null,
-) {
-  const token = useToken();
+/** Only properties free for a stay: the calendar's Availability filter. */
+export interface FreeFor {
+  from: string;
+  to: string;
+  guests: number;
+}
+
+function calendarQuery(from: string, to: string, free?: FreeFor | null): URLSearchParams {
   const query = new URLSearchParams({ from, to });
   if (free) {
     query.set('freeFrom', free.from);
     query.set('freeTo', free.to);
     query.set('guests', String(free.guests));
   }
-  return useQuery({
-    queryKey: ['calendar', orgId, query.toString()],
-    enabled: Boolean(token && orgId),
-    placeholderData: keepPreviousData,
-    queryFn: () => apiFetch<Calendar>(`/v1/calendar?${query}`, { token: token as string, orgId }),
+  return query;
+}
+
+/**
+ * The calendar in pieces of a few weeks, fetched as they scroll into view and kept once fetched.
+ * While a piece's filter changes, its last answer stays on screen until the new one arrives.
+ */
+export function useCalendarPieces(
+  orgId: string | null,
+  pieces: { from: string; to: string }[],
+  free?: FreeFor | null,
+) {
+  const token = useToken();
+  return useQueries({
+    queries: pieces.map((piece) => {
+      const query = calendarQuery(piece.from, piece.to, free);
+      return {
+        queryKey: ['calendar', orgId, query.toString()],
+        enabled: Boolean(token && orgId),
+        placeholderData: keepPreviousData,
+        staleTime: 30_000,
+        queryFn: () => apiFetch<Calendar>(`/v1/calendar?${query}`, { token: token as string, orgId }),
+      };
+    }),
+  });
+}
+
+/** Marks a property clean or dirty. The calendar shows the change at once. */
+export function useSetCleaning(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ propertyId, status }: { propertyId: string } & CleaningUpdate) =>
+      apiFetch<CleaningState>(`/v1/properties/${propertyId}/cleaning`, {
+        token: token as string,
+        orgId,
+        method: 'PUT',
+        body: { status },
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['calendar', orgId] }),
   });
 }
 

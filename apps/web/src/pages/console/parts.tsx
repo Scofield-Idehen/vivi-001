@@ -9,6 +9,7 @@ import {
 } from '@v01/shared';
 import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { PageLoading } from '../../components/Spinner.tsx';
 import { Badge, Button, Notice, type Status, StatusDot } from '../../components/ui.tsx';
 import { ApiError, useStartSupportAccess } from '../../lib/api.ts';
 import { clockTime, number, V01 } from '../../lib/format.ts';
@@ -19,7 +20,7 @@ export function cx(...classes: (string | false | null | undefined)[]): string {
 }
 
 export function Loading({ children = 'Loading' }: { children?: ReactNode }) {
-  return <p className="text-[14px] text-mist">{children}</p>;
+  return <PageLoading>{children}</PageLoading>;
 }
 
 export function LoadError({ error }: { error: unknown }) {

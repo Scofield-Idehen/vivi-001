@@ -19,6 +19,7 @@ import {
   app,
   cancellationPolicy,
   checkInMethod,
+  cleaningStatus,
   createdAt,
   managedBy,
   priceOwner,
@@ -26,7 +27,7 @@ import {
   spaceType,
   updatedAt,
 } from './common.ts';
-import { organisations } from './operators.ts';
+import { appUsers, organisations } from './operators.ts';
 
 export const properties = app.table(
   'properties',
@@ -101,6 +102,11 @@ export const properties = app.table(
     licenceNumber: text('licence_number'),
     /** The team's own labels, such as an owner or a part of town, for finding and grouping properties. */
     tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
+    /** Dirty from a guest's check-out (the worker marks it) until someone marks it clean. */
+    cleaningStatus: cleaningStatus('cleaning_status').notNull().default('clean'),
+    cleaningChangedAt: timestamp('cleaning_changed_at', { withTimezone: true, mode: 'string' }),
+    /** Who marked it; null when the worker did, at a check-out. */
+    cleaningChangedBy: uuid('cleaning_changed_by').references(() => appUsers.id, { onDelete: 'set null' }),
     archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'string' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

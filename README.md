@@ -38,12 +38,16 @@ access.
 - **A company's workspace**
   - Today, Calendar, Reservations, Properties and Workspace settings. The sidebar is a row of icons
     that opens when your mouse rests on it.
-  - The Calendar: every property by night, with prices, minimum stays, bookings and blocks. Each
-    booking starts with the mark of the channel it came from. Drag across nights (and down across
-    properties) to change their price or minimum stay, close them to arrivals or departures, or block
-    them. Prices stay within each property's limits.
-  - Finding properties on the Calendar: search over the names, and filter by area, tags, sync,
-    bedrooms, or free dates for a stay. Tags are the team's own labels, set under a property's name.
+  - The Calendar: every property by night, with prices, minimum stays, bookings and blocks. Scroll
+    sideways through a year back and two years ahead, or jump to a date. Each booking starts with the
+    mark of the channel it came from. Drag across nights (and down across properties), then choose
+    what to do: set a price or minimum stay, block them or mark the owner staying, or close them to
+    arrivals or departures. Prices stay within each property's limits.
+  - Clean or dirty under each property's name: a guest's check-out makes it dirty by itself, and one
+    click marks it clean.
+  - Finding properties on the Calendar: check which are available for a stay without looking at each
+    one, search over the names, and filter by area, tags, sync, cleaning or bedrooms. Tags are the
+    team's own labels, set under a property's name.
   - Bookings: select one on the Calendar to see it, edit it, message the guest or open its page. Every
     booking has a page with the stay, the guest and the team's notes. The Reservations list shows
     upcoming, past and cancelled bookings, and finds one by guest, code or property.
@@ -71,7 +75,10 @@ access.
 *A property's page: the whole listing, every part editable, with what the channels still need.*
 
 ![The calendar](docs/images/calendar.png)
-*The Calendar: filters across the top, bookings marked with their channel, and dragging across nights to change them.*
+*The Calendar: Availability and the filters across the top, clean or dirty under each name, and bookings marked with their channel.*
+
+![Nights chosen on the calendar](docs/images/nights-panel.png)
+*Nights chosen: what's there now, and a short list of what to do with them.*
 
 ![A booking on the calendar](docs/images/booking-panel.png)
 *A booking: open its page, edit it, or reach the guest by email, a call or a text.*

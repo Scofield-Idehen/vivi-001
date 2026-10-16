@@ -1,4 +1,5 @@
 import {
+  appUsers,
   blocks,
   calendarDays,
   guests,
@@ -27,7 +28,7 @@ import { and, asc, eq, gt, gte, inArray, isNull, lte, type SQL, sql } from 'driz
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { z } from 'zod';
-import { pgErrorCode, type RequestScope } from '../context.ts';
+import { pgErrorCode, type RequestScope, toIso } from '../context.ts';
 import { HttpError } from '../errors.ts';
 
 type Change = z.output<typeof CalendarChangeSchema>;
@@ -302,6 +303,9 @@ export function calendarRoutes(app: FastifyInstance, deps: { scope: RequestScope
             bedrooms: properties.bedrooms,
             maxGuests: properties.maxGuests,
             tags: properties.tags,
+            cleaningStatus: properties.cleaningStatus,
+            cleaningChangedAt: properties.cleaningChangedAt,
+            cleaningChangedBy: sql<string | null>`coalesce(${appUsers.fullName}, ${appUsers.email})`,
             managedBy: properties.managedBy,
             priceOwner: properties.priceOwner,
             basePriceMinor: properties.basePriceMinor,
@@ -312,6 +316,8 @@ export function calendarRoutes(app: FastifyInstance, deps: { scope: RequestScope
             maxNights: properties.maxNights,
           })
           .from(properties)
+          // Whoever last marked it clean or dirty, by name: one of the team, so row-level security shows them.
+          .leftJoin(appUsers, eq(appUsers.id, properties.cleaningChangedBy))
           .where(
             and(isNull(properties.archivedAt), free, party ? gte(properties.maxGuests, party) : undefined),
           )
@@ -401,7 +407,15 @@ export function calendarRoutes(app: FastifyInstance, deps: { scope: RequestScope
           from,
           to,
           today,
-          properties: rows.map((r) => ({ ...r, coverPhotoUrl: coverOf.get(r.id) ?? null })),
+          properties: rows.map(({ cleaningStatus, cleaningChangedAt, cleaningChangedBy, ...r }) => ({
+            ...r,
+            coverPhotoUrl: coverOf.get(r.id) ?? null,
+            cleaning: {
+              status: cleaningStatus,
+              changedAt: cleaningChangedAt ? toIso(cleaningChangedAt) : null,
+              changedBy: cleaningChangedBy,
+            },
+          })),
           propertyCount,
           nights,
           stays: stays.map(({ adults, children, status, ...stay }) => ({

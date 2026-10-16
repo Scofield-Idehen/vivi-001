@@ -1,35 +1,41 @@
-import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
-import { addDays, can, isIsoDate, nightsBetween, todayIn } from '@v01/shared';
+import { IconCalendarEvent, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
+import { addDays, type Calendar, can, isIsoDate, todayIn } from '@v01/shared';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { PageLoading } from '../../components/Spinner.tsx';
 import { Button, EmptyState, Notice, PageHeader } from '../../components/ui.tsx';
-import { ApiError, useCalendar, useWorkspace } from '../../lib/api.ts';
+import { ApiError, useCalendarPieces, useWorkspace } from '../../lib/api.ts';
 import { plural } from '../../lib/format.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
-import { type BarTarget, CalendarGrid } from './CalendarGrid.tsx';
+import { type BarTarget, CalendarGrid, type GridHandle } from './CalendarGrid.tsx';
 import { CalendarPanel, type PanelTarget } from './CalendarPanel.tsx';
+import { CleaningBadge } from './Cleaning.tsx';
 import { FilterBar } from './FilterBar.tsx';
 import {
   buildRows,
   type CalendarFilters,
+  type CalendarRow,
   CELL_WIDTH,
   filterChoices,
   filterProperties,
   filtersOn,
   filtersToKeep,
+  mergeCalendars,
   NAME_WIDTH,
   NAME_WIDTH_NARROW,
   NO_FILTERS,
-  nightsFrom,
-  nightsThatFit,
   parseFilters,
+  piecesFor,
   rangeLabel,
   type Selection,
+  timelineFor,
   windowLabel,
 } from './model.ts';
 
 /** Nights shown before today, so this morning's departures are on screen. */
 const DAYS_BEFORE_TODAY = 2;
+/** Nights fetched beyond those in view, either side, so a slow scroll never waits. */
+const FETCH_AHEAD = 14;
 /** The page's own padding below the grid. */
 const BOTTOM_SPACE = 40;
 
@@ -54,10 +60,95 @@ function keepFilters(orgId: string, filters: CalendarFilters): void {
 }
 
 /**
+ * Moving through the dates: Today, a week back or forward, and the nights in view as a button that
+ * opens a date picker to jump anywhere. Scrolling the calendar itself does the same.
+ */
+function DateNav({
+  label,
+  loading,
+  min,
+  max,
+  value,
+  onToday,
+  onStep,
+  onPick,
+}: {
+  label: string;
+  loading: boolean;
+  min: string;
+  max: string;
+  value: string;
+  onToday(): void;
+  onStep(nights: number): void;
+  onPick(date: string): void;
+}) {
+  const picker = useRef<HTMLInputElement>(null);
+  const open = () => {
+    const input = picker.current;
+    if (!input) return;
+    try {
+      input.showPicker();
+    } catch {
+      input.focus();
+    }
+  };
+  const arrow =
+    'grid size-9 place-items-center border border-hairline text-ink transition-colors hover:bg-linen';
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button onClick={onToday}>Today</Button>
+      <div className="flex items-center">
+        <button
+          type="button"
+          aria-label="A week earlier"
+          onClick={() => onStep(-7)}
+          className={`${arrow} rounded-l-md`}
+        >
+          <IconChevronLeft size={18} stroke={1.75} aria-hidden />
+        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={open}
+            aria-label={`Go to a date. Showing ${label}`}
+            className="inline-flex h-9 items-center gap-2 border-y border-hairline px-3 text-[14px] font-medium whitespace-nowrap text-ink transition-colors hover:bg-linen"
+          >
+            <IconCalendarEvent size={16} stroke={1.75} aria-hidden className="text-slate" />
+            <span aria-live="polite">{label}</span>
+            {loading ? <span className="text-[12.5px] font-normal text-mist">Loading</span> : null}
+          </button>
+          <input
+            ref={picker}
+            type="date"
+            tabIndex={-1}
+            aria-label="Go to a date"
+            min={min}
+            max={max}
+            value={value}
+            onChange={(event) => {
+              if (isIsoDate(event.target.value)) onPick(event.target.value);
+            }}
+            className="pointer-events-none absolute bottom-0 left-0 size-px opacity-0"
+          />
+        </div>
+        <button
+          type="button"
+          aria-label="A week later"
+          onClick={() => onStep(7)}
+          className={`${arrow} rounded-r-md`}
+        >
+          <IconChevronRight size={18} stroke={1.75} aria-hidden />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Every property by night (design phase D1): prices, minimum stays, bookings and blocks, with the
- * price limits behind every price. Choosing nights opens a panel to change them; what changes goes
- * to the channels for properties V-01 runs. Filters across the top find properties; the search
- * sits over their names.
+ * price limits behind every price, and whether each property is clean. It scrolls through a year
+ * back and two years ahead, fetching four weeks at a time as they come into view. Choosing nights
+ * opens a panel to change them; what changes goes to the channels for properties V-01 runs.
  */
 export function CalendarPage() {
   const { orgId } = useCurrentWorkspace();
@@ -71,10 +162,12 @@ function CalendarScreen() {
   const settings = workspace.data?.settings;
   const currency = settings?.currency ?? 'GBP';
   const locale = settings?.locale ?? 'en-GB';
-  const localToday = todayIn(settings?.timeZone ?? 'Europe/London');
+  const timeZone = settings?.timeZone ?? 'Europe/London';
+  const localToday = todayIn(timeZone);
   const editable = can(entry.role, 'calendar.write');
+  const canClean = can(entry.role, 'cleaning.write');
 
-  // As many nights as fit across, measured from the space the grid has.
+  // The names column narrows on a phone, so more of the nights show.
   const frame = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1100);
   useEffect(() => {
@@ -87,9 +180,6 @@ function CalendarScreen() {
     return () => observer.disconnect();
   }, []);
   const nameWidth = width < 640 ? NAME_WIDTH_NARROW : NAME_WIDTH;
-  const count = nightsThatFit(width - 2, nameWidth);
-  // Whole nights fill the width exactly; a phone scrolls sideways at the usual width.
-  const cellWidth = Math.max(CELL_WIDTH, (width - 2 - nameWidth) / count);
 
   // The grid ends at the bottom of the window and scrolls inside, wherever the filters leave its top.
   const [top, setTop] = useState(260);
@@ -104,26 +194,56 @@ function CalendarScreen() {
   const [filters, setFilters] = useState(() => loadFilters(orgId));
   useEffect(() => keepFilters(orgId, filters), [orgId, filters]);
 
-  // Opened from a booking ("See it on the Calendar"): start just before its arrival.
+  // The whole timeline, and where it opens: just before today, or before a booking's arrival when
+  // opened from it ("See it on the Calendar").
+  const timeline = useMemo(() => timelineFor(localToday), [localToday]);
   const [params] = useSearchParams();
-  const asked = params.get('from');
-  const [start, setStart] = useState<string | null>(() =>
-    asked && isIsoDate(asked) && asked > localToday ? addDays(asked, -DAYS_BEFORE_TODAY) : null,
+  const [startAt] = useState(() => {
+    const asked = params.get('from');
+    const at = asked && isIsoDate(asked) ? asked : localToday;
+    const start = addDays(at, -DAYS_BEFORE_TODAY);
+    return start < timeline.first ? timeline.first : start;
+  });
+  const [view, setView] = useState({ first: startAt, last: addDays(startAt, 20) });
+  const onView = useCallback(
+    (first: string, last: string) =>
+      setView((was) => (was.first === first && was.last === last ? was : { first, last })),
+    [],
   );
-  const first = start ?? addDays(localToday, -DAYS_BEFORE_TODAY);
-  const last = addDays(first, count - 1);
-  const calendar = useCalendar(orgId, first, last, filters.free);
-  const data = calendar.data;
-  // Drawn from the nights the data covers, so a window still loading never shows half-empty.
-  const nights = useMemo(
-    () => (data ? nightsFrom(data.from, nightsBetween(data.from, data.to) + 1) : []),
-    [data],
+
+  // The pieces around the nights in view, fetched as they come near and kept.
+  const pieces = useMemo(
+    () => piecesFor(timeline, addDays(view.first, -FETCH_AHEAD), addDays(view.last, FETCH_AHEAD)),
+    [timeline, view.first, view.last],
   );
-  const allRows = useMemo(() => (data ? buildRows(data, nights) : []), [data, nights]);
+  const results = useCalendarPieces(orgId, pieces, filters.free);
+  const signature = results
+    .map((r) => `${r.dataUpdatedAt}.${r.isPlaceholderData ? 'p' : 'd'}.${r.status}`)
+    .join('|');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the results change identity every render; their signature says when they really changed
+  const data = useMemo(() => mergeCalendars(results.flatMap((r) => (r.data ? [r.data] : []))), [signature]);
+  // Nights with an answer of their own, not one kept from before a filter changed.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: as above
+  const loadedRanges = useMemo(
+    () =>
+      results
+        .filter((r): r is typeof r & { data: Calendar } => Boolean(r.data) && !r.isPlaceholderData)
+        .map((r) => [r.data.from, r.data.to] as const),
+    [signature],
+  );
+  const loaded = useCallback(
+    (night: string) => loadedRanges.some(([from, to]) => night >= from && night <= to),
+    [loadedRanges],
+  );
+  const fetching = results.some((r) => r.isFetching);
+  const error = results.find((r) => r.error)?.error ?? null;
+
+  const allRows = useMemo(() => (data ? buildRows(data) : []), [data]);
   const rows = useMemo(() => filterProperties(allRows, filters), [allRows, filters]);
   const choices = useMemo(() => filterChoices(data?.properties ?? []), [data]);
   const today = data?.today ?? localToday;
 
+  const grid = useRef<GridHandle>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [panel, setPanel] = useState<PanelTarget | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -134,20 +254,19 @@ function CalendarScreen() {
     return () => window.clearTimeout(timer);
   }, [message]);
 
+  const goTo = (night: string) => grid.current?.scrollToNight(addDays(night, -DAYS_BEFORE_TODAY));
+
   const changeFilters = (next: CalendarFilters) => {
     // Nights chosen among properties that may now be hidden would change ones out of sight.
     setSelection(null);
-    // A free-dates search brings the stay on screen, unless all of it is there already.
+    // Availability brings the stay on screen, unless all of it is there already.
     if (next.free && next.free !== filters.free) {
       const { from, to } = next.free;
-      if (from < first || addDays(to, -1) > last) {
-        setStart(from <= localToday ? null : addDays(from, -DAYS_BEFORE_TODAY));
-      }
+      if (from < view.first || addDays(to, -1) > view.last) goTo(from);
     }
     setFilters(next);
   };
 
-  const step = Math.max(7, count - 7);
   const onChoose = useCallback((chosen: Selection) => setPanel({ kind: 'change', selection: chosen }), []);
   const onOpenBar = useCallback(
     (target: BarTarget) =>
@@ -160,46 +279,26 @@ function CalendarScreen() {
     setPanel(null);
     setSelection(null);
   };
-
-  const navigation = (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <div className="flex items-center gap-2">
-        <Button onClick={() => setStart(null)} disabled={start === null}>
-          Today
-        </Button>
-        <div className="flex">
-          <button
-            type="button"
-            aria-label="Earlier nights"
-            onClick={() => setStart(addDays(first, -step))}
-            className="grid size-9 place-items-center rounded-l-md border border-hairline text-ink transition-colors hover:bg-linen"
-          >
-            <IconChevronLeft size={18} stroke={1.75} aria-hidden />
-          </button>
-          <button
-            type="button"
-            aria-label="Later nights"
-            onClick={() => setStart(addDays(first, step))}
-            className="grid size-9 place-items-center rounded-r-md border border-l-0 border-hairline text-ink transition-colors hover:bg-linen"
-          >
-            <IconChevronRight size={18} stroke={1.75} aria-hidden />
-          </button>
-        </div>
-      </div>
-      <h2 className="text-[15px] font-medium text-ink" aria-live="polite">
-        {windowLabel(first, last)}
-        {calendar.isFetching && data ? (
-          <span className="ml-3 text-[13px] font-normal text-mist">Loading</span>
-        ) : null}
-      </h2>
-    </div>
+  const short = nameWidth === NAME_WIDTH_NARROW;
+  const cleaning = useCallback(
+    (row: CalendarRow) => (
+      <CleaningBadge
+        row={row}
+        orgId={orgId}
+        today={today}
+        timeZone={timeZone}
+        canChange={canClean}
+        short={short}
+      />
+    ),
+    [orgId, today, timeZone, canClean, short],
   );
 
   const free = filters.free;
   const empty = (
     <div className="flex flex-col items-start gap-2">
       <p className="font-serif text-[19px] text-ink">
-        {free && data?.properties.length === 0 ? 'Nothing is free for that stay' : 'No property matches'}
+        {free && data?.properties.length === 0 ? 'Nothing is available for that stay' : 'No property matches'}
       </p>
       <p className="text-[13.5px] leading-relaxed text-slate">
         {free && data?.properties.length === 0
@@ -227,15 +326,28 @@ function CalendarScreen() {
             <>
               Prices, minimum stays, bookings and blocks for every property.{' '}
               <span className="pointer-coarse:hidden">
-                Drag across nights to change them, and down to take in more properties.
+                Scroll sideways through the dates. Drag across nights to change them.
               </span>
-              <span className="hidden pointer-coarse:inline">Tap a night to change it.</span>
+              <span className="hidden pointer-coarse:inline">
+                Swipe through the dates. Tap a night to change it.
+              </span>
             </>
           ) : (
             'Prices, minimum stays, bookings and blocks for every property. Your role can look but not change them.'
           )
         }
-        action={navigation}
+        action={
+          <DateNav
+            label={windowLabel(view.first, view.last)}
+            loading={fetching && Boolean(data)}
+            min={timeline.first}
+            max={timeline.last}
+            value={view.first}
+            onToday={() => goTo(today)}
+            onStep={(nights) => grid.current?.scrollByNights(nights)}
+            onPick={goTo}
+          />
+        }
       />
 
       {data && data.propertyCount > 0 ? (
@@ -256,12 +368,12 @@ function CalendarScreen() {
       ) : null}
 
       <div ref={frame}>
-        {calendar.error ? (
+        {error && !data ? (
           <Notice tone="urgent">
-            {calendar.error instanceof ApiError ? calendar.error.message : 'Could not load the calendar.'}
+            {error instanceof ApiError ? error.message : 'Could not load the calendar.'}
           </Notice>
         ) : !data ? (
-          <p className="text-[14px] text-mist">Loading the calendar</p>
+          <PageLoading>Loading the calendar</PageLoading>
         ) : data.propertyCount === 0 ? (
           <EmptyState
             title="No properties yet"
@@ -275,11 +387,16 @@ function CalendarScreen() {
           </EmptyState>
         ) : (
           <CalendarGrid
+            ref={grid}
             rows={rows}
-            nights={nights}
+            nights={timeline.nights}
             today={today}
+            loaded={loaded}
+            startAt={startAt}
+            onView={onView}
+            cleaning={cleaning}
             nameWidth={nameWidth}
-            cellWidth={cellWidth}
+            cellWidth={CELL_WIDTH}
             currency={currency}
             locale={locale}
             editable={editable}
@@ -295,6 +412,11 @@ function CalendarScreen() {
           />
         )}
       </div>
+      {error && data ? (
+        <p className="mt-2 text-[13px] text-urgent" role="alert">
+          Some dates didn’t load. Scroll a little to try again.
+        </p>
+      ) : null}
 
       {panel ? (
         <CalendarPanel

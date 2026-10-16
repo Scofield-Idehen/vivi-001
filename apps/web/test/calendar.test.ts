@@ -6,23 +6,30 @@ import {
   buildRows,
   type CalendarFilters,
   type ChangeForm,
+  cellFor,
   chosenLabel,
+  cleaningWhen,
   filterChoices,
   filterProperties,
   filtersOn,
   filtersToKeep,
   freeDatesError,
   freeLabel,
+  guestWhoLeft,
+  mergeCalendars,
   monthSpans,
   NO_FILTERS,
   newForm,
   nightsFrom,
-  nightsThatFit,
+  nightsToChange,
+  PIECE_NIGHTS,
   parseFilters,
+  piecesFor,
   rangeLabel,
   resultMessage,
   selectionBetween,
   summarise,
+  timelineFor,
   toChange,
   windowLabel,
 } from '../src/pages/calendar/model.ts';
@@ -39,6 +46,7 @@ const property = (patch: Partial<CalendarProperty>): CalendarProperty => ({
   bedrooms: 3,
   maxGuests: 6,
   tags: ['Sea view', 'Owner: Ellis'],
+  cleaning: { status: 'clean', changedAt: null, changedBy: null },
   managedBy: 'v01',
   priceOwner: 'v01',
   basePriceMinor: 16_500,
@@ -122,20 +130,54 @@ const calendar: Calendar = {
   ],
 };
 
-const rows = buildRows(calendar, nights);
-const cell = (row: number, night: string) => rows[row]?.cells.find((c) => c.night === night);
+const rows = buildRows(calendar);
+const cell = (row: number, night: string) => {
+  const r = rows[row];
+  return r ? cellFor(r, night, TODAY) : undefined;
+};
 
-describe('the calendar grid', () => {
-  it('shows as many nights as fit, up to two months, and two weeks to scroll on a phone', () => {
-    // Each night's box is 72 pixels wide at least.
-    expect(nightsThatFit(1600, 224)).toBe(19);
-    expect(nightsThatFit(1100, 224)).toBe(12);
-    expect(nightsThatFit(730, 224)).toBe(7);
-    expect(nightsThatFit(700, 224)).toBe(14);
-    expect(nightsThatFit(390, 136)).toBe(14);
-    expect(nightsThatFit(6000, 224)).toBe(62);
+describe('the timeline', () => {
+  const timeline = timelineFor(TODAY);
+
+  it('reaches a year back and two years ahead', () => {
+    expect(timeline.first).toBe('2025-10-15');
+    expect(timeline.last).toBe('2028-10-14');
+    expect(timeline.nights).toHaveLength(365 + 730 + 1);
   });
 
+  it('fetches the same four-week pieces for the same nights, wherever the scroll stopped', () => {
+    const pieces = piecesFor(timeline, '2026-10-13', '2026-10-26');
+    expect(pieces.length).toBeGreaterThanOrEqual(1);
+    for (const piece of pieces) expect(piece.from <= piece.to).toBe(true);
+    // Every night asked for is in a piece; pieces start on the timeline's four-week beat.
+    for (const night of nightsFrom('2026-10-13', 14)) {
+      expect(pieces.some((p) => p.from <= night && night <= p.to)).toBe(true);
+    }
+    expect(piecesFor(timeline, '2026-10-14', '2026-10-20')[0]).toEqual(
+      pieces.find((p) => p.from <= '2026-10-14' && '2026-10-14' <= p.to),
+    );
+    expect(new Set(pieces.map((p) => p.from)).size).toBe(pieces.length);
+    expect(
+      pieces.every(
+        (p) => (Date.parse(p.from) - Date.parse(timeline.first)) % (PIECE_NIGHTS * 86_400_000) === 0,
+      ),
+    ).toBe(true);
+    // Never past the ends.
+    expect(piecesFor(timeline, '2020-01-01', '2025-10-20')[0]?.from).toBe(timeline.first);
+    expect(piecesFor(timeline, '2028-10-01', '2030-01-01').at(-1)?.to).toBe(timeline.last);
+  });
+
+  it('puts the pieces together with each stay, block and night once', () => {
+    const later: Calendar = { ...calendar, from: '2026-10-27', to: '2026-11-23', nights: [], blocks: [] };
+    const merged = mergeCalendars([calendar, later]);
+    expect(merged).toMatchObject({ from: '2026-10-13', to: '2026-11-23' });
+    expect(merged?.stays).toHaveLength(calendar.stays.length);
+    expect(merged?.nights).toHaveLength(calendar.nights.length);
+    expect(mergeCalendars([])).toBeNull();
+  });
+});
+
+describe('the calendar grid', () => {
   it('puts as much of a name on a bar as fits, and never a stray letter', () => {
     // A two-night stay: the whole name.
     expect(barLabel('Sofia Romano', 'Sofia', 112, 13)).toBe('Sofia Romano');
@@ -217,6 +259,7 @@ describe('the calendar grid', () => {
     const summary = summarise(
       { propertyIds: [lodge.id, flat.id], firstNight: '2026-10-15', lastNight: '2026-10-19' },
       rows,
+      TODAY,
     );
     expect(summary).toMatchObject({
       nights: 5,
@@ -252,6 +295,10 @@ describe('finding properties', () => {
         { value: 'guesty', count: 1 },
         { value: 'v01', count: 2 },
       ],
+      cleaning: [
+        { value: 'dirty', count: 0 },
+        { value: 'clean', count: 3 },
+      ],
     });
   });
 
@@ -259,10 +306,10 @@ describe('finding properties', () => {
     expect(chosenLabel(['Riverside'], 'areas')).toBe('Riverside');
     expect(chosenLabel(['Riverside', 'Old Town'], 'areas')).toBe('2 areas');
     expect(freeLabel({ from: '2026-10-23', to: '2026-10-25', guests: 4 })).toBe(
-      'Free 23 to 25 Oct, 4 guests',
+      'Available 23 to 25 Oct, 4 guests',
     );
     expect(freeLabel({ from: '2026-10-30', to: '2026-11-02', guests: 1 })).toBe(
-      'Free 30 Oct to 2 Nov, 1 guest',
+      'Available 30 Oct to 2 Nov, 1 guest',
     );
   });
 
@@ -314,6 +361,38 @@ describe('finding properties', () => {
         filters({ search: ' ', tags: ['Family'], free: { from: TODAY, to: '2026-10-18', guests: 2 } }),
       ),
     ).toBe(2);
+  });
+});
+
+describe('clean and dirty', () => {
+  it('filters by cleaning', () => {
+    const [lodgeRow, flatRow] = rows;
+    if (!lodgeRow || !flatRow) throw new Error('rows missing');
+    const dirtyFlat = {
+      ...flatRow,
+      property: {
+        ...flatRow.property,
+        cleaning: { status: 'dirty' as const, changedAt: null, changedBy: null },
+      },
+    };
+    const only = (cleaning: CalendarFilters['cleaning']) =>
+      filterProperties([lodgeRow, dirtyFlat], { ...NO_FILTERS, cleaning }).map((r) => r.property.name);
+    expect(only(['dirty'])).toEqual(['Mill Street Flat']);
+    expect(only(['clean', 'dirty'])).toEqual(['Harbour View Lodge', 'Mill Street Flat']);
+    expect(filtersOn({ ...NO_FILTERS, cleaning: ['dirty'] })).toBe(1);
+  });
+
+  it('says when it changed, where the operator is', () => {
+    expect(cleaningWhen('2026-10-15T09:00:00Z', 'Europe/London', TODAY)).toBe('10:00 today');
+    expect(cleaningWhen('2026-10-14T15:20:00Z', 'Europe/London', TODAY)).toBe('16:20 yesterday');
+    expect(cleaningWhen('2026-10-12T15:20:00Z', 'Europe/London', TODAY)).toBe('Mon 12 Oct, 16:20');
+  });
+
+  it('names the guest whose check-out made it dirty', () => {
+    const [lodgeRow] = rows;
+    if (!lodgeRow) throw new Error('rows missing');
+    expect(guestWhoLeft(lodgeRow, '2026-10-16')).toBe('Priya Shah');
+    expect(guestWhoLeft(lodgeRow, '2026-10-17')).toBeNull();
   });
 });
 
@@ -371,6 +450,25 @@ describe('a change to some nights', () => {
       change: null,
       errors: { form: 'Choose something to change' },
     });
+  });
+
+  it('counts the nights the button will change', () => {
+    const both = [lodge.id, flat.id];
+    // Priya Shah has the lodge on the 15th, so blocking the 15th to the 17th blocks two nights.
+    const lodgeStay = { propertyIds: [lodge.id], firstNight: '2026-10-15', lastNight: '2026-10-17' };
+    expect(nightsToChange(form({ availability: 'block' }), lodgeStay, rows, TODAY)).toBe(2);
+    // The flat is blocked on the 18th and 19th: blocking skips them, opening touches only them.
+    const flatWeek = { propertyIds: [flat.id], firstNight: '2026-10-17', lastNight: '2026-10-20' };
+    expect(nightsToChange(form({ availability: 'block' }), flatWeek, rows, TODAY)).toBe(2);
+    expect(nightsToChange(form({ availability: 'open' }), flatWeek, rows, TODAY)).toBe(2);
+    // A price goes on every chosen night, booked or not, on the chosen days only.
+    const week = { propertyIds: both, firstNight: '2026-10-19', lastNight: '2026-10-25' };
+    expect(nightsToChange(form({ price: 'set' }), week, rows, TODAY)).toBe(14);
+    expect(nightsToChange(form({ price: 'set', days: [5, 6] }), week, rows, TODAY)).toBe(4);
+    expect(nightsToChange(form({ price: 'set', days: [] }), week, rows, TODAY)).toBe(0);
+    // Nights before today are never changed.
+    const fromBefore = { propertyIds: [lodge.id], firstNight: '2026-10-13', lastNight: '2026-10-16' };
+    expect(nightsToChange(form({ price: 'set' }), fromBefore, rows, TODAY)).toBe(2);
   });
 
   it('says what happened in a line', () => {

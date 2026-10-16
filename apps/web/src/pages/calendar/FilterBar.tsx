@@ -1,5 +1,11 @@
-import { IconCheck } from '@tabler/icons-react';
-import { addDays, MANAGED_BY_LABELS, type ManagedBy } from '@v01/shared';
+import { IconCalendarSearch, IconCheck } from '@tabler/icons-react';
+import {
+  addDays,
+  CLEANING_STATUS_LABELS,
+  type CleaningStatus,
+  MANAGED_BY_LABELS,
+  type ManagedBy,
+} from '@v01/shared';
 import { type FormEvent, type ReactNode, useState } from 'react';
 import { Stepper } from '../../components/choices.tsx';
 import { Popover } from '../../components/Popover.tsx';
@@ -155,9 +161,9 @@ function FreeDatesForm({
 
   return (
     <form onSubmit={submit} noValidate className="p-4">
-      <p className="text-[14px] font-medium text-ink">Free for a stay</p>
+      <p className="text-[14px] font-medium text-ink">Available for a stay</p>
       <p className="mt-1 text-[12.5px] leading-snug text-slate">
-        Properties with no booking or block on those nights, and room for everyone.
+        Shows only the properties with no booking or block on those nights, and room for everyone.
       </p>
       <div className="mt-4 grid grid-cols-2 gap-3">
         <Field
@@ -194,7 +200,7 @@ function FreeDatesForm({
       ) : null}
       <div className="mt-4 flex items-center gap-4">
         <Button variant="primary" type="submit">
-          Show free properties
+          Show available properties
         </Button>
         {value ? (
           <Button
@@ -215,8 +221,9 @@ function FreeDatesForm({
 const SYNC_ORDER: ManagedBy[] = ['v01', 'guesty', 'none'];
 
 /**
- * The filters over the calendar: area, tags, sync, bedrooms and free dates, with how many
- * properties are showing and a way to clear them all. The search sits in the grid, over the names.
+ * The filters over the calendar: Availability first (properties free for a stay, as Guesty users
+ * look for), then area, tags, sync, cleaning and bedrooms, with how many properties are showing
+ * and a way to clear them all. The search sits in the grid, over the names.
  */
 export function FilterBar({
   filters,
@@ -228,7 +235,12 @@ export function FilterBar({
 }: {
   filters: CalendarFilters;
   onChange(next: CalendarFilters): void;
-  choices: { areas: FilterChoice[]; tags: FilterChoice[]; statuses: FilterChoice[] };
+  choices: {
+    areas: FilterChoice[];
+    tags: FilterChoice[];
+    statuses: FilterChoice[];
+    cleaning: FilterChoice[];
+  };
   /** Properties on screen, and in the workspace. */
   shown: number;
   total: number;
@@ -241,6 +253,18 @@ export function FilterBar({
 
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
+      <Popover
+        title="Availability"
+        label={filters.free ? freeLabel(filters.free) : 'Availability'}
+        icon={<IconCalendarSearch size={16} stroke={1.75} aria-hidden className="shrink-0 text-slate" />}
+        active={filters.free !== null}
+        panelClassName="w-[320px]"
+      >
+        {(close) => (
+          <FreeDatesForm value={filters.free} today={today} onApply={(free) => set({ free })} close={close} />
+        )}
+      </Popover>
+      <span aria-hidden className="mx-1 h-6 w-px bg-hairline" />
       <Popover
         title="Area"
         label={filters.areas.length ? chosenLabel(filters.areas, 'areas') : 'Area'}
@@ -288,22 +312,33 @@ export function FilterBar({
         />
       </Popover>
       <Popover
+        title="Cleaning"
+        label={
+          filters.cleaning.length === 1
+            ? CLEANING_STATUS_LABELS[filters.cleaning[0] as CleaningStatus]
+            : 'Cleaning'
+        }
+        active={filters.cleaning.length > 0}
+        panelClassName="w-[220px]"
+      >
+        <CheckList
+          legend="Cleaning"
+          options={choices.cleaning.map((c) => ({
+            ...c,
+            label: CLEANING_STATUS_LABELS[c.value as CleaningStatus],
+          }))}
+          chosen={filters.cleaning}
+          onChange={(next) => set({ cleaning: next as CleaningStatus[] })}
+          emptyText="No properties yet."
+        />
+      </Popover>
+      <Popover
         title="Bedrooms"
         label={filters.minBedrooms ? `${filters.minBedrooms}+ bedrooms` : 'Bedrooms'}
         active={filters.minBedrooms !== null}
         panelClassName="w-[220px]"
       >
         <BedroomsList value={filters.minBedrooms} onChange={(minBedrooms) => set({ minBedrooms })} />
-      </Popover>
-      <Popover
-        title="Free dates"
-        label={filters.free ? freeLabel(filters.free) : 'Free dates'}
-        active={filters.free !== null}
-        panelClassName="w-[320px]"
-      >
-        {(close) => (
-          <FreeDatesForm value={filters.free} today={today} onApply={(free) => set({ free })} close={close} />
-        )}
       </Popover>
 
       <p className="tnum ml-1 text-[13px] text-slate" aria-live="polite">
