@@ -22,10 +22,15 @@ import {
   type ConsoleOverview,
   type ConsoleSync,
   type ConsoleSyncRow,
+  type CustomField,
+  CustomFieldCreateSchema,
+  CustomFieldUpdateSchema,
   can,
   countBeds,
   eachNight,
+  FIELDS_MAX,
   formatMoney,
+  isWebAddress,
   type Me,
   type MemberRole,
   nightRules,
@@ -37,6 +42,8 @@ import {
   type Property,
   PropertyCreateSchema,
   type PropertyDetail,
+  type PropertyField,
+  PropertyFieldsUpdateSchema,
   type PropertyList,
   PropertySchema,
   type PropertyType,
@@ -118,6 +125,10 @@ interface DemoOperator {
   calendar: DemoCalendar;
   /** Each property's cleaning, by property id. Missing: clean, never marked. */
   cleaning?: Record<string, CleaningState>;
+  /** The workspace's custom fields, in order. */
+  fields: CustomField[];
+  /** Values by property id, then field id. Secrets sit here as typed: the demo has no database. */
+  fieldValues: Record<string, Record<string, string>>;
 }
 
 /** A booking as the API keeps it: what the calendar shows, and what the reservation page adds. */
@@ -167,7 +178,7 @@ interface DemoSyncError {
 
 interface DemoState {
   /** Raised whenever the shape changes, so a browser holding older sample data starts fresh. */
-  version: 8;
+  version: 9;
   /** The day the sample bookings were laid out from. They are laid out afresh each week. */
   calendarFrom: string;
   operators: DemoOperator[];
@@ -238,6 +249,7 @@ function listingDefaults(): Omit<PropertyDetail, keyof Property | 'updatedAt'> {
     channex: NOT_CONNECTED,
     cleaning: { status: 'clean', changedAt: null, changedBy: null },
     listings: [],
+    fields: [],
   };
 }
 
@@ -766,7 +778,7 @@ function operatorWorkspace(
 function seed(): DemoState {
   const pastVisit = Date.now() - (2 * 24 * 60 + 190) * MINUTE;
   const state: DemoState = {
-    version: 8,
+    version: 9,
     calendarFrom: demoToday(),
     operators: [
       {
@@ -788,6 +800,8 @@ function seed(): DemoState {
         channelAccounts: [],
         live: NO_ACTIVITY,
         calendar: { nights: [], stays: [], blocks: [] },
+        fields: [],
+        fieldValues: {},
       },
       {
         // The demo user belongs to this invented operator too, so the Calendar has bookings to try.
@@ -918,6 +932,8 @@ function seed(): DemoState {
           lastActivityMinutes: 5,
         },
         calendar: { nights: [], stays: [], blocks: [] },
+        fields: [],
+        fieldValues: {},
       },
       {
         role: null,
@@ -997,6 +1013,8 @@ function seed(): DemoState {
         ],
         live: { ...NO_ACTIVITY, lastActivityMinutes: 190 },
         calendar: { nights: [], stays: [], blocks: [] },
+        fields: [],
+        fieldValues: {},
       },
     ],
     grants: [
@@ -1031,7 +1049,47 @@ function seed(): DemoState {
     ],
   };
   layOutSamples(state);
+  seedFields(state);
   return state;
+}
+
+/**
+ * The custom fields an operator leaving Guesty brings: a check-in instructions link, the lock
+ * code, the cleaning policy, a note for the team. Sample values only; nothing here is real.
+ */
+function seedFields(s: DemoState): void {
+  const defs: { name: string; kind: CustomField['kind'] }[] = [
+    { name: 'Check-in instructions', kind: 'link' },
+    { name: 'Lock code', kind: 'secret' },
+    { name: 'Cleaning policy', kind: 'long_text' },
+    { name: 'Note for the team', kind: 'long_text' },
+  ];
+  const samples: Record<string, [string | null, string | null, string | null, string | null]> = {
+    HVL: [
+      'https://docs.example.com/harbour-view/arrival',
+      '4921#',
+      'Full clean after every stay. Linen from the store in the garage; towels for six.',
+      'Owner visits in August: keep the second week free.',
+    ],
+    ORC: [
+      'https://docs.example.com/orchard/arrival',
+      '7730',
+      'Clean after every stay; deep clean on the first Monday of the month.',
+      null,
+    ],
+    QYH: [null, '2580', 'Still cleaned by the Guesty-era team until the move-over.', null],
+  };
+  for (const operator of s.operators) {
+    if (!operator.role) continue;
+    operator.fields = defs.map((d, position) => ({ id: crypto.randomUUID(), ...d, position }));
+    for (const property of operator.properties) {
+      const values = samples[property.internalCode ?? ''];
+      if (!values) continue;
+      operator.fieldValues[property.id] = Object.fromEntries(
+        operator.fields.flatMap((f, i) => (values[i] ? [[f.id, values[i]]] : [])),
+      );
+    }
+  }
 }
 
 /** The invented operators' bookings, laid out from today, with every property cleaned yesterday. */
@@ -1103,7 +1161,7 @@ function load(): DemoState {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved) as DemoState;
-      if (parsed.version === 8) {
+      if (parsed.version === 9) {
         // A week on, the sample bookings would all be in the past: lay them out again from today.
         if (parsed.calendarFrom <= addDays(demoToday(), -7)) {
           layOutSamples(parsed);
@@ -1353,7 +1411,22 @@ function listingsOf(operator: DemoOperator, detail: PropertyDetail): PropertyDet
     });
 }
 
-async function resolved(detail: PropertyDetail, operator?: DemoOperator): Promise<PropertyDetail> {
+/** Every field with this property's value; secrets only for roles that may see them. */
+function fieldsOf(operator: DemoOperator, propertyId: string, role: WorkspaceRole): PropertyField[] {
+  const values = operator.fieldValues[propertyId] ?? {};
+  const reveal = can(role, 'secrets.read');
+  return operator.fields.map((f) => {
+    const value = values[f.id] ?? null;
+    if (f.kind === 'secret' && !reveal) return { ...f, value: null, hidden: value !== null };
+    return { ...f, value, hidden: false };
+  });
+}
+
+async function resolved(
+  detail: PropertyDetail,
+  operator?: DemoOperator,
+  role: WorkspaceRole = 'admin',
+): Promise<PropertyDetail> {
   const photos: PropertyDetail['photos'] = [];
   for (const photo of detail.photos) {
     const url = photo.url.startsWith('demo-photo:')
@@ -1371,12 +1444,14 @@ async function resolved(detail: PropertyDetail, operator?: DemoOperator): Promis
   if (operator) sweepCleaning(operator);
   const cleaning = operator?.cleaning?.[detail.id] ?? { status: 'clean', changedAt: null, changedBy: null };
   const listings = operator ? listingsOf(operator, detail) : [];
+  const fields = operator ? fieldsOf(operator, detail.id, role) : [];
   return {
     ...detail,
     photos,
     channex,
     cleaning,
     listings,
+    fields,
     coverPhotoUrl: photos[0]?.url ?? null,
     photoCount: photos.length,
   };
@@ -1801,7 +1876,9 @@ function changeDemoReservation(operator: DemoOperator, id: string, body: unknown
   return toReservation(operator, stay);
 }
 
-const PROPERTY_PATH = /^\/v1\/properties\/([0-9a-f-]{36})(\/rooms|\/amenities|\/photos\/order|\/archive)?$/;
+const PROPERTY_PATH =
+  /^\/v1\/properties\/([0-9a-f-]{36})(\/rooms|\/amenities|\/photos\/order|\/archive|\/fields)?$/;
+const FIELD_PATH = /^\/v1\/custom-fields(?:\/([0-9a-f-]{36}))?$/;
 const PHOTO_PATH = /^\/v1\/properties\/([0-9a-f-]{36})\/photos\/([0-9a-f-]{36})$/;
 
 export async function demoFetch<T>(
@@ -1915,11 +1992,37 @@ export async function demoFetch<T>(
   if (propertyMatch?.[1]) {
     const [, id, part] = propertyMatch;
     if (method === 'GET' && !part) {
-      const { operator } = access(options.orgId, 'properties.read');
-      return (await resolved(findProperty(operator, id), operator)) as T;
+      const { operator, role } = access(options.orgId, 'properties.read');
+      return (await resolved(findProperty(operator, id), operator, role)) as T;
     }
-    const { operator } = access(options.orgId, 'properties.write');
+    const { operator, role } = access(options.orgId, 'properties.write');
     const property = findProperty(operator, id);
+
+    if (method === 'PUT' && part === '/fields') {
+      const parsed = PropertyFieldsUpdateSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      const values = { ...(operator.fieldValues[property.id] ?? {}) };
+      for (const [fieldId, value] of Object.entries(parsed.data.values)) {
+        const field = operator.fields.find((f) => f.id === fieldId);
+        if (!field)
+          throw new ApiError(404, 'field_not_found', 'One of those fields does not exist in this workspace.');
+        if (value && field.kind === 'link' && !isWebAddress(value)) {
+          throw new ApiError(
+            422,
+            'not_a_link',
+            `"${field.name}" needs a web address starting with https://.`,
+          );
+        }
+        if (value && field.kind === 'secret' && !can(role, 'secrets.read')) {
+          throw new ApiError(403, 'not_allowed', 'Your role does not allow setting secrets.');
+        }
+        if (value) values[fieldId] = value;
+        else delete values[fieldId];
+      }
+      operator.fieldValues[property.id] = values;
+      save();
+      return { fields: fieldsOf(operator, property.id, role) } as T;
+    }
 
     if (method === 'POST' && part === '/archive') {
       operator.properties = operator.properties.filter((p) => p.id !== property.id);
@@ -2051,6 +2154,64 @@ export async function demoFetch<T>(
     const { operator } = access(options.orgId, 'reservations.read');
     const query = Object.fromEntries(new URLSearchParams(path.split('?')[1] ?? ''));
     return demoReservations(operator, query) as T;
+  }
+
+  const fieldMatch = FIELD_PATH.exec(path);
+  if (fieldMatch) {
+    const fieldId = fieldMatch[1];
+    if (method === 'GET' && !fieldId) {
+      const { operator } = access(options.orgId, 'properties.read');
+      return { fields: operator.fields } as T;
+    }
+    const { operator } = access(options.orgId, 'fields.manage');
+    const taken = (name: string, except?: string) =>
+      operator.fields.some((f) => f.id !== except && f.name.toLowerCase() === name.toLowerCase());
+    if (method === 'POST' && !fieldId) {
+      const parsed = CustomFieldCreateSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      if (operator.fields.length >= FIELDS_MAX)
+        throw new ApiError(409, 'too_many_fields', `A workspace can have ${FIELDS_MAX} custom fields.`);
+      if (taken(parsed.data.name))
+        throw new ApiError(409, 'field_exists', `There is already a field called "${parsed.data.name}".`);
+      const field: CustomField = {
+        id: crypto.randomUUID(),
+        ...parsed.data,
+        position: operator.fields.length,
+      };
+      operator.fields.push(field);
+      save();
+      return field as T;
+    }
+    const field = operator.fields.find((f) => f.id === fieldId);
+    if (!field) throw new ApiError(404, 'field_not_found', 'That field does not exist in this workspace.');
+    if (method === 'PATCH') {
+      const parsed = CustomFieldUpdateSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      if (parsed.data.name !== undefined) {
+        if (taken(parsed.data.name, field.id))
+          throw new ApiError(409, 'field_exists', `There is already a field called "${parsed.data.name}".`);
+        field.name = parsed.data.name;
+      }
+      if (parsed.data.position !== undefined) {
+        const rest = operator.fields.filter((f) => f.id !== field.id);
+        rest.splice(Math.min(parsed.data.position, rest.length), 0, field);
+        rest.forEach((f, index) => {
+          f.position = index;
+        });
+        operator.fields = rest;
+      }
+      save();
+      return field as T;
+    }
+    if (method === 'DELETE') {
+      operator.fields = operator.fields.filter((f) => f.id !== field.id);
+      operator.fields.forEach((f, index) => {
+        f.position = index;
+      });
+      for (const values of Object.values(operator.fieldValues)) delete values[field.id];
+      save();
+      return { deleted: true } as T;
+    }
   }
 
   const channexMatch = CHANNEX_PATH.exec(path);

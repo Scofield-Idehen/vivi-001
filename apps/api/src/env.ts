@@ -20,6 +20,12 @@ const EnvSchema = z
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(20).optional(),
     /** A public Supabase Storage bucket for listing photos, and nothing else. */
     PHOTO_BUCKET: z.string().default('property-photos'),
+    /**
+     * Encrypts secret custom fields (lock codes, Wi-Fi passwords) in the database. Secrets can't be
+     * saved or read until it is set. Changing it makes every stored secret unreadable, so it is
+     * kept in the secret manager and never rotated without re-encrypting first.
+     */
+    FIELD_SECRET_KEY: z.string().min(32).optional(),
   })
   .refine((env) => env.SUPABASE_URL || env.SUPABASE_JWT_SECRET, {
     message: 'Set SUPABASE_URL (recommended) or SUPABASE_JWT_SECRET so sign-in tokens can be verified',

@@ -16,6 +16,7 @@ import { ApiError, useProperty, useUpdateProperty, useWorkspace } from '../../li
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
 import { AmenitiesSection } from './AmenitiesSection.tsx';
 import { ChannelsSection } from './ChannelsSection.tsx';
+import { FieldsSection } from './FieldsSection.tsx';
 import {
   AddressSection,
   ArrivalSection,
@@ -49,6 +50,7 @@ const ORDER: ListingSection[] = [
   'booking',
   'pricing',
   'licence',
+  'fields',
   'channels',
   'settings',
 ];
@@ -268,6 +270,7 @@ export function PropertyPage() {
           <BookingSection {...sectionProps} />
           <PricingSection {...sectionProps} />
           <LicenceSection {...sectionProps} />
+          <FieldsSection d={d} orgId={orgId} canEdit={canEdit} canManage={can(entry.role, 'fields.manage')} />
           <ChannelsSection
             d={d}
             orgId={orgId}

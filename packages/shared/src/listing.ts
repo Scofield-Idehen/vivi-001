@@ -387,6 +387,7 @@ export type ListingSection =
   | 'booking'
   | 'pricing'
   | 'licence'
+  | 'fields'
   | 'channels'
   | 'settings';
 

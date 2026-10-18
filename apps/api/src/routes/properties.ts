@@ -29,6 +29,7 @@ import {
   PropertyUpdateSchema,
   type Room,
   RoomsUpdateSchema,
+  type WorkspaceRole,
 } from '@v01/shared';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
@@ -37,7 +38,9 @@ import { z } from 'zod';
 import { pgConstraint, pgErrorCode, type RequestScope, toIso } from '../context.ts';
 import { HttpError } from '../errors.ts';
 import { newPhotoPath, type PhotoStore, photoPathBelongsTo } from '../photos.ts';
+import type { SecretBox } from '../secrets.ts';
 import { channexStateOf } from './channex.ts';
+import { fieldsOf } from './fields.ts';
 
 type PropertyRow = typeof properties.$inferSelect;
 type RoomRow = typeof propertyRooms.$inferSelect;
@@ -105,6 +108,9 @@ function toPhoto(row: PhotoRow): Photo {
 const NOT_FOUND = () =>
   new HttpError(404, 'property_not_found', 'That property does not exist in this workspace.');
 
+/** Who is looking: their role decides whether secret fields are opened. */
+type Viewer = { role: WorkspaceRole; box: SecretBox | undefined };
+
 async function findProperty(tx: Tx, id: string): Promise<PropertyRow> {
   // Row-level security already limits this to the operator in scope.
   const [row] = await tx
@@ -115,7 +121,7 @@ async function findProperty(tx: Tx, id: string): Promise<PropertyRow> {
   return row;
 }
 
-async function loadDetail(tx: Tx, id: string): Promise<PropertyDetail> {
+async function loadDetail(tx: Tx, id: string, viewer: Viewer): Promise<PropertyDetail> {
   const row = await findProperty(tx, id);
   const rooms = await tx
     .select()
@@ -170,6 +176,7 @@ async function loadDetail(tx: Tx, id: string): Promise<PropertyDetail> {
     channex: await channexStateOf(tx, id),
     cleaning: await cleaningOf(tx, row),
     listings: await listingsOf(tx, id),
+    fields: await fieldsOf(tx, id, viewer.role, viewer.box),
     updatedAt: toIso(row.updatedAt),
   };
 }
@@ -265,7 +272,11 @@ async function renumberPhotos(tx: Tx, propertyId: string, orderedIds: string[]):
 const PropertyParams = z.object({ id: z.uuid() });
 const PhotoParams = z.object({ id: z.uuid(), photoId: z.uuid() });
 
-export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope; photos: PhotoStore }) {
+export function propertyRoutes(
+  app: FastifyInstance,
+  deps: { scope: RequestScope; photos: PhotoStore; box: SecretBox | undefined },
+) {
+  const viewer = (ctx: { role: WorkspaceRole }): Viewer => ({ role: ctx.role, box: deps.box });
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   typed.get('/v1/properties', { schema: { response: { 200: PropertyListSchema } } }, async (req) =>
@@ -301,7 +312,8 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
   typed.get(
     '/v1/properties/:id',
     { schema: { params: PropertyParams, response: { 200: PropertyDetailSchema } } },
-    async (req) => deps.scope.inOrg(req, 'properties.read', (tx) => loadDetail(tx, req.params.id)),
+    async (req) =>
+      deps.scope.inOrg(req, 'properties.read', (tx, ctx) => loadDetail(tx, req.params.id, viewer(ctx))),
   );
 
   typed.post(
@@ -345,7 +357,7 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
         if (!row) throw new Error('Insert returned no row');
         if (input.amenities?.length) await setAmenities(tx, ctx.orgId, row.id, input.amenities);
         reply.code(201);
-        return loadDetail(tx, row.id);
+        return loadDetail(tx, row.id, viewer(ctx));
       }),
   );
 
@@ -374,7 +386,7 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
       schema: { params: PropertyParams, body: PropertyUpdateSchema, response: { 200: PropertyDetailSchema } },
     },
     async (req) =>
-      deps.scope.inOrg(req, 'properties.write', async (tx) => {
+      deps.scope.inOrg(req, 'properties.write', async (tx, ctx) => {
         await findProperty(tx, req.params.id);
         const changes = cleaned(req.body);
         if (changes.name === null) throw new HttpError(400, 'invalid_request', 'A property needs a name.');
@@ -383,7 +395,7 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
           .set(changes as Partial<typeof properties.$inferInsert>)
           .where(eq(properties.id, req.params.id))
           .catch((error: unknown) => explain(error, req.body.internalCode));
-        return loadDetail(tx, req.params.id);
+        return loadDetail(tx, req.params.id, viewer(ctx));
       }),
   );
 
@@ -427,7 +439,7 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
             })
             .where(eq(properties.id, id));
         }
-        return loadDetail(tx, id);
+        return loadDetail(tx, id, viewer(ctx));
       }),
   );
 
@@ -448,7 +460,7 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
           throw new HttpError(400, 'invalid_request', 'One of those amenities is not on the list.');
         }
         await setAmenities(tx, ctx.orgId, req.params.id, codes.data);
-        return loadDetail(tx, req.params.id);
+        return loadDetail(tx, req.params.id, viewer(ctx));
       }),
   );
 
@@ -521,7 +533,7 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
           })
           .onConflictDoNothing({ target: propertyPhotos.storagePath });
         reply.code(201);
-        return loadDetail(tx, id);
+        return loadDetail(tx, id, viewer(ctx));
       }),
   );
 
@@ -529,7 +541,7 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
     '/v1/properties/:id/photos/:photoId',
     { schema: { params: PhotoParams, body: PhotoUpdateSchema, response: { 200: PropertyDetailSchema } } },
     async (req) =>
-      deps.scope.inOrg(req, 'properties.write', async (tx) => {
+      deps.scope.inOrg(req, 'properties.write', async (tx, ctx) => {
         const { id, photoId } = req.params;
         await findProperty(tx, id);
         if (req.body.roomId) {
@@ -547,7 +559,7 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
         if (updated.length === 0) {
           throw new HttpError(404, 'photo_not_found', 'That photo is not on this property.');
         }
-        return loadDetail(tx, id);
+        return loadDetail(tx, id, viewer(ctx));
       }),
   );
 
@@ -555,7 +567,7 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
     '/v1/properties/:id/photos/order',
     { schema: { params: PropertyParams, body: PhotoOrderSchema, response: { 200: PropertyDetailSchema } } },
     async (req) =>
-      deps.scope.inOrg(req, 'properties.write', async (tx) => {
+      deps.scope.inOrg(req, 'properties.write', async (tx, ctx) => {
         const id = req.params.id;
         await findProperty(tx, id);
         const current = await tx
@@ -575,7 +587,7 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
           );
         }
         await renumberPhotos(tx, id, wanted);
-        return loadDetail(tx, id);
+        return loadDetail(tx, id, viewer(ctx));
       }),
   );
 
@@ -585,7 +597,7 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
     async (req) => {
       const { id, photoId } = req.params;
       let removedPath: string | null = null;
-      const detail = await deps.scope.inOrg(req, 'properties.write', async (tx) => {
+      const detail = await deps.scope.inOrg(req, 'properties.write', async (tx, ctx) => {
         await findProperty(tx, id);
         const [removed] = await tx
           .delete(propertyPhotos)
@@ -603,7 +615,7 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
           id,
           rest.map((p) => p.id),
         );
-        return loadDetail(tx, id);
+        return loadDetail(tx, id, viewer(ctx));
       });
       // The file goes once its row has gone: a failure here leaves an orphan file, never a broken photo.
       if (removedPath) await deps.photos.remove(removedPath).catch(() => {});

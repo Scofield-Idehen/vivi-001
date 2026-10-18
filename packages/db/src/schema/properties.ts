@@ -13,14 +13,17 @@ import {
   time,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import {
   app,
+  bytea,
   cancellationPolicy,
   checkInMethod,
   cleaningStatus,
   createdAt,
+  fieldKind,
   managedBy,
   priceOwner,
   roomKind,
@@ -229,5 +232,57 @@ export const propertyPhotos = app.table(
     }).onDelete('restrict'),
     unique('property_photos_storage_path_key').on(t.storagePath),
     check('property_photos_caption_length', sql`char_length(${t.caption}) <= 200`),
+  ],
+);
+
+/** The workspace's custom fields: the team's own details kept on every property. */
+export const customFields = app.table(
+  'custom_fields',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    name: text('name').notNull(),
+    kind: fieldKind('kind').notNull(),
+    position: integer('position').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('custom_fields_org_idx').on(t.organisationId),
+    uniqueIndex('custom_fields_org_name_key').on(t.organisationId, sql`lower(${t.name})`),
+    check('custom_fields_name_length', sql`char_length(${t.name}) between 1 and 60`),
+  ],
+);
+
+/**
+ * A field's value on one property. Secrets go in `secret`, encrypted by the API before they are
+ * sent, never in `value`; the plain column stays null for them.
+ */
+export const propertyFieldValues = app.table(
+  'property_field_values',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    propertyId: uuid('property_id')
+      .notNull()
+      .references(() => properties.id, { onDelete: 'cascade' }),
+    fieldId: uuid('field_id')
+      .notNull()
+      .references(() => customFields.id, { onDelete: 'cascade' }),
+    value: text('value'),
+    secret: bytea('secret'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('property_field_values_org_idx').on(t.organisationId),
+    index('property_field_values_property_idx').on(t.propertyId),
+    unique('property_field_values_property_field_key').on(t.propertyId, t.fieldId),
+    check('property_field_values_one_kind', sql`${t.value} is null or ${t.secret} is null`),
+    check('property_field_values_value_length', sql`${t.value} is null or char_length(${t.value}) <= 4000`),
   ],
 );

@@ -16,6 +16,9 @@ export const PERMISSIONS = {
   'reservations.write': ['admin', 'operations', 'guest_comms'],
   /** Marking a property clean or dirty: the field team too, who do the cleaning. */
   'cleaning.write': ['admin', 'operations', 'field'],
+  // Lock codes, key-safe codes and Wi-Fi passwords: never accounts, never V-01 support.
+  'secrets.read': ['admin', 'operations', 'guest_comms'],
+  'fields.manage': ['admin'],
   'channels.manage': ['admin'],
   'workspace.read': ['admin', 'operations', 'guest_comms', 'accounts', 'field', 'v01_support'],
   'workspace.manage': ['admin'],

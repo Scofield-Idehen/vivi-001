@@ -10,10 +10,16 @@ import type {
   ConsoleOperatorList,
   ConsoleOverview,
   ConsoleSync,
+  CustomField,
+  CustomFieldCreate,
+  CustomFieldList,
+  CustomFieldUpdate,
   Me,
   PhotoUploadTicket,
   PropertyCreate,
   PropertyDetail,
+  PropertyField,
+  PropertyFieldsUpdate,
   PropertyList,
   PropertyUpdate,
   Reservation,
@@ -502,6 +508,69 @@ export function useEndSupportAccess() {
         queryClient.invalidateQueries({ queryKey: ['me'] }),
         queryClient.invalidateQueries({ queryKey: ['console'] }),
       ]);
+    },
+  });
+}
+
+/** The workspace's custom fields, as an admin manages them. */
+export function useCustomFields(orgId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['custom-fields', orgId],
+    enabled: Boolean(token && orgId),
+    queryFn: () => apiFetch<CustomFieldList>('/v1/custom-fields', { token: token as string, orgId }),
+  });
+}
+
+/** Defining, renaming, moving or removing a field changes every property's page. */
+function useFieldChange<Input>(
+  orgId: string | null,
+  send: (token: string, input: Input) => Promise<unknown>,
+) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Input) => send(token as string, input),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['custom-fields', orgId] }),
+        queryClient.invalidateQueries({ queryKey: ['property', orgId] }),
+      ]);
+    },
+  });
+}
+
+export const useCreateField = (orgId: string | null) =>
+  useFieldChange<CustomFieldCreate>(orgId, (token, body) =>
+    apiFetch<CustomField>('/v1/custom-fields', { token, orgId, method: 'POST', body }),
+  );
+
+export const useUpdateField = (orgId: string | null) =>
+  useFieldChange<{ id: string } & CustomFieldUpdate>(orgId, (token, { id, ...body }) =>
+    apiFetch<CustomField>(`/v1/custom-fields/${id}`, { token, orgId, method: 'PATCH', body }),
+  );
+
+export const useDeleteField = (orgId: string | null) =>
+  useFieldChange<string>(orgId, (token, id) =>
+    apiFetch<{ deleted: true }>(`/v1/custom-fields/${id}`, { token, orgId, method: 'DELETE' }),
+  );
+
+/** Values on one property. The answer is the property's fields, which replace the cached ones. */
+export function useSetFields(orgId: string | null, id: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (values: PropertyFieldsUpdate['values']) =>
+      apiFetch<{ fields: PropertyField[] }>(`/v1/properties/${id}/fields`, {
+        token: token as string,
+        orgId,
+        method: 'PUT',
+        body: { values },
+      }),
+    onSuccess: ({ fields }) => {
+      queryClient.setQueryData<PropertyDetail>(['property', orgId, id], (current) =>
+        current ? { ...current, fields } : current,
+      );
     },
   });
 }

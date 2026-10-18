@@ -58,6 +58,9 @@ docs/           Decision log and runbooks
 6. To look inside an operator's workspace, V-01 staff open a support grant: it needs a reason, is
    read-only, lasts at most four hours, logs every request, and the operator sees it on their Workspace page.
 7. Tests in `packages/db/test/security-coverage.test.ts` fail if a new table or function skips these rules.
+8. Secret custom fields (lock codes, Wi-Fi passwords) are sealed in the API (`apps/api/src/secrets.ts`,
+   AES-256-GCM under `FIELD_SECRET_KEY`) before they reach Postgres, and opened only for roles with
+   `secrets.read`. Support grants never include it, so V-01 staff never see a secret.
 
 ## Local setup
 

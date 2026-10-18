@@ -37,6 +37,29 @@ V-01 Build Playbook and Design Roadmap.
   when it was added. Task templates, automation, saved replies and accounting are Guesty parts of
   the same page; they come with the inbox (Phase 2), tasks (Phase 3) and owner accounting (after
   switch-off).
+- **Custom fields, because Guesty has them and the team's critical details live there (Alpha, 18 Oct
+  2026: "see custom field for example, so we have to factor this in so we don't have issues or miss
+  anything").** An admin defines fields once for the workspace (`custom_fields`, migration 0019), each
+  of a kind: short text, long text, link or secret. Every property shows every field, in the admin's
+  order, with its value (`property_field_values`); anyone who edits properties fills them in, from a
+  Custom fields part of the property page. Links must be web addresses. Vivistays' Guesty fields
+  (check-in instruction link, full address, lock codes, cleaning policy, internal note) all fit these
+  kinds; the Guesty import will carry them across. Reservation custom fields and Guesty's "default
+  values" for them come with the inbox (Phase 2), since that is where message templates use them.
+- **Secrets are sealed in the API, not in the database.** A secret field (a lock code, a key-safe
+  code, a Wi-Fi password) is encrypted with AES-256-GCM under `FIELD_SECRET_KEY` before it is sent to
+  Postgres, so the database, its logs, backups and the audit log only ever hold sealed bytes; the
+  plain column stays null for them. It is opened only for roles with `secrets.read` (admin,
+  operations, guest comms): the accounts and field roles see that a value is set and nothing more,
+  and V-01 support never sees one, even with the key on the server. Without the key the API refuses
+  to save a secret rather than store it plain. Changing the key makes stored secrets unreadable, so it
+  is rotated only with a re-encryption step. Only admins define fields (`fields.manage`).
+- **Guesty's List on channels page is the shape of our next step (Alpha, 18 Oct 2026: "also note this
+  very important").** A card per channel on the property page: Airbnb, Booking.com and Vrbo first,
+  then the channels reached through Channex later and the booking engine. A linked card opens the
+  listing on the channel's site and can pause it (stop taking bookings there) and resume; an unlinked
+  one links a listing. This is integration step 7, the listing links that make V-01 reach the
+  channels, so it comes after the downtime safety net (step 6).
 - **Hosting moves to Firebase (Alpha).** Firebase hosts the whole project, the web app and the API
   and worker, in place of Render. Supabase stays the database, file storage and, for now, sign-in.
   Not urgent; nothing in the code has changed yet.

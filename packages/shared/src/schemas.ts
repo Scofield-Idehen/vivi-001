@@ -12,6 +12,7 @@ import {
   SPACE_TYPES,
   WORKSPACE_ROLES,
 } from './enums.ts';
+import { PropertyFieldSchema } from './fields.ts';
 import {
   AmenityCodesSchema,
   CANCELLATION_POLICIES,
@@ -189,6 +190,8 @@ export const PropertyDetailSchema = PropertySchema.extend({
   cleaning: CleaningStateSchema,
   /** The channel listings linked to this property and taking bookings now. Empty until step 7. */
   listings: z.array(PropertyListingSchema),
+  /** The workspace's custom fields with this property's values, in order. */
+  fields: z.array(PropertyFieldSchema),
   updatedAt: z.string(),
 });
 export type PropertyDetail = z.infer<typeof PropertyDetailSchema>;

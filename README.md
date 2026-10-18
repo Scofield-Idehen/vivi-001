@@ -59,6 +59,10 @@ access.
     changeable in place: photos, rooms and beds, amenities, description, house rules, booking rules,
     prices and fees, and the licence. A checklist shows what the channels still need, and Settings
     archives it.
+  - Custom fields, as in Guesty: the team's own details on every property. An admin defines them once
+    for the workspace (a check-in instructions link, the lock code, the cleaning policy, a note for
+    the team); anyone who edits properties fills them in. Secrets such as lock codes are stored
+    encrypted, shown behind a Show button, and never shown to accounts or to V-01 support.
   - Connect a property to Channex from its page. The worker makes it there, in the company's own group,
     and the page shows when it's done. Nothing reaches a channel until its listings are linked (next).
   - The other modules are in the menu and arrive in later phases.

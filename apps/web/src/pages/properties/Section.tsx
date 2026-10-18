@@ -16,6 +16,7 @@ export const SECTION_TITLES: Record<ListingSection, string> = {
   booking: 'Booking rules',
   pricing: 'Prices and fees',
   licence: 'Licence',
+  fields: 'Custom fields',
   channels: 'Channels',
   settings: 'Settings',
 };

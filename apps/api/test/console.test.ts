@@ -52,7 +52,7 @@ function token(who: { userId: string; email: string }): Promise<string> {
 }
 
 async function call(
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'PUT',
   url: string,
   as: keyof typeof people,
   options: { org?: string; body?: unknown } = {},
@@ -100,6 +100,7 @@ beforeAll(async () => {
     DATABASE_URL: t.apiUrl,
     SUPABASE_JWT_SECRET: JWT_SECRET,
     CHANNEX_WEBHOOK_SECRET: 'test-only-channex-signing-secret',
+    FIELD_SECRET_KEY: 'test-only-field-secret-key-with-enough-length',
   });
   db = new ApiDatabase(t.apiUrl);
   app = await buildApp({ env, db, verifyToken: createTokenVerifier({ jwtSecret: JWT_SECRET }) });
@@ -254,6 +255,34 @@ describe('support access', () => {
     expect(workspace.body).toMatchObject({ organisation: { name: 'Operator A' }, role: 'v01_support' });
   });
 
+  it('never shows them a secret custom field, even with the key on the server', async () => {
+    const lodge = (await call('GET', '/v1/properties', 'adminA', { org: a.orgId })).body.properties as {
+      id: string;
+      name: string;
+    }[];
+    const lodgeId = lodge.find((p) => p.name === 'Harbour View Lodge')?.id as string;
+    const field = await call('POST', '/v1/custom-fields', 'adminA', {
+      org: a.orgId,
+      body: { name: 'Lock code', kind: 'secret' },
+    });
+    expect(field.status).toBe(201);
+    const saved = await call('PUT', `/v1/properties/${lodgeId}/fields`, 'adminA', {
+      org: a.orgId,
+      body: { values: { [field.body.id as string]: '2468' } },
+    });
+    expect(saved.status).toBe(200);
+    expect(saved.body.fields).toEqual([
+      expect.objectContaining({ name: 'Lock code', value: '2468', hidden: false }),
+    ]);
+
+    const seen = await call('GET', `/v1/properties/${lodgeId}`, 'support', { org: a.orgId });
+    expect(seen.status).toBe(200);
+    expect(seen.body.fields).toEqual([
+      expect.objectContaining({ name: 'Lock code', value: null, hidden: true }),
+    ]);
+    expect(JSON.stringify(seen.body)).not.toContain('2468');
+  });
+
   it('never lets them change anything', async () => {
     const { status, body } = await call('POST', '/v1/properties', 'support', {
       org: a.orgId,
@@ -290,7 +319,7 @@ describe('support access', () => {
   it('logs every request, including the refused one', async () => {
     const { body } = await call('GET', '/v1/console/support', 'viewer');
     const grant = (body.grants as { id: string; requests: number }[]).find((g) => g.id === grantId);
-    expect(grant?.requests).toBe(3);
+    expect(grant?.requests).toBe(4);
     const logged = await owner<{ path: string; allowed: boolean }>(
       `select detail->>'path' as path, (detail->>'allowed')::boolean as allowed
          from app.platform_audit where grant_id = $1 and action = 'support.request' order by id`,
@@ -299,6 +328,7 @@ describe('support access', () => {
     expect(logged).toEqual([
       { path: '/v1/properties', allowed: true },
       { path: '/v1/workspace', allowed: true },
+      { path: expect.stringMatching(/^\/v1\/properties\/[0-9a-f-]+$/), allowed: true },
       { path: '/v1/properties', allowed: false },
     ]);
   });

@@ -18,11 +18,13 @@ import { calendarRoutes } from './routes/calendar.ts';
 import { channexRoutes } from './routes/channex.ts';
 import { cleaningRoutes } from './routes/cleaning.ts';
 import { consoleRoutes } from './routes/console.ts';
+import { fieldRoutes } from './routes/fields.ts';
 import { meRoutes } from './routes/me.ts';
 import { propertyRoutes } from './routes/properties.ts';
 import { reservationRoutes } from './routes/reservations.ts';
 import { webhookRoutes } from './routes/webhooks.ts';
 import { workspaceRoutes } from './routes/workspace.ts';
+import { SecretBox } from './secrets.ts';
 
 export interface AppDeps {
   env: Env;
@@ -105,9 +107,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.get('/v1/app-brand', async () => appBrand);
 
   const scope = new RequestScope(deps.db, deps.verifyToken);
+  const box = deps.env.FIELD_SECRET_KEY ? new SecretBox(deps.env.FIELD_SECRET_KEY) : undefined;
   meRoutes(app, { db: deps.db, scope });
   workspaceRoutes(app, { scope });
-  propertyRoutes(app, { scope, photos: deps.photos ?? photoStoreFrom(deps.env) });
+  propertyRoutes(app, { scope, photos: deps.photos ?? photoStoreFrom(deps.env), box });
+  fieldRoutes(app, { scope, box });
   calendarRoutes(app, { scope });
   reservationRoutes(app, { scope });
   cleaningRoutes(app, { scope });

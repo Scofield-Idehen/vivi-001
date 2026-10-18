@@ -134,6 +134,13 @@
       "when": 1792343408056,
       "tag": "0018_channex_setups",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792346074089,
+      "tag": "0019_custom_fields",
+      "breakpoints": true
     }
   ]
 }

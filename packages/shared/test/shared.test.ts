@@ -90,11 +90,19 @@ describe('permissions', () => {
     expect(can('admin', 'members.manage')).toBe(true);
   });
 
-  it('lets V-01 support read a workspace but never change anything in it', () => {
+  it('lets V-01 support read a workspace but never change anything in it, nor see its secrets', () => {
     for (const [permission, roles] of Object.entries(PERMISSIONS)) {
       const allowed = (roles as readonly string[]).includes('v01_support');
-      expect(allowed, permission).toBe(permission.endsWith('.read'));
+      expect(allowed, permission).toBe(permission.endsWith('.read') && permission !== 'secrets.read');
     }
+  });
+
+  it('keeps lock codes and other secrets from accounts and the field team', () => {
+    expect(can('accounts', 'secrets.read')).toBe(false);
+    expect(can('field', 'secrets.read')).toBe(false);
+    expect(can('operations', 'secrets.read')).toBe(true);
+    expect(can('admin', 'fields.manage')).toBe(true);
+    expect(can('operations', 'fields.manage')).toBe(false);
   });
 
   it('keeps the console to V-01 staff, and support access to owners and support', () => {

@@ -58,7 +58,9 @@ async function ownerRows<T extends pg.QueryResultRow>(text: string, values: unkn
 
 const asA = (): Who => ({ ...a, email: 'admin-a@example.test' });
 const asB = (): Who => ({ ...b, email: 'admin-b@example.test' });
-const env = () => loadEnv({ NODE_ENV: 'test', DATABASE_URL: t.apiUrl, SUPABASE_JWT_SECRET: JWT_SECRET });
+const FIELD_SECRET_KEY = 'test-only-field-secret-key-with-enough-length';
+const env = () =>
+  loadEnv({ NODE_ENV: 'test', DATABASE_URL: t.apiUrl, SUPABASE_JWT_SECRET: JWT_SECRET, FIELD_SECRET_KEY });
 
 beforeAll(async () => {
   t = await createTestDatabase();
@@ -515,5 +517,213 @@ describe('the property page’s summary and archiving', () => {
     const list = await call('GET', '/v1/properties', { as: asA() });
     expect((list.body.properties as { id: string }[]).some((p) => p.id === made.id)).toBe(false);
     expect((await call('POST', `/v1/properties/${made.id}/archive`, { as: asA() })).status).toBe(404);
+  });
+});
+
+describe('custom fields', () => {
+  const fieldsOf = async (id: string, who: Who = asA()) =>
+    (await call('GET', `/v1/properties/${id}`, { as: who })).body.fields as Record<string, unknown>[];
+  let accounts: Who;
+  let operations: Who;
+  let cottage: string;
+  let link: string;
+  let code: string;
+  let note: string;
+
+  beforeAll(async () => {
+    const [acct] = await ownerRows<{ id: string }>(
+      `insert into app.app_users (id, email) values (gen_random_uuid(), 'books@example.test') returning id`,
+    );
+    const [ops] = await ownerRows<{ id: string }>(
+      `insert into app.app_users (id, email) values (gen_random_uuid(), 'ops@example.test') returning id`,
+    );
+    await ownerRows(
+      `insert into app.memberships (organisation_id, user_id, role) values ($1, $2, 'accounts'), ($1, $3, 'operations')`,
+      [a.orgId, acct?.id, ops?.id],
+    );
+    accounts = { userId: acct?.id as string, email: 'books@example.test', orgId: a.orgId };
+    operations = { userId: ops?.id as string, email: 'ops@example.test', orgId: a.orgId };
+    const { body } = await call('POST', '/v1/properties', {
+      as: asA(),
+      body: { name: 'Field Cottage', countryCode: 'GB', maxGuests: 4 },
+    });
+    cottage = body.id;
+  });
+
+  it('lets an admin define fields for the workspace, in order', async () => {
+    const made = await Promise.all(
+      (
+        [
+          ['Check-in instructions', 'link'],
+          ['Lock code', 'secret'],
+          ['Note for the team', 'long_text'],
+        ] as const
+      ).map(async ([name, kind]) => {
+        const { status, body } = await call('POST', '/v1/custom-fields', { as: asA(), body: { name, kind } });
+        expect(status).toBe(201);
+        return body;
+      }),
+    );
+    [link, code, note] = made.map((f) => f.id as string) as [string, string, string];
+    const { body } = await call('GET', '/v1/custom-fields', { as: accounts });
+    expect((body.fields as { name: string }[]).map((f) => f.name)).toEqual([
+      'Check-in instructions',
+      'Lock code',
+      'Note for the team',
+    ]);
+    const again = await call('POST', '/v1/custom-fields', {
+      as: asA(),
+      body: { name: 'lock code', kind: 'text' },
+    });
+    expect(again.status).toBe(409);
+    expect(again.body.error.code).toBe('field_exists');
+  });
+
+  it('only admins define them', async () => {
+    const { status } = await call('POST', '/v1/custom-fields', {
+      as: operations,
+      body: { name: 'Parking', kind: 'text' },
+    });
+    expect(status).toBe(403);
+  });
+
+  it('shows every field on a property, empty until filled', async () => {
+    expect(await fieldsOf(cottage)).toEqual([
+      expect.objectContaining({ id: link, kind: 'link', value: null, hidden: false }),
+      expect.objectContaining({ id: code, kind: 'secret', value: null, hidden: false }),
+      expect.objectContaining({ id: note, kind: 'long_text', value: null, hidden: false }),
+    ]);
+  });
+
+  it('saves values, checks links, and clears with an empty string', async () => {
+    const bad = await call('PUT', `/v1/properties/${cottage}/fields`, {
+      as: operations,
+      body: { values: { [link]: 'see the shared doc' } },
+    });
+    expect(bad.status).toBe(422);
+    expect(bad.body.error.code).toBe('not_a_link');
+
+    const { status, body } = await call('PUT', `/v1/properties/${cottage}/fields`, {
+      as: operations,
+      body: { values: { [link]: 'https://docs.example.test/arrival', [note]: 'Bins go out Tuesday.' } },
+    });
+    expect(status).toBe(200);
+    expect(body.fields).toEqual([
+      expect.objectContaining({ id: link, value: 'https://docs.example.test/arrival' }),
+      expect.objectContaining({ id: code, value: null }),
+      expect.objectContaining({ id: note, value: 'Bins go out Tuesday.' }),
+    ]);
+
+    const cleared = await call('PUT', `/v1/properties/${cottage}/fields`, {
+      as: operations,
+      body: { values: { [note]: '' } },
+    });
+    expect(cleared.body.fields).toEqual([
+      expect.objectContaining({ id: link, value: 'https://docs.example.test/arrival' }),
+      expect.objectContaining({ id: code, value: null }),
+      expect.objectContaining({ id: note, value: null }),
+    ]);
+  });
+
+  it('keeps secrets encrypted in the database and shows them only to roles that may see them', async () => {
+    const { status, body } = await call('PUT', `/v1/properties/${cottage}/fields`, {
+      as: operations,
+      body: { values: { [code]: '1357#' } },
+    });
+    expect(status).toBe(200);
+    expect(body.fields).toContainEqual(expect.objectContaining({ id: code, value: '1357#', hidden: false }));
+
+    // Operations and admins see it; accounts see that there is one, and nothing else.
+    expect(await fieldsOf(cottage, operations)).toContainEqual(
+      expect.objectContaining({ id: code, value: '1357#' }),
+    );
+    const books = await fieldsOf(cottage, accounts);
+    expect(books).toContainEqual(expect.objectContaining({ id: code, value: null, hidden: true }));
+    expect(JSON.stringify(books)).not.toContain('1357');
+
+    // The table and the audit log hold sealed bytes, never the code.
+    const [stored] = await ownerRows<{ value: string | null; secret: Buffer | null }>(
+      `select value, secret from app.property_field_values where property_id = $1 and field_id = $2`,
+      [cottage, code],
+    );
+    expect(stored?.value).toBeNull();
+    expect(stored?.secret?.toString('utf8')).not.toContain('1357');
+    const audit = await ownerRows<{ after: Record<string, unknown> }>(
+      `select after from app.audit_log where entity_type = 'property_field_values' and entity_id = (
+         select id from app.property_field_values where property_id = $1 and field_id = $2)`,
+      [cottage, code],
+    );
+    expect(audit.length).toBeGreaterThan(0);
+    expect(JSON.stringify(audit)).not.toContain('1357');
+
+    // Accounts can't set one either.
+    const { status: refused } = await call('PUT', `/v1/properties/${cottage}/fields`, {
+      as: accounts,
+      body: { values: { [code]: '0000' } },
+    });
+    expect(refused).toBe(403);
+  });
+
+  it('refuses secrets when the API has no key, instead of storing them plain', async () => {
+    const bare = await buildApp({
+      env: loadEnv({ NODE_ENV: 'test', DATABASE_URL: t.apiUrl, SUPABASE_JWT_SECRET: JWT_SECRET }),
+      db,
+      verifyToken: createTokenVerifier({ jwtSecret: JWT_SECRET }),
+      photos: storage,
+    });
+    try {
+      const { status, body } = await call('PUT', `/v1/properties/${cottage}/fields`, {
+        as: asA(),
+        body: { values: { [code]: '9999' } },
+        on: bare,
+      });
+      expect(status).toBe(503);
+      expect(body.error.code).toBe('secrets_unavailable');
+      // What is already stored stays hidden rather than unreadable noise.
+      expect(await fieldsOf(cottage, asA())).toContainEqual(
+        expect.objectContaining({ id: code, value: '1357#' }),
+      );
+      const { body: seen } = await call('GET', `/v1/properties/${cottage}`, { as: asA(), on: bare });
+      expect(seen.fields).toContainEqual(expect.objectContaining({ id: code, value: null, hidden: true }));
+    } finally {
+      await bare.close();
+    }
+  });
+
+  it('renames and reorders fields, and deleting one removes its values everywhere', async () => {
+    const renamed = await call('PATCH', `/v1/custom-fields/${note}`, {
+      as: asA(),
+      body: { name: 'Internal note', position: 0 },
+    });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body).toMatchObject({ name: 'Internal note', position: 0 });
+    expect((await fieldsOf(cottage)).map((f) => f.name)).toEqual([
+      'Internal note',
+      'Check-in instructions',
+      'Lock code',
+    ]);
+
+    const gone = await call('DELETE', `/v1/custom-fields/${code}`, { as: asA() });
+    expect(gone.status).toBe(200);
+    expect((await fieldsOf(cottage)).map((f) => f.name)).toEqual(['Internal note', 'Check-in instructions']);
+    const [left] = await ownerRows<{ n: number }>(
+      `select count(*)::int as n from app.property_field_values where field_id = $1`,
+      [code],
+    );
+    expect(left?.n).toBe(0);
+  });
+
+  it("keeps one operator's fields out of another's workspace", async () => {
+    expect((await call('GET', '/v1/custom-fields', { as: asB() })).body.fields).toEqual([]);
+    const { status } = await call('PATCH', `/v1/custom-fields/${link}`, {
+      as: asB(),
+      body: { name: 'Mine' },
+    });
+    expect(status).toBe(404);
+    const { status: setStatus } = await call('PUT', `/v1/properties/${cottage}/fields`, {
+      as: asB(),
+      body: { values: { [link]: 'https://b.example.test' } },
+    });
+    expect(setStatus).toBe(404);
   });
 });
