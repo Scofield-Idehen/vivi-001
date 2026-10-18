@@ -11,6 +11,7 @@ import {
   type CalendarNight,
   CalendarQuerySchema,
   type CalendarStay,
+  CHANNEL_LABELS,
   type Channel,
   type ChannexState,
   type CleaningState,
@@ -235,6 +236,8 @@ function listingDefaults(): Omit<PropertyDetail, keyof Property | 'updatedAt'> {
     amenities: [],
     photos: [],
     channex: NOT_CONNECTED,
+    cleaning: { status: 'clean', changedAt: null, changedBy: null },
+    listings: [],
   };
 }
 
@@ -1330,7 +1333,27 @@ function findProperty(operator: DemoOperator, id: string): PropertyDetail {
 }
 
 /** Photo addresses point into this browser's storage; photos it no longer has are left out. */
-async function resolved(detail: PropertyDetail): Promise<PropertyDetail> {
+/**
+ * The listings a sample property is on: one per connected account of the operator, for properties
+ * V-01 runs or that are still on Guesty (step 7 will link real ones).
+ */
+function listingsOf(operator: DemoOperator, detail: PropertyDetail): PropertyDetail['listings'] {
+  if (detail.managedBy === 'none') return [];
+  const counts: Partial<Record<Channel, number>> = {};
+  return operator.channelAccounts
+    .filter((a) => a.connected)
+    .map((a) => {
+      counts[a.channel] = (counts[a.channel] ?? 0) + 1;
+      const letter = String.fromCharCode(64 + (counts[a.channel] ?? 1));
+      return {
+        channel: a.channel,
+        account: `${CHANNEL_LABELS[a.channel]} ${letter}`,
+        externalListingId: `${detail.internalCode ?? 'L'}-${a.channel}-${letter}`.toLowerCase(),
+      };
+    });
+}
+
+async function resolved(detail: PropertyDetail, operator?: DemoOperator): Promise<PropertyDetail> {
   const photos: PropertyDetail['photos'] = [];
   for (const photo of detail.photos) {
     const url = photo.url.startsWith('demo-photo:')
@@ -1345,7 +1368,18 @@ async function resolved(detail: PropertyDetail): Promise<PropertyDetail> {
     detail.channex = channex;
     save();
   }
-  return { ...detail, photos, channex, coverPhotoUrl: photos[0]?.url ?? null, photoCount: photos.length };
+  if (operator) sweepCleaning(operator);
+  const cleaning = operator?.cleaning?.[detail.id] ?? { status: 'clean', changedAt: null, changedBy: null };
+  const listings = operator ? listingsOf(operator, detail) : [];
+  return {
+    ...detail,
+    photos,
+    channex,
+    cleaning,
+    listings,
+    coverPhotoUrl: photos[0]?.url ?? null,
+    photoCount: photos.length,
+  };
 }
 
 const PROPERTY_KEYS = Object.keys(PropertySchema.shape) as (keyof Property)[];
@@ -1767,7 +1801,7 @@ function changeDemoReservation(operator: DemoOperator, id: string, body: unknown
   return toReservation(operator, stay);
 }
 
-const PROPERTY_PATH = /^\/v1\/properties\/([0-9a-f-]{36})(\/rooms|\/amenities|\/photos\/order)?$/;
+const PROPERTY_PATH = /^\/v1\/properties\/([0-9a-f-]{36})(\/rooms|\/amenities|\/photos\/order|\/archive)?$/;
 const PHOTO_PATH = /^\/v1\/properties\/([0-9a-f-]{36})\/photos\/([0-9a-f-]{36})$/;
 
 export async function demoFetch<T>(
@@ -1882,10 +1916,18 @@ export async function demoFetch<T>(
     const [, id, part] = propertyMatch;
     if (method === 'GET' && !part) {
       const { operator } = access(options.orgId, 'properties.read');
-      return (await resolved(findProperty(operator, id))) as T;
+      return (await resolved(findProperty(operator, id), operator)) as T;
     }
     const { operator } = access(options.orgId, 'properties.write');
     const property = findProperty(operator, id);
+
+    if (method === 'POST' && part === '/archive') {
+      operator.properties = operator.properties.filter((p) => p.id !== property.id);
+      operator.calendar.stays = operator.calendar.stays.filter((st) => st.propertyId !== property.id);
+      operator.calendar.blocks = operator.calendar.blocks.filter((bl) => bl.propertyId !== property.id);
+      save();
+      return { archivedAt: new Date().toISOString() } as T;
+    }
 
     if (method === 'PATCH' && !part) {
       const parsed = PropertyUpdateSchema.safeParse(options.body);

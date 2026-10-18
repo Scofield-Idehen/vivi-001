@@ -23,6 +23,17 @@ V-01 Build Playbook and Design Roadmap.
   stand-ins in one run never clash in the mapping table.
 - **Changes to a guest's name, email and phone are now in the audit trail** (migration 0017). They
   were being saved without a record of who changed them; found while mapping progress on 18 October.
+- **The property page opens with the property at a glance (Alpha, 18 Oct 2026: "we are missing a lot
+  of details").** Under the photos: the listing's title and address; bedrooms, bathrooms, beds, guests
+  and photos as counts; the channels it is listed on, as marks; clean or dirty, changeable there; and
+  buttons to its own calendar and bookings (the Calendar and Reservations open searched for it).
+  Guesty's property page was the measure; the page keeps V-01's own shape.
+- **A property can be archived, from a Settings part at the end of its page.** It leaves every screen
+  and nothing more is sent for it; its bookings, history and Channex link stay, so V-01 support can
+  bring it back. Settings also shows the short code, area, who runs the channels, who sets prices and
+  when it was added. Task templates, automation, saved replies and accounting are Guesty parts of
+  the same page; they come with the inbox (Phase 2), tasks (Phase 3) and owner accounting (after
+  switch-off).
 - **Hosting moves to Firebase (Alpha).** Firebase hosts the whole project, the web app and the API
   and worker, in place of Render. Supabase stays the database, file storage and, for now, sign-in.
   Not urgent; nothing in the code has changed yet.

@@ -484,3 +484,36 @@ describe('connecting to the channel manager', () => {
     });
   });
 });
+
+describe('the property page’s summary and archiving', () => {
+  it('shows cleaning and the listings taking bookings, and archiving hides the property everywhere', async () => {
+    const { body: made } = await call('POST', '/v1/properties', {
+      as: asA(),
+      body: { name: 'Marsh House', countryCode: 'GB', maxGuests: 4 },
+    });
+    expect(made.cleaning).toEqual({ status: 'clean', changedAt: null, changedBy: null });
+    expect(made.listings).toEqual([]);
+    const [account] = await ownerRows<{ id: string }>(
+      `insert into app.channel_accounts (organisation_id, channel, label) values ($1, 'airbnb', 'Airbnb B') returning id`,
+      [a.orgId],
+    );
+    await ownerRows(
+      `insert into app.channel_listings (organisation_id, property_id, channel_account_id, channel, external_listing_id)
+       values ($1, $2, $3, 'airbnb', '123456')`,
+      [a.orgId, made.id, account!.id],
+    );
+    await call('PUT', `/v1/properties/${made.id}/cleaning`, { as: asA(), body: { status: 'dirty' } });
+    const { body } = await call('GET', `/v1/properties/${made.id}`, { as: asA() });
+    expect(body.listings).toEqual([{ channel: 'airbnb', account: 'Airbnb B', externalListingId: '123456' }]);
+    expect(body.cleaning).toMatchObject({ status: 'dirty', changedBy: 'admin-a@example.test' });
+
+    expect((await call('POST', `/v1/properties/${made.id}/archive`, { as: asB() })).status).toBe(404);
+    const archived = await call('POST', `/v1/properties/${made.id}/archive`, { as: asA() });
+    expect(archived.status).toBe(200);
+    expect(Date.now() - Date.parse(archived.body.archivedAt)).toBeLessThan(60_000);
+    expect((await call('GET', `/v1/properties/${made.id}`, { as: asA() })).status).toBe(404);
+    const list = await call('GET', '/v1/properties', { as: asA() });
+    expect((list.body.properties as { id: string }[]).some((p) => p.id === made.id)).toBe(false);
+    expect((await call('POST', `/v1/properties/${made.id}/archive`, { as: asA() })).status).toBe(404);
+  });
+});

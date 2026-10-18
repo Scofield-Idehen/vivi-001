@@ -191,13 +191,18 @@ function CalendarScreen() {
   });
   const maxHeight = `max(420px, calc(100dvh - ${top + BOTTOM_SPACE}px))`;
 
-  const [filters, setFilters] = useState(() => loadFilters(orgId));
+  // Opened from a property's page ("See its calendar"), the search starts on that property.
+  const [params] = useSearchParams();
+  const [filters, setFilters] = useState(() => {
+    const kept = loadFilters(orgId);
+    const property = params.get('property');
+    return property ? { ...kept, search: property } : kept;
+  });
   useEffect(() => keepFilters(orgId, filters), [orgId, filters]);
 
   // The whole timeline, and where it opens: just before today, or before a booking's arrival when
   // opened from it ("See it on the Calendar").
   const timeline = useMemo(() => timelineFor(localToday), [localToday]);
-  const [params] = useSearchParams();
   const [startAt] = useState(() => {
     const asked = params.get('from');
     const at = asked && isIsoDate(asked) ? asked : localToday;

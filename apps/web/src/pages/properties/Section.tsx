@@ -17,6 +17,7 @@ export const SECTION_TITLES: Record<ListingSection, string> = {
   pricing: 'Prices and fees',
   licence: 'Licence',
   channels: 'Channels',
+  settings: 'Settings',
 };
 
 export const sectionAnchor = (id: ListingSection) => `section-${id}`;

@@ -54,9 +54,11 @@ access.
   - Adding a property: a panel slides in from the right and asks one thing at a time, in Airbnb's three
     stages: about the place; make it stand out (amenities, photos, title and description); then
     pricing. Only a name is required, and closing it keeps the draft.
-  - Every property has its own page, where any part of the listing can be changed later: photos, rooms
-    and beds, amenities, description, house rules, booking rules, prices and fees, and the licence. A
-    checklist shows what the channels still need.
+  - Every property has its own page: the property at a glance (title, address, what it sleeps, the
+    channels it's on, clean or dirty, its calendar and bookings), then every part of the listing, each
+    changeable in place: photos, rooms and beds, amenities, description, house rules, booking rules,
+    prices and fees, and the licence. A checklist shows what the channels still need, and Settings
+    archives it.
   - Connect a property to Channex from its page. The worker makes it there, in the company's own group,
     and the page shows when it's done. Nothing reaches a channel until its listings are linked (next).
   - The other modules are in the menu and arrive in later phases.

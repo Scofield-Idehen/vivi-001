@@ -338,7 +338,28 @@ export function useSetCleaning(orgId: string | null) {
         method: 'PUT',
         body: { status },
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['calendar', orgId] }),
+    onSuccess: (_state, { propertyId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['calendar', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['property', orgId, propertyId] });
+    },
+  });
+}
+
+/** Archives a property: it leaves every screen. */
+export function useArchiveProperty(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (propertyId: string) =>
+      apiFetch<{ archivedAt: string }>(`/v1/properties/${propertyId}/archive`, {
+        token: token as string,
+        orgId,
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['properties', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['calendar', orgId] });
+    },
   });
 }
 

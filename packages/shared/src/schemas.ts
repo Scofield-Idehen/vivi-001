@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { ChannexStateSchema } from './channex.ts';
 import { isIsoDate } from './dates.ts';
 import {
+  CHANNELS,
+  CLEANING_STATUSES,
   MANAGED_BY,
   MEMBER_ROLES,
   PLATFORM_ROLES,
@@ -122,6 +124,25 @@ export const TagsSchema = z
     });
   });
 
+/** Clean or dirty, and who last changed it. Shown on the Calendar and the property's page. */
+export const CleaningStateSchema = z.object({
+  status: z.enum(CLEANING_STATUSES),
+  /** When it last changed: someone marking it, or a guest's check-out. */
+  changedAt: z.string().nullable(),
+  /** Who marked it, by name or email; null when a check-out made it dirty. */
+  changedBy: z.string().nullable(),
+});
+export type CleaningState = z.infer<typeof CleaningStateSchema>;
+
+/** One of a property's listings on a channel, as linked in Channex. */
+export const PropertyListingSchema = z.object({
+  channel: z.enum(CHANNELS),
+  /** The channel account it sits on: "Airbnb A". */
+  account: z.string(),
+  externalListingId: z.string(),
+});
+export type PropertyListing = z.infer<typeof PropertyListingSchema>;
+
 /** Everything about one property: the basics above plus the whole listing. */
 export const PropertyDetailSchema = PropertySchema.extend({
   addressLine2: z.string().nullable(),
@@ -164,6 +185,10 @@ export const PropertyDetailSchema = PropertySchema.extend({
   amenities: z.array(z.string()),
   photos: z.array(PhotoSchema),
   channex: ChannexStateSchema,
+  /** Clean or dirty, and who last changed it. */
+  cleaning: CleaningStateSchema,
+  /** The channel listings linked to this property and taking bookings now. Empty until step 7. */
+  listings: z.array(PropertyListingSchema),
   updatedAt: z.string(),
 });
 export type PropertyDetail = z.infer<typeof PropertyDetailSchema>;

@@ -1,4 +1,13 @@
-import { properties, propertyAmenities, propertyPhotos, propertyRooms, type Tx } from '@v01/db';
+import {
+  appUsers,
+  channelAccounts,
+  channelListings,
+  properties,
+  propertyAmenities,
+  propertyPhotos,
+  propertyRooms,
+  type Tx,
+} from '@v01/db';
 import {
   AmenitiesUpdateSchema,
   AmenityCodesSchema,
@@ -159,8 +168,39 @@ async function loadDetail(tx: Tx, id: string): Promise<PropertyDetail> {
     amenities: amenities.map((a) => a.code),
     photos: photos.map(toPhoto),
     channex: await channexStateOf(tx, id),
+    cleaning: await cleaningOf(tx, row),
+    listings: await listingsOf(tx, id),
     updatedAt: toIso(row.updatedAt),
   };
+}
+
+async function cleaningOf(tx: Tx, row: typeof properties.$inferSelect): Promise<PropertyDetail['cleaning']> {
+  const [who] = row.cleaningChangedBy
+    ? await tx
+        .select({ name: sql<string>`coalesce(${appUsers.fullName}, ${appUsers.email})` })
+        .from(appUsers)
+        .where(eq(appUsers.id, row.cleaningChangedBy))
+    : [];
+  return {
+    status: row.cleaningStatus,
+    changedAt: row.cleaningChangedAt ? toIso(row.cleaningChangedAt) : null,
+    changedBy: who?.name ?? null,
+  };
+}
+
+/** The listings taking bookings for the property now, oldest account first. */
+async function listingsOf(tx: Tx, id: string): Promise<PropertyDetail['listings']> {
+  const rows = await tx
+    .select({
+      channel: channelListings.channel,
+      account: channelAccounts.label,
+      externalListingId: channelListings.externalListingId,
+    })
+    .from(channelListings)
+    .innerJoin(channelAccounts, eq(channelAccounts.id, channelListings.channelAccountId))
+    .where(and(eq(channelListings.propertyId, id), eq(channelListings.status, 'live')))
+    .orderBy(asc(channelAccounts.label));
+  return rows;
 }
 
 /** Database rules turned into messages a person can act on. */
@@ -306,6 +346,25 @@ export function propertyRoutes(app: FastifyInstance, deps: { scope: RequestScope
         if (input.amenities?.length) await setAmenities(tx, ctx.orgId, row.id, input.amenities);
         reply.code(201);
         return loadDetail(tx, row.id);
+      }),
+  );
+
+  /**
+   * Archives a property: it disappears from every screen and nothing more is sent for it. Its
+   * bookings, history and Channex link stay, so it can be brought back by hand if it was a mistake.
+   */
+  typed.post(
+    '/v1/properties/:id/archive',
+    { schema: { params: PropertyParams, response: { 200: z.object({ archivedAt: z.string() }) } } },
+    async (req) =>
+      deps.scope.inOrg(req, 'properties.write', async (tx) => {
+        await findProperty(tx, req.params.id);
+        const [row] = await tx
+          .update(properties)
+          .set({ archivedAt: sql`now()` })
+          .where(eq(properties.id, req.params.id))
+          .returning({ archivedAt: properties.archivedAt });
+        return { archivedAt: toIso(row?.archivedAt ?? new Date().toISOString()) };
       }),
   );
 

@@ -387,7 +387,8 @@ export type ListingSection =
   | 'booking'
   | 'pricing'
   | 'licence'
-  | 'channels';
+  | 'channels'
+  | 'settings';
 
 export interface ListingCheck {
   section: ListingSection;

@@ -1,7 +1,7 @@
 import { IconChevronRight, IconSearch, IconX } from '@tabler/icons-react';
 import { formatMoney, nightsBetween, type ReservationSummary, type ReservationView } from '@v01/shared';
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { PageLoading } from '../../components/Spinner.tsx';
 import { EmptyState, Notice, PageHeader } from '../../components/ui.tsx';
 import { ApiError, useReservations, useWorkspace } from '../../lib/api.ts';
@@ -43,7 +43,9 @@ export function Reservations() {
   const locale = workspace.data?.settings.locale ?? 'en-GB';
   const navigate = useNavigate();
   const [view, setView] = useState<ReservationView>('upcoming');
-  const [search, setSearch] = useState('');
+  // Opened from a property's page, the search starts on that property.
+  const [params] = useSearchParams();
+  const [search, setSearch] = useState(() => params.get('q') ?? '');
   const query = useSettled(search);
   const list = useReservations(orgId, view, query);
   const rows = list.data?.reservations ?? [];

@@ -29,6 +29,8 @@ import {
 import { PhotosSection } from './PhotosSection.tsx';
 import { RoomsSection } from './RoomsSection.tsx';
 import { SECTION_TITLES, sectionAnchor } from './Section.tsx';
+import { SettingsSection } from './SettingsSection.tsx';
+import { Summary } from './Summary.tsx';
 import { Tags } from './Tags.tsx';
 
 function cx(...classes: (string | false | null | undefined)[]): string {
@@ -48,6 +50,7 @@ const ORDER: ListingSection[] = [
   'pricing',
   'licence',
   'channels',
+  'settings',
 ];
 
 function goTo(id: ListingSection) {
@@ -246,6 +249,7 @@ export function PropertyPage() {
       </header>
 
       <PhotoMosaic d={d} />
+      <Summary d={d} orgId={orgId} canClean={can(entry.role, 'cleaning.write')} />
 
       <div className="mt-10 grid gap-10 lg:grid-cols-[210px_minmax(0,1fr)]">
         <aside className="flex flex-col gap-6 lg:sticky lg:top-8 lg:self-start">
@@ -270,6 +274,7 @@ export function PropertyPage() {
             canManage={can(entry.role, 'channels.manage')}
             refresh={() => void property.refetch()}
           />
+          <SettingsSection d={d} orgId={orgId} canEdit={canEdit} />
         </div>
       </div>
     </div>
