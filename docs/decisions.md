@@ -23,6 +23,9 @@ V-01 Build Playbook and Design Roadmap.
   stand-ins in one run never clash in the mapping table.
 - **Changes to a guest's name, email and phone are now in the audit trail** (migration 0017). They
   were being saved without a record of who changed them; found while mapping progress on 18 October.
+- **Clean or dirty is a small switch (Alpha, 18 Oct 2026: "this should be a tiny toggle").** One tap
+  flips it, on the Calendar and on the property's page; who changed it and when is in the tooltip.
+  This replaces the panel with a Mark clean button from 16 October.
 - **The property page opens with the property at a glance (Alpha, 18 Oct 2026: "we are missing a lot
   of details").** Under the photos: the listing's title and address; bedrooms, bathrooms, beds, guests
   and photos as counts; the channels it is listed on, as marks; clean or dirty, changeable there; and

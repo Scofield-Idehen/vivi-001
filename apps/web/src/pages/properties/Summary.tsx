@@ -5,28 +5,13 @@ import {
   IconClipboardText,
   IconDoor,
   IconPhoto,
-  IconSparkles,
-  IconSpray,
   IconUsers,
 } from '@tabler/icons-react';
-import { CHANNEL_LABELS, CLEANING_STATUS_LABELS, type PropertyDetail } from '@v01/shared';
+import { CHANNEL_LABELS, type PropertyDetail } from '@v01/shared';
 import { Link } from 'react-router';
-import { Popover } from '../../components/Popover.tsx';
-import { Button } from '../../components/ui.tsx';
-import { ApiError, useSetCleaning } from '../../lib/api.ts';
+import { CleaningToggle, cleaningStory } from '../../components/CleaningToggle.tsx';
+import { useSetCleaning } from '../../lib/api.ts';
 import { ChannelMark } from '../calendar/marks.tsx';
-
-function cx(...classes: (string | false | null | undefined)[]): string {
-  return classes.filter(Boolean).join(' ');
-}
-
-const WHEN = new Intl.DateTimeFormat('en-GB', {
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-});
 
 function Count({
   icon: Icon,
@@ -47,67 +32,18 @@ function Count({
   );
 }
 
-/** Clean or dirty, changed here as on the Calendar; says who last changed it, and when. */
+/** Clean or dirty, the same switch as on the Calendar. */
 function Cleaning({ d, orgId, canChange }: { d: PropertyDetail; orgId: string; canChange: boolean }) {
   const set = useSetCleaning(orgId);
-  const { status, changedAt, changedBy } = d.cleaning;
-  const dirty = status === 'dirty';
-  const Icon = dirty ? IconSpray : IconSparkles;
-  const next = dirty ? 'clean' : 'dirty';
-  const story = !changedAt
-    ? 'Nobody has marked it since it was added.'
-    : changedBy
-      ? `Marked ${CLEANING_STATUS_LABELS[status].toLowerCase()} by ${changedBy}, ${WHEN.format(new Date(changedAt))}.`
-      : `Dirty since a guest checked out, ${WHEN.format(new Date(changedAt))}.`;
-  const pill = cx(
-    'inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium',
-    dirty ? 'bg-pending/20 text-pending-text' : 'bg-done/10 text-done-text',
-  );
-  const content = (
-    <>
-      <Icon size={14} stroke={2} aria-hidden />
-      {CLEANING_STATUS_LABELS[status]}
-    </>
-  );
-  if (!canChange) {
-    return (
-      <span className={pill} title={story}>
-        {content}
-      </span>
-    );
-  }
   return (
-    <Popover
-      title={`Cleaning at ${d.name}`}
-      label={content}
-      buttonLabel={`${CLEANING_STATUS_LABELS[status]}. Change the cleaning of ${d.name}`}
-      buttonClassName={cx(
-        pill,
-        'cursor-pointer transition-shadow hover:shadow-[inset_0_0_0_1px_currentColor]',
-      )}
-      panelClassName="w-[270px] p-4"
-    >
-      {(close) => (
-        <div className="flex flex-col gap-3">
-          <p className="text-[14px] font-medium text-ink">
-            {d.name} is {CLEANING_STATUS_LABELS[status].toLowerCase()}
-          </p>
-          <p className="-mt-1.5 text-[13px] leading-snug text-slate">{story}</p>
-          {set.error ? (
-            <p role="alert" className="text-[12.5px] text-urgent">
-              {set.error instanceof ApiError ? set.error.message : 'That didn’t save. Try again.'}
-            </p>
-          ) : null}
-          <Button
-            variant={next === 'clean' ? 'primary' : 'secondary'}
-            disabled={set.isPending}
-            onClick={() => set.mutate({ propertyId: d.id, status: next }, { onSuccess: close })}
-          >
-            {set.isPending ? 'Saving' : next === 'clean' ? 'Mark clean' : 'Mark dirty'}
-          </Button>
-        </div>
-      )}
-    </Popover>
+    <CleaningToggle
+      state={d.cleaning}
+      name={d.name}
+      canChange={canChange}
+      pending={set.isPending}
+      story={cleaningStory(d.cleaning)}
+      onChange={(status) => set.mutate({ propertyId: d.id, status })}
+    />
   );
 }
 
