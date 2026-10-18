@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ChannexStateSchema } from './channex.ts';
 import { isIsoDate } from './dates.ts';
 import {
   MANAGED_BY,
@@ -162,6 +163,7 @@ export const PropertyDetailSchema = PropertySchema.extend({
   rooms: z.array(RoomSchema),
   amenities: z.array(z.string()),
   photos: z.array(PhotoSchema),
+  channex: ChannexStateSchema,
   updatedAt: z.string(),
 });
 export type PropertyDetail = z.infer<typeof PropertyDetailSchema>;

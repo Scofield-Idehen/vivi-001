@@ -124,3 +124,10 @@ export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 
 export const OUTBOX_STATUSES = ['pending', 'sending', 'sent', 'failed'] as const;
 export type OutboxStatus = (typeof OUTBOX_STATUSES)[number];
+
+/**
+ * A property's connection to the channel manager: asked for, being made (the worker is on it),
+ * made, or given up on after repeated failures (a person must look).
+ */
+export const CHANNEX_SETUP_STATUSES = ['queued', 'working', 'done', 'failed'] as const;
+export type ChannexSetupStatus = (typeof CHANNEX_SETUP_STATUSES)[number];

@@ -2,6 +2,7 @@ import { ApiDatabase } from '@v01/db';
 import { createTestDatabase, seedOperator, type TestDatabase } from '@v01/db/testing';
 import type { FastifyInstance } from 'fastify';
 import { SignJWT } from 'jose';
+import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.ts';
 import { createTokenVerifier } from '../src/auth.ts';
@@ -43,6 +44,16 @@ async function call(
     payload: options.body as never,
   });
   return { status: response.statusCode, body: response.json() };
+}
+
+async function ownerRows<T extends pg.QueryResultRow>(text: string, values: unknown[] = []): Promise<T[]> {
+  const client = new pg.Client({ connectionString: t.ownerUrl });
+  await client.connect();
+  try {
+    return (await client.query<T>(text, values)).rows;
+  } finally {
+    await client.end();
+  }
 }
 
 const asA = (): Who => ({ ...a, email: 'admin-a@example.test' });
@@ -381,5 +392,95 @@ describe('photos', () => {
     } finally {
       await bare.close();
     }
+  });
+});
+
+describe('connecting to the channel manager', () => {
+  const connect = (id: string, who: Who = asA()) => call('POST', `/v1/properties/${id}/channex`, { as: who });
+  const detail = async (id: string) => (await call('GET', `/v1/properties/${id}`, { as: asA() })).body;
+  let cabin: string;
+
+  beforeAll(async () => {
+    const { body } = await call('POST', '/v1/properties', {
+      as: asA(),
+      body: { name: 'Dune Cabin', countryCode: 'GB', maxGuests: 2 },
+    });
+    cabin = body.id;
+  });
+
+  it('starts not connected, and queues a request for the worker when asked', async () => {
+    expect((await detail(cabin)).channex).toEqual({
+      status: 'not_connected',
+      channexPropertyId: null,
+      requestedBy: null,
+      requestedAt: null,
+      finishedAt: null,
+      error: null,
+      attempts: 0,
+    });
+    const { status, body } = await connect(cabin);
+    expect(status).toBe(200);
+    expect(body).toMatchObject({
+      status: 'connecting',
+      requestedBy: 'admin-a@example.test',
+      attempts: 0,
+      error: null,
+    });
+    expect(Date.now() - Date.parse(body.requestedAt)).toBeLessThan(60_000);
+    expect((await detail(cabin)).channex).toEqual(body);
+    // Asking again while it is queued changes nothing.
+    expect((await connect(cabin)).body).toEqual(body);
+  });
+
+  it('is for admins only, and never another operator', async () => {
+    const [ops] = await ownerRows<{ id: string }>(
+      `insert into app.app_users (id, email) values (gen_random_uuid(), 'ops-a@example.test') returning id`,
+    );
+    await ownerRows(
+      `insert into app.memberships (organisation_id, user_id, role) values ($1, $2, 'operations')`,
+      [a.orgId, ops!.id],
+    );
+    expect(
+      (await connect(cabin, { orgId: a.orgId, userId: ops!.id, email: 'ops-a@example.test' })).status,
+    ).toBe(403);
+    expect((await connect(cabin, asB())).status).toBe(404);
+  });
+
+  it('shows a failure with its reason, starts over when asked again, and refuses once connected', async () => {
+    await ownerRows(
+      `update app.channex_setups set status = 'failed', attempts = 3, last_error = 'Title is too long', finished_at = now()
+        where property_id = $1`,
+      [cabin],
+    );
+    expect((await detail(cabin)).channex).toMatchObject({
+      status: 'failed',
+      attempts: 3,
+      error: 'Title is too long',
+    });
+    expect((await connect(cabin)).body).toMatchObject({
+      status: 'connecting',
+      attempts: 0,
+      error: null,
+      finishedAt: null,
+    });
+    // The worker made it.
+    await ownerRows(
+      `insert into app.channex_mappings (organisation_id, property_id, channex_property_id, channex_room_type_id, channex_rate_plan_id)
+       values ($1, $2, 'cx-dune', 'cx-dune-room', 'cx-dune-rate')`,
+      [a.orgId, cabin],
+    );
+    await ownerRows(
+      `update app.channex_setups set status = 'done', finished_at = now() where property_id = $1`,
+      [cabin],
+    );
+    expect((await detail(cabin)).channex).toMatchObject({
+      status: 'connected',
+      channexPropertyId: 'cx-dune',
+      error: null,
+    });
+    expect(await connect(cabin)).toMatchObject({
+      status: 409,
+      body: { error: { code: 'already_connected' } },
+    });
   });
 });

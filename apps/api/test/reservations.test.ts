@@ -361,5 +361,20 @@ describe('changing a booking', () => {
     );
     expect(rows.length).toBeGreaterThanOrEqual(2);
     expect(rows.every((r) => r.actor === members.comms.userId)).toBe(true);
+    // The guest's own details are edited on their row, so those changes are recorded too.
+    const guest = await owner<{
+      actor: string | null;
+      before: { phone: string | null };
+      after: { phone: string | null };
+    }>(
+      `select a.actor_user_id as actor, a.before, a.after from app.audit_log a
+         join app.reservations r on r.guest_id = a.entity_id
+        where a.entity_type = 'guests' and a.action = 'update' and r.id = $1
+        order by a.created_at`,
+      [ids.staying],
+    );
+    expect(guest.length).toBeGreaterThanOrEqual(2);
+    expect(guest.every((g) => g.actor === members.comms.userId)).toBe(true);
+    expect(guest.at(-1)).toMatchObject({ before: { phone: '+44 7700 900123' }, after: { phone: null } });
   });
 });

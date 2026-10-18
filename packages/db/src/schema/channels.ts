@@ -1,7 +1,25 @@
 import { sql } from 'drizzle-orm';
-import { date, foreignKey, index, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
-import { app, channel, channelAccountStatus, createdAt, listingStatus, updatedAt } from './common.ts';
-import { organisations } from './operators.ts';
+import {
+  date,
+  foreignKey,
+  index,
+  integer,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import {
+  app,
+  channel,
+  channelAccountStatus,
+  channexSetupStatus,
+  createdAt,
+  listingStatus,
+  updatedAt,
+} from './common.ts';
+import { appUsers, organisations } from './operators.ts';
 import { properties } from './properties.ts';
 
 /** One row per channel account, e.g. "Airbnb A", "Booking.com B", "Vrbo". */
@@ -107,5 +125,60 @@ export const channexChannels = app.table(
     index('channex_channels_org_idx').on(t.organisationId),
     unique('channex_channels_account_key').on(t.channelAccountId),
     unique('channex_channels_channex_key').on(t.channexChannelId),
+  ],
+);
+
+/**
+ * Each operator's properties sit in their own Channex group (playbook, Section 2). Made the first
+ * time one of the operator's properties is connected; a Channex ID, so it lives here, not in
+ * `organisations`.
+ */
+export const channexGroups = app.table(
+  'channex_groups',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    channexGroupId: text('channex_group_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('channex_groups_org_key').on(t.organisationId),
+    unique('channex_groups_channex_key').on(t.channexGroupId),
+  ],
+);
+
+/**
+ * A request to connect a property to Channex (integration step 3). The API writes it; the worker
+ * makes the property, unit and rate plan, stores the mapping and marks it done. Retried with a
+ * growing wait when Channex is busy; failed, for a person to look at, when it refuses.
+ */
+export const channexSetups = app.table(
+  'channex_setups',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    propertyId: uuid('property_id')
+      .notNull()
+      .references(() => properties.id, { onDelete: 'restrict' }),
+    status: channexSetupStatus('status').notNull().default('queued'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .defaultNow(),
+    lockedAt: timestamp('locked_at', { withTimezone: true, mode: 'string' }),
+    lastError: text('last_error'),
+    requestedBy: uuid('requested_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    finishedAt: timestamp('finished_at', { withTimezone: true, mode: 'string' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('channex_setups_org_idx').on(t.organisationId),
+    unique('channex_setups_property_key').on(t.propertyId),
+    index('channex_setups_due_idx').on(t.nextAttemptAt).where(sql`${t.status} in ('queued', 'working')`),
   ],
 );

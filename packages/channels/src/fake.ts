@@ -19,6 +19,9 @@ export class FakeChannelProvider implements ChannelProvider {
   readonly restrictionCalls: RestrictionUpdate[][] = [];
   readonly acknowledged: string[] = [];
   readonly listings: ListingSetup[] = [];
+  readonly groups: string[] = [];
+  /** Ids carry a token per instance, so two stand-ins in one test run never hand out the same id. */
+  readonly token = Math.random().toString(36).slice(2, 8);
   feed: BookingRevision[] = [];
   private nextFailure: ChannelError | null = null;
   private taskCounter = 0;
@@ -64,12 +67,18 @@ export class FakeChannelProvider implements ChannelProvider {
   async createListing(setup: ListingSetup): Promise<ExternalPropertyRef> {
     this.maybeFail();
     this.listings.push(setup);
-    const n = this.listings.length;
+    const n = `${this.token}-${this.listings.length}`;
     return {
       externalPropertyId: `fake-property-${n}`,
       externalRoomTypeId: `fake-room-${n}`,
       externalRatePlanId: `fake-rate-${n}`,
     };
+  }
+
+  async createGroup(title: string): Promise<string> {
+    this.maybeFail();
+    this.groups.push(title);
+    return `fake-group-${this.token}-${this.groups.length}`;
   }
 
   /** The stand-in stores a revision as itself, so reading it back is the revision less its payload. */

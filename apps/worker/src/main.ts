@@ -14,6 +14,7 @@ import { loadEnv } from './env.ts';
 import { enqueueFullSync } from './full-sync.ts';
 import { startJobs } from './jobs.ts';
 import { processOutbox } from './outbox.ts';
+import { connectProperties } from './setup.ts';
 
 const env = loadEnv();
 const log = pino({ level: env.LOG_LEVEL, base: { service: 'v01-worker' } });
@@ -61,6 +62,10 @@ const stops = [
   every('outbox', env.OUTBOX_INTERVAL_MS, async () => {
     const stats = await processOutbox(deps);
     if (stats.claimed) log.info(stats, 'Outbox processed');
+  }),
+  every('setup', env.OUTBOX_INTERVAL_MS, async () => {
+    const stats = await connectProperties(deps);
+    if (stats.claimed) log.info(stats, 'Properties connected');
   }),
 ];
 

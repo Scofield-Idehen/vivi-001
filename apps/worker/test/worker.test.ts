@@ -17,6 +17,7 @@ import { silentLogger, type WorkerDeps } from '../src/deps.ts';
 import { enqueueFullSync, FULL_SYNC_DAYS } from '../src/full-sync.ts';
 import { startJobs } from '../src/jobs.ts';
 import { backoffMs, processOutbox } from '../src/outbox.ts';
+import { connectProperties } from '../src/setup.ts';
 
 class MemoryAlerts implements AlertSink {
   readonly sent: Alert[] = [];
@@ -678,6 +679,144 @@ describe('clean and dirty', () => {
     expect(await markDirtyAfterCheckOut(at('2026-10-20T11:30:00Z'))).toBe(0);
     expect(await markDirtyAfterCheckOut(at('2026-10-20T12:05:00Z'))).toBe(1);
     expect((await state())?.changed_at).toBe('2026-10-20 12:00:00');
+  });
+});
+
+describe('connecting properties to the channel manager', () => {
+  /** A property added in V-01 with no Channex ids yet. */
+  async function plainProperty(name: string, managedBy: 'v01' | 'guesty' | 'none'): Promise<string> {
+    const [row] = await owner<{ id: string }>(
+      `insert into app.properties (organisation_id, name, country_code, max_guests, managed_by, city, postcode, address_line1)
+       values ($1, $2, 'GB', 6, $3, 'Port Seton', 'EH32 0AA', '4 Harbour Road') returning id`,
+      [op.orgId, name, managedBy],
+    );
+    return row!.id;
+  }
+  const ask = (propertyId: string) =>
+    owner(
+      `insert into app.channex_setups (organisation_id, property_id, requested_by) values ($1, $2, $3)
+       on conflict (property_id) do update set status = 'queued', attempts = 0, next_attempt_at = now(), locked_at = null, last_error = null, finished_at = null`,
+      [op.orgId, propertyId, op.userId],
+    );
+  const setupOf = async (propertyId: string) => {
+    const [row] = await owner<{
+      status: string;
+      attempts: number;
+      last_error: string | null;
+      finished_at: string | null;
+    }>('select status, attempts, last_error, finished_at from app.channex_setups where property_id = $1', [
+      propertyId,
+    ]);
+    return row;
+  };
+  const mappingOf = async (propertyId: string) => {
+    const [row] = await owner<{
+      channex_property_id: string;
+      channex_room_type_id: string;
+      channex_rate_plan_id: string;
+    }>(
+      'select channex_property_id, channex_room_type_id, channex_rate_plan_id from app.channex_mappings where property_id = $1',
+      [propertyId],
+    );
+    return row;
+  };
+
+  it('makes the operator’s group once, then the property in it, and keeps the ids', async () => {
+    const lodge = await plainProperty('Lighthouse Lodge', 'guesty');
+    const barn = await plainProperty('Lighthouse Barn', 'guesty');
+    await ask(lodge);
+    await ask(barn);
+    expect(await connectProperties(deps)).toEqual({ claimed: 2, done: 2, deferred: 0, failed: 0 });
+    expect(provider.groups).toEqual(['Operator']);
+    expect(provider.listings).toHaveLength(2);
+    expect(provider.listings[0]).toMatchObject({
+      title: 'Lighthouse Lodge',
+      currency: 'GBP',
+      countryCode: 'GB',
+      timeZone: 'Europe/London',
+      maxGuests: 6,
+      city: 'Port Seton',
+      postcode: 'EH32 0AA',
+      address: '4 Harbour Road',
+      groupId: `fake-group-${provider.token}-1`,
+    });
+    expect(await mappingOf(lodge)).toEqual({
+      channex_property_id: `fake-property-${provider.token}-1`,
+      channex_room_type_id: `fake-room-${provider.token}-1`,
+      channex_rate_plan_id: `fake-rate-${provider.token}-1`,
+    });
+    expect(await setupOf(lodge)).toMatchObject({ status: 'done', attempts: 1, last_error: null });
+    expect((await setupOf(lodge))?.finished_at).not.toBeNull();
+    const groups = await owner<{ channex_group_id: string }>(
+      'select channex_group_id from app.channex_groups where organisation_id = $1',
+      [op.orgId],
+    );
+    expect(groups).toEqual([{ channex_group_id: `fake-group-${provider.token}-1` }]);
+    // Nothing is queued for a property still on Guesty: Guesty runs its channels.
+    const queued = await owner('select 1 from app.ari_outbox where property_id = $1', [lodge]);
+    expect(queued).toHaveLength(0);
+    // A second run finds nothing to do.
+    expect(await connectProperties(deps)).toEqual({ claimed: 0, done: 0, deferred: 0, failed: 0 });
+  });
+
+  it('queues a full sync straight away for a property V-01 already runs', async () => {
+    const studio = await plainProperty('Pier Studio', 'v01');
+    await ask(studio);
+    await connectProperties(deps);
+    expect(await setupOf(studio)).toMatchObject({ status: 'done', last_error: null });
+    const rows = await owner<{ kind: string; date_from: string; date_to: string }>(
+      'select kind, date_from::text, date_to::text from app.ari_outbox where property_id = $1 order by kind',
+      [studio],
+    );
+    expect(rows).toEqual([
+      { kind: 'availability', date_from: TODAY, date_to: '2028-02-26' },
+      { kind: 'restrictions', date_from: TODAY, date_to: '2028-02-26' },
+    ]);
+  });
+
+  it('tries again later when the channel manager is busy, and gives up with an alert when it refuses', async () => {
+    const flat = await plainProperty('Pier Flat', 'guesty');
+    await ask(flat);
+    provider.failNextCallWith(new ChannelError('Too many requests', 'rate_limited', 429, 1000));
+    expect(await connectProperties(deps)).toMatchObject({ deferred: 1 });
+    expect(await setupOf(flat)).toMatchObject({
+      status: 'queued',
+      attempts: 1,
+      last_error: 'Too many requests',
+    });
+    expect(await mappingOf(flat)).toBeUndefined();
+    expect(alerts.sent).toHaveLength(0);
+    // Not due yet.
+    expect(await connectProperties(deps)).toMatchObject({ claimed: 0 });
+    await owner('update app.channex_setups set next_attempt_at = now() where property_id = $1', [flat]);
+    provider.failNextCallWith(new ChannelError('Title is too long', 'validation', 422));
+    expect(await connectProperties(deps)).toMatchObject({ failed: 1 });
+    expect(await setupOf(flat)).toMatchObject({
+      status: 'failed',
+      attempts: 2,
+      last_error: 'Title is too long',
+    });
+    expect(alerts.sent.map((a) => a.title)).toEqual(["Couldn't connect Pier Flat to the channel manager"]);
+    // Asked again from the property's page, it starts over and gets through.
+    await ask(flat);
+    expect(await connectProperties(deps)).toMatchObject({ done: 1 });
+    expect(await mappingOf(flat)).toBeDefined();
+  });
+
+  it('records the request and its outcome in the audit trail and the sync log', async () => {
+    const cabin = await plainProperty('Pier Cabin', 'guesty');
+    await ask(cabin);
+    await connectProperties(deps);
+    const log = await owner<{ kind: string; status: string }>(
+      "select kind, status from app.sync_log where property_id = $1 and kind = 'setup'",
+      [cabin],
+    );
+    expect(log).toEqual([{ kind: 'setup', status: 'ok' }]);
+    const audit = await owner<{ action: string }>(
+      "select action from app.audit_log where entity_type = 'channex_setups' and entity_id = (select id from app.channex_setups where property_id = $1) order by created_at",
+      [cabin],
+    );
+    expect(audit.map((a) => a.action)).toEqual(['insert', 'update', 'update']);
   });
 });
 

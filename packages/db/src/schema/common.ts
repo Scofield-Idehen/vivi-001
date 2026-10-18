@@ -2,6 +2,7 @@ import {
   CANCELLATION_POLICIES,
   CHANNEL_ACCOUNT_STATUSES,
   CHANNELS,
+  CHANNEX_SETUP_STATUSES,
   CHECK_IN_METHODS,
   CLEANING_STATUSES,
   LISTING_STATUSES,
@@ -32,6 +33,7 @@ export const managedBy = app.enum('managed_by', MANAGED_BY);
 export const priceOwner = app.enum('price_owner', PRICE_OWNERS);
 export const outboxKind = app.enum('outbox_kind', OUTBOX_KINDS);
 export const outboxStatus = app.enum('outbox_status', OUTBOX_STATUSES);
+export const channexSetupStatus = app.enum('channex_setup_status', CHANNEX_SETUP_STATUSES);
 export const platformRole = app.enum('platform_role', PLATFORM_ROLES);
 export const spaceType = app.enum('space_type', SPACE_TYPES);
 export const checkInMethod = app.enum('check_in_method', CHECK_IN_METHODS);

@@ -12,6 +12,7 @@ import {
   CalendarQuerySchema,
   type CalendarStay,
   type Channel,
+  type ChannexState,
   type CleaningState,
   CleaningUpdateSchema,
   type ConsoleOperator,
@@ -233,7 +234,54 @@ function listingDefaults(): Omit<PropertyDetail, keyof Property | 'updatedAt'> {
     rooms: [],
     amenities: [],
     photos: [],
+    channex: NOT_CONNECTED,
   };
+}
+
+const NOT_CONNECTED: ChannexState = {
+  status: 'not_connected',
+  channexPropertyId: null,
+  requestedBy: null,
+  requestedAt: null,
+  finishedAt: null,
+  error: null,
+  attempts: 0,
+};
+
+/** A connection the stand-in worker finished: the sample properties V-01 runs were "connected" when added. */
+function connectedSince(at: string): ChannexState {
+  return {
+    status: 'connected',
+    channexPropertyId: crypto.randomUUID(),
+    requestedBy: 'Demo user',
+    requestedAt: at,
+    finishedAt: at,
+    error: null,
+    attempts: 1,
+  };
+}
+
+/**
+ * The stand-in worker: a request made more than a few seconds ago has been done. Properties saved
+ * before this existed get their state from who runs them.
+ */
+function channexOf(detail: PropertyDetail): ChannexState {
+  const current = detail.channex as ChannexState | undefined;
+  if (!current) return detail.managedBy === 'v01' ? connectedSince(detail.createdAt) : NOT_CONNECTED;
+  if (
+    current.status === 'connecting' &&
+    current.requestedAt &&
+    Date.now() - Date.parse(current.requestedAt) > 4000
+  ) {
+    return {
+      ...current,
+      status: 'connected',
+      channexPropertyId: crypto.randomUUID(),
+      finishedAt: new Date().toISOString(),
+      attempts: 1,
+    };
+  }
+  return current;
 }
 
 function sampleProperty(p: {
@@ -1292,7 +1340,12 @@ async function resolved(detail: PropertyDetail): Promise<PropertyDetail> {
         : photo.url;
     if (url) photos.push({ ...photo, url, position: photos.length });
   }
-  return { ...detail, photos, coverPhotoUrl: photos[0]?.url ?? null, photoCount: photos.length };
+  const channex = channexOf(detail);
+  if (channex !== detail.channex) {
+    detail.channex = channex;
+    save();
+  }
+  return { ...detail, photos, channex, coverPhotoUrl: photos[0]?.url ?? null, photoCount: photos.length };
 }
 
 const PROPERTY_KEYS = Object.keys(PropertySchema.shape) as (keyof Property)[];
@@ -1609,6 +1662,7 @@ const END_PATH = /^\/v1\/console\/support-access\/([0-9a-f-]{36})\/end$/;
 
 const RESERVATION_PATH = /^\/v1\/reservations\/([0-9a-f-]{36})$/;
 const CLEANING_PATH = /^\/v1\/properties\/([0-9a-f-]{36})\/cleaning$/;
+const CHANNEX_PATH = /^\/v1\/properties\/([0-9a-f-]{36})\/channex$/;
 
 function reservationSummary(operator: DemoOperator, x: DemoStay): ReservationSummary {
   return {
@@ -1955,6 +2009,25 @@ export async function demoFetch<T>(
     const { operator } = access(options.orgId, 'reservations.read');
     const query = Object.fromEntries(new URLSearchParams(path.split('?')[1] ?? ''));
     return demoReservations(operator, query) as T;
+  }
+
+  const channexMatch = CHANNEX_PATH.exec(path);
+  if (method === 'POST' && channexMatch?.[1]) {
+    const { operator } = access(options.orgId, 'channels.manage');
+    const property = findProperty(operator, channexMatch[1]);
+    const current = channexOf(property);
+    if (current.status === 'connected') {
+      throw new ApiError(409, 'already_connected', 'This property is already connected to Channex.');
+    }
+    if (current.status === 'connecting') return current as T;
+    property.channex = {
+      ...NOT_CONNECTED,
+      status: 'connecting',
+      requestedBy: 'Demo user',
+      requestedAt: new Date().toISOString(),
+    };
+    save();
+    return property.channex as T;
   }
 
   const cleaningMatch = CLEANING_PATH.exec(path);

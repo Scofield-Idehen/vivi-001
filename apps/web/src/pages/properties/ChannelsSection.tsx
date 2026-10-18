@@ -1,8 +1,90 @@
 import { IconCheck } from '@tabler/icons-react';
-import type { PropertyDetail } from '@v01/shared';
-import { StatusDot } from '../../components/ui.tsx';
+import type { ChannexState, PropertyDetail } from '@v01/shared';
+import { useEffect } from 'react';
+import { Spinner } from '../../components/Spinner.tsx';
+import { Button, StatusDot } from '../../components/ui.tsx';
+import { ApiError, useConnectChannex } from '../../lib/api.ts';
 import { V01 } from '../../lib/format.ts';
 import { Section } from './Section.tsx';
+
+const WHEN = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+const when = (iso: string | null) => (iso ? WHEN.format(new Date(iso)) : '');
+
+/**
+ * The property's place in Channex (integration step 3). Connecting makes it there, in the
+ * operator's own group; nothing reaches any channel until its listings are linked (step 7).
+ */
+function ChannelManager({
+  state,
+  orgId,
+  propertyId,
+  canManage,
+  refresh,
+}: {
+  state: ChannexState;
+  orgId: string;
+  propertyId: string;
+  canManage: boolean;
+  refresh(): void;
+}) {
+  const connect = useConnectChannex(orgId, propertyId);
+  // The worker is on it: look again every few seconds until it is done.
+  useEffect(() => {
+    if (state.status !== 'connecting') return;
+    const timer = setInterval(refresh, 4000);
+    return () => clearInterval(timer);
+  }, [state.status, refresh]);
+
+  const line =
+    state.status === 'connected' ? (
+      <StatusDot status="done">
+        Connected to Channex{state.finishedAt ? `, ${when(state.finishedAt)}` : ''}. Its Airbnb, Booking.com
+        and Vrbo listings can be linked to it next.
+      </StatusDot>
+    ) : state.status === 'connecting' ? (
+      <span className="inline-flex items-center gap-2">
+        <Spinner size={16} />
+        <span>
+          Connecting to Channex, asked for by {state.requestedBy ?? 'the team'}
+          {state.attempts > 1 ? `; attempt ${state.attempts}` : ''}.
+          {state.error ? ` Last try: ${state.error}` : ''}
+        </span>
+      </span>
+    ) : state.status === 'failed' ? (
+      <StatusDot status="urgent">
+        Couldn’t connect to Channex after {state.attempts} {state.attempts === 1 ? 'try' : 'tries'}
+        {state.error ? `: ${state.error}` : ''}
+      </StatusDot>
+    ) : (
+      <StatusDot status="neutral">
+        Not in Channex yet. Connecting makes it there; nothing is sent to any channel.
+      </StatusDot>
+    );
+
+  const error = connect.error;
+  return (
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-xl bg-paper px-4 py-3.5 text-[14px]">
+      <div className="min-w-0">
+        {line}
+        {error ? (
+          <p role="alert" className="mt-1 text-[12.5px] text-urgent">
+            {error instanceof ApiError ? error.message : 'That didn’t go through. Try again.'}
+          </p>
+        ) : null}
+      </div>
+      {canManage && (state.status === 'not_connected' || state.status === 'failed') ? (
+        <Button variant="primary" disabled={connect.isPending} onClick={() => connect.mutate()}>
+          {state.status === 'failed' ? 'Try again' : 'Connect to Channex'}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
 
 const CHANNELS = ['Airbnb', 'Booking.com', 'Vrbo'] as const;
 
@@ -20,7 +102,19 @@ const SYNC: { what: string; synced: readonly (typeof CHANNELS)[number][] }[] = [
   { what: 'Photos, title, description and amenities', synced: [] },
 ];
 
-export function ChannelsSection({ d }: { d: PropertyDetail }) {
+export function ChannelsSection({
+  d,
+  orgId,
+  canManage,
+  refresh,
+}: {
+  d: PropertyDetail;
+  orgId: string;
+  /** The role can connect channels: admins. */
+  canManage: boolean;
+  /** Loads the property again, to see what the worker has done. */
+  refresh(): void;
+}) {
   const state =
     d.managedBy === 'v01' ? (
       <StatusDot status="done">Run by {V01}: changes here reach the channels.</StatusDot>
@@ -40,6 +134,13 @@ export function ChannelsSection({ d }: { d: PropertyDetail }) {
       canEdit={false}
       description={`Guests book through Airbnb, Booking.com and Vrbo. This is what ${V01} keeps in step on each.`}
     >
+      <ChannelManager
+        state={d.channex}
+        orgId={orgId}
+        propertyId={d.id}
+        canManage={canManage}
+        refresh={refresh}
+      />
       <p className="text-[14px]">{state}</p>
       <div className="mt-6 overflow-x-auto">
         <table className="w-full min-w-[560px] border-collapse text-left text-[13.5px]">

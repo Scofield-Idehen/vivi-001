@@ -120,6 +120,20 @@
       "when": 1792136177638,
       "tag": "0016_cleaning_status",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792343143922,
+      "tag": "0017_guests_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792343408056,
+      "tag": "0018_channex_setups",
+      "breakpoints": true
     }
   ]
 }

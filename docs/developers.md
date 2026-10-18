@@ -22,6 +22,7 @@ with a soft white page.
 | Calendar: nightly prices, stay rules and blocks | `apps/api/src/routes/calendar.ts`, `packages/shared/src/calendar.ts` | Done |
 | Calendar screen: one scrolling timeline (a year back, two ahead, loaded four weeks at a time), Availability, filters, channel marks and the actions panel | `apps/web/src/pages/calendar` | Done; awaiting design sign-off |
 | Clean and dirty: marked by hand, or dirty after a check-out | `apps/api/src/routes/cleaning.ts`, `apps/worker/src/cleaning.ts`, `packages/db/migrations/0016_cleaning_status.sql` | Done |
+| Property sync into Channex (step 3): asked for from the property page, made by the worker in the operator's group | `apps/api/src/routes/channex.ts`, `apps/worker/src/setup.ts`, `packages/db/migrations/0018_channex_setups.sql` | Done, tested against the stand-in |
 | Property tags | `packages/db/migrations/0014_property_tags.sql`, `apps/web/src/pages/properties/Tags.tsx` | Done |
 | Reservations: list, one booking's page, and its edits | `apps/api/src/routes/reservations.ts`, `apps/web/src/pages/reservations` | Done; awaiting design sign-off |
 | Changes queued for the channels by the database | `packages/db/migrations/0012_channel_queue.sql` | Done |

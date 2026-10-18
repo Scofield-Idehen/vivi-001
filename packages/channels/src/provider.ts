@@ -47,6 +47,8 @@ export interface ListingSetup {
   city?: string | null;
   address?: string | null;
   postcode?: string | null;
+  /** The operator's group at the channel manager, so its properties sit apart from every other operator's. */
+  groupId?: string | null;
 }
 
 export interface PushResult {
@@ -108,6 +110,8 @@ export interface ChannelProvider {
    * created is removed again before the error is thrown.
    */
   createListing(setup: ListingSetup): Promise<ExternalPropertyRef>;
+  /** Makes a group to hold one operator's properties, and returns its id. */
+  createGroup(title: string): Promise<string>;
 }
 
 export type ChannelErrorKind = 'rate_limited' | 'server' | 'auth' | 'validation' | 'network';

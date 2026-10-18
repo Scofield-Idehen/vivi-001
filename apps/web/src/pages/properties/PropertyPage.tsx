@@ -264,7 +264,12 @@ export function PropertyPage() {
           <BookingSection {...sectionProps} />
           <PricingSection {...sectionProps} />
           <LicenceSection {...sectionProps} />
-          <ChannelsSection d={d} />
+          <ChannelsSection
+            d={d}
+            orgId={orgId}
+            canManage={can(entry.role, 'channels.manage')}
+            refresh={() => void property.refetch()}
+          />
         </div>
       </div>
     </div>

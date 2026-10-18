@@ -3,6 +3,30 @@
 Newest first. Each entry says what was decided and why. Product decisions also live in the
 V-01 Build Playbook and Design Roadmap.
 
+## 2026-10-18
+
+- **Connecting a property to Channex is asked for from its page and done by the worker (integration
+  step 3).** An admin presses Connect to Channex; the request is queued (`channex_setups`, migration
+  0018) and the worker makes the property in Channex as one property, one unit and one rate plan, then
+  stores the Channex ids in the mapping table. Each operator's properties go in the operator's own
+  Channex group, made the first time one of its properties is connected and remembered
+  (`channex_groups`), so operators stay apart in Channex as the playbook asks. Channex puts a new
+  property in the account's default group as well; the operator's group is the one that matters.
+- **Connecting sends nothing to any channel.** A property in Channex with no listing linked to it
+  reaches no channel, so the one-manager rule holds: Guesty keeps running a property until the
+  move-over step. A property V-01 already runs gets a full sync queued the moment it is connected,
+  so Channex holds its prices and availability before any listing is linked (step 7).
+- **When Channex is busy the worker tries again later, with a growing wait, up to ten times; when
+  Channex refuses, the request fails at once with an alert,** and the page shows the reason. Pressing
+  Try again starts the attempts over. Every request and outcome is in the audit trail and the sync
+  log. The stand-in channel manager used in tests hands out ids unique to each instance, so two
+  stand-ins in one run never clash in the mapping table.
+- **Changes to a guest's name, email and phone are now in the audit trail** (migration 0017). They
+  were being saved without a record of who changed them; found while mapping progress on 18 October.
+- **Hosting moves to Firebase (Alpha).** Firebase hosts the whole project, the web app and the API
+  and worker, in place of Render. Supabase stays the database, file storage and, for now, sign-in.
+  Not urgent; nothing in the code has changed yet.
+
 ## 2026-10-16
 
 - **Every property is clean or dirty, shown under its name on the Calendar (Alpha).** A guest's

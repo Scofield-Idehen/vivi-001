@@ -28,6 +28,7 @@ import { z } from 'zod';
 import { pgConstraint, pgErrorCode, type RequestScope, toIso } from '../context.ts';
 import { HttpError } from '../errors.ts';
 import { newPhotoPath, type PhotoStore, photoPathBelongsTo } from '../photos.ts';
+import { channexStateOf } from './channex.ts';
 
 type PropertyRow = typeof properties.$inferSelect;
 type RoomRow = typeof propertyRooms.$inferSelect;
@@ -157,6 +158,7 @@ async function loadDetail(tx: Tx, id: string): Promise<PropertyDetail> {
     rooms: rooms.map(toRoom),
     amenities: amenities.map((a) => a.code),
     photos: photos.map(toPhoto),
+    channex: await channexStateOf(tx, id),
     updatedAt: toIso(row.updatedAt),
   };
 }

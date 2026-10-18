@@ -138,6 +138,14 @@ export class ChannexProvider implements ChannelProvider {
           options: [{ occupancy: setup.maxGuests, is_primary: true, rate: 0 }],
         },
       });
+      // Channex puts a new property in the account's default group; the operator's own group is
+      // what keeps operators apart, so the property joins it too.
+      if (setup.groupId) {
+        await this.client.request(
+          'POST',
+          `/groups/${encodeURIComponent(setup.groupId)}/properties/${encodeURIComponent(propertyId)}`,
+        );
+      }
       return {
         externalPropertyId: propertyId,
         externalRoomTypeId: roomTypeId,
@@ -161,6 +169,11 @@ export class ChannexProvider implements ChannelProvider {
       }
       throw error;
     }
+  }
+
+  async createGroup(title: string): Promise<string> {
+    const group = await this.client.request('POST', '/groups', { group: { title: title.slice(0, 255) } });
+    return createdId(group, 'group');
   }
 
   parseRevision(raw: unknown): BookingRevision {

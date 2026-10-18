@@ -3,6 +3,7 @@ import type {
   Calendar,
   CalendarChange,
   CalendarChangeResult,
+  ChannexState,
   CleaningState,
   CleaningUpdate,
   ConsoleOperatorDetail,
@@ -338,6 +339,21 @@ export function useSetCleaning(orgId: string | null) {
         body: { status },
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['calendar', orgId] }),
+  });
+}
+
+/** Asks for a property to be connected to Channex. The worker does it; the page polls until it has. */
+export function useConnectChannex(orgId: string | null, propertyId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<ChannexState>(`/v1/properties/${propertyId}/channex`, {
+        token: token as string,
+        orgId,
+        method: 'POST',
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['property', orgId, propertyId] }),
   });
 }
 

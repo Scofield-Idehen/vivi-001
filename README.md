@@ -57,6 +57,8 @@ access.
   - Every property has its own page, where any part of the listing can be changed later: photos, rooms
     and beds, amenities, description, house rules, booking rules, prices and fees, and the licence. A
     checklist shows what the channels still need.
+  - Connect a property to Channex from its page. The worker makes it there, in the company's own group,
+    and the page shows when it's done. Nothing reaches a channel until its listings are linked (next).
   - The other modules are in the menu and arrive in later phases.
 
 ![The V-01 console overview](docs/images/console-overview.png)
