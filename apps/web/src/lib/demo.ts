@@ -216,7 +216,7 @@ interface DemoSyncError {
 
 interface DemoState {
   /** Raised whenever the shape changes, so a browser holding older sample data starts fresh. */
-  version: 10;
+  version: 11;
   /** The day the sample bookings were laid out from. They are laid out afresh each week. */
   calendarFrom: string;
   operators: DemoOperator[];
@@ -876,7 +876,7 @@ function operatorWorkspace(
 function seed(): DemoState {
   const pastVisit = Date.now() - (2 * 24 * 60 + 190) * MINUTE;
   const state: DemoState = {
-    version: 10,
+    version: 11,
     calendarFrom: demoTodayDate(),
     operators: [
       {
@@ -1204,30 +1204,40 @@ function seedLinks(s: DemoState): void {
 }
 
 /**
- * The custom fields an operator leaving Guesty brings: a check-in instructions link, the lock
- * code, the cleaning policy, a note for the team. Sample values only; nothing here is real.
+ * The standard fields every workspace starts with (Alpha, 19 Oct 2026), plus a note for the team,
+ * as an operator leaving Guesty fills them. Sample values only; nothing here is real.
  */
 function seedFields(s: DemoState): void {
   const defs: { name: string; kind: CustomField['kind'] }[] = [
-    { name: 'Check-in instructions', kind: 'link' },
-    { name: 'Lock code', kind: 'secret' },
-    { name: 'Cleaning policy', kind: 'long_text' },
+    ...standardFields().map(({ name, kind }) => ({ name, kind })),
     { name: 'Note for the team', kind: 'long_text' },
   ];
-  const samples: Record<string, [string | null, string | null, string | null, string | null]> = {
+  type Values = [string | null, string | null, string | null, string | null, string | null, string | null];
+  const samples: Record<string, Values> = {
     HVL: [
-      'https://docs.example.com/harbour-view/arrival',
       '4921#',
-      'Full clean after every stay. Linen from the store in the garage; towels for six.',
+      '7718#',
+      'HarbourView-Guest',
+      'seabreeze2026',
+      'https://docs.example.com/harbour-view/arrival',
       'Owner visits in August: keep the second week free.',
     ],
     ORC: [
-      'https://docs.example.com/orchard/arrival',
       '7730',
-      'Clean after every stay; deep clean on the first Monday of the month.',
+      '7731',
+      'Orchard Wifi',
+      'apples-and-pears',
+      'https://docs.example.com/orchard/arrival',
       null,
     ],
-    QYH: [null, '2580', 'Still cleaned by the Guesty-era team until the move-over.', null],
+    QYH: [
+      '2580',
+      null,
+      'Quay House',
+      'tide-tables',
+      null,
+      'Still cleaned by the Guesty-era team until the move-over.',
+    ],
   };
   for (const operator of s.operators) {
     if (!operator.role) continue;
@@ -1324,16 +1334,17 @@ function load(): DemoState {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved) as DemoState;
-      if (parsed.version === 10) {
+      if ((parsed.version as number) === 10) {
+        // Version 11 brought the standard custom fields; the sample workspaces start again with them.
+        seedFields(parsed);
+        parsed.version = 11;
+      }
+      if (parsed.version === 11) {
         // A week on, the sample bookings would all be in the past: lay them out again from today.
         if (parsed.calendarFrom <= addDays(demoTodayDate(), -7)) {
           layOutSamples(parsed);
           state = parsed;
           save();
-        }
-        // A workspace saved before the standard fields existed starts with them, as the database does.
-        for (const operator of parsed.operators) {
-          if (operator.fields.length === 0) operator.fields = standardFields();
         }
         state = parsed;
         return parsed;
