@@ -5,6 +5,22 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-19
 
+- **Staging runs on Alpha's laptop against Supabase `v01-staging` (Ireland, eu-west-1) from 19 Oct
+  2026.** Migrations, roles and the seed ran through the session pooler (the direct address is
+  IPv6-only and unreachable from his network); the API, worker and web app start with `pnpm dev`;
+  the worker runs with the real Channex staging key. Sign-in works through Supabase's email link.
+- **Set aside, to come back to: the sign-in email's sender (Alpha, 19 Oct 2026: "not professional,
+  it should come from us").** The words are changed in Supabase under Authentication → Emails →
+  Templates (Confirm sign up and Magic Link; a Vivistays-branded template was drafted). The sender
+  address needs custom SMTP: a Resend account with Vivistays' domain verified in DNS, then host
+  `smtp.resend.com`, port 465, user `resend`, the Resend key as password, sender
+  `Vivistays <signin@vivistays.com>`. Needs whoever controls Vivistays' domain DNS. Until then the
+  custom SMTP switch stays off, or no emails go out. The staff app wears Vivistays' brand, so the
+  email says Vivistays; V-01's own name goes on it when V-01 has a brand and domain.
+- **Also to do before anything real:** reset the Supabase database password (it was pasted in chat
+  during set-up), replace the three role passwords and the field secret key with long random ones,
+  and make a new Channex key.
+
 - **The sign-in page shows one of Vivistays' lodges at sunset (Alpha's photo, 19 Oct 2026).** A
   full-height picture beside the form. To change it without code, a photo at
   `apps/web/public/sign-in.jpg` is used the moment it exists.
