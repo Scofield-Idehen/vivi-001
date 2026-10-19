@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { Navigate } from 'react-router';
-import drawnHouse from '../assets/sign-in.jpg';
+import lodgeAtDusk from '../assets/sign-in.jpg';
 import { BrandMark } from '../components/BrandMark.tsx';
 import { Button, Field, Notice } from '../components/ui.tsx';
 import { appBrand } from '../lib/brand.ts';
@@ -9,8 +9,8 @@ import { signInToDemo, useSession } from '../lib/session.tsx';
 import { supabase } from '../lib/supabase.ts';
 
 /**
- * The picture beside the form. A photo of one of the operator's own homes goes in
- * apps/web/public/sign-in.jpg and is used when present; until then, a drawn house at dusk.
+ * The picture beside the form: one of Vivistays' lodges at dusk. Another operator's photo goes in
+ * apps/web/public/sign-in.jpg and is used when present, with no code change.
  */
 function Picture() {
   const [src, setSrc] = useState('/sign-in.jpg');
@@ -20,9 +20,9 @@ function Picture() {
         src={src}
         alt=""
         onError={() => {
-          if (src !== drawnHouse) setSrc(drawnHouse);
+          if (src !== lodgeAtDusk) setSrc(lodgeAtDusk);
         }}
-        className="absolute inset-0 size-full object-cover"
+        className="absolute inset-0 size-full object-cover object-[55%_60%]"
       />
       <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/35 to-transparent" />
       <p className="absolute bottom-6 left-6 text-[12px] tracking-[0.18em] text-white/85 uppercase">

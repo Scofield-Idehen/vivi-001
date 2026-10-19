@@ -5,9 +5,9 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-19
 
-- **The sign-in page shows a house (Alpha, 19 Oct 2026).** A full-height picture beside the form: a
-  drawn harbourside house at dusk until the operator supplies a photo of one of their own homes, which
-  goes in `apps/web/public/sign-in.jpg` and is used the moment it exists, with no code change.
+- **The sign-in page shows one of Vivistays' lodges at sunset (Alpha's photo, 19 Oct 2026).** A
+  full-height picture beside the form. To change it without code, a photo at
+  `apps/web/public/sign-in.jpg` is used the moment it exists.
 
 - **Connect all to Channex, in one press (Alpha, 19 Oct 2026: "I thought we were adding all
   properties at once").** The Properties page gains a Channex column (In Channex, Connecting, Not
