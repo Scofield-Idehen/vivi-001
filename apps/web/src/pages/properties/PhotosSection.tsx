@@ -153,7 +153,8 @@ export function PhotosSection({ d, canEdit, orgId }: { d: PropertyDetail; canEdi
     add.mutate(
       { files: chosen, onProgress: (done, total) => setProgress({ done, total }) },
       {
-        onSuccess: (result) => setProblems((p) => [...p, ...result.problems]),
+        // The same reason for several photos is said once.
+        onSuccess: (result) => setProblems((p) => [...new Set([...p, ...result.problems])]),
         onError: (error) =>
           setProblems((p) => [
             ...p,
