@@ -70,6 +70,8 @@ access.
     the listings Channex sees on it. On a property's page each channel has a card: link a listing from a
     connected account, open it on the channel's site, unlink it. The page shows what is waiting to go out
     and what came in.
+  - Airbnb specifics: a live Airbnb listing gets the property's prices, fees and booking rules through
+    Channex, again whenever they change; the card can pause the listing on Airbnb and resume it.
   - A safety net for V-01's own downtime: Channex closes booked nights by itself on every connected
     property (checked daily), and a worker that comes back after a gap saves every booking that
     arrived meanwhile before it sends a single price or availability out. Sync health in the console

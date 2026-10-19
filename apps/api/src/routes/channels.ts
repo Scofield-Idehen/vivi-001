@@ -113,6 +113,10 @@ export async function linksOf(tx: Tx, propertyId: string): Promise<PropertyLink[
       requestedBy: sql<
         string | null
       >`(select coalesce(u.full_name, u.email) from app.app_users u where u.id = ${channelListings.requestedBy})`,
+      publishedWanted: channelListings.publishedWanted,
+      published: channelListings.published,
+      settingsSyncedAt: channelListings.settingsSyncedAt,
+      settingsError: channelListings.settingsError,
       title: channelAccountListings.title,
       url: channelAccountListings.url,
     })
@@ -135,6 +139,7 @@ export async function linksOf(tx: Tx, propertyId: string): Promise<PropertyLink[
   return rows.map((r) => ({
     ...r,
     url: r.url ?? listingUrl(r.channel, r.externalListingId),
+    settingsSyncedAt: r.settingsSyncedAt ? toIso(r.settingsSyncedAt) : null,
   }));
 }
 
@@ -402,6 +407,39 @@ export function channelRoutes(app: FastifyInstance, deps: { scope: RequestScope 
           .returning({ id: channelListings.id });
         if (!rows.length)
           throw new HttpError(404, 'link_not_found', 'That link does not exist, or is already gone.');
+        return { links: await linksOf(tx, req.params.id) };
+      }),
+  );
+
+  // Airbnb only: pause takes the listing off Airbnb (the worker asks Channex); resume puts it back.
+  const PauseParams = LinkParams.extend({ action: z.enum(['pause', 'resume']) });
+  typed.post(
+    '/v1/properties/:id/links/:linkId/:action',
+    { schema: { params: PauseParams, response: { 200: PropertyLinkListSchema } } },
+    async (req) =>
+      deps.scope.inOrg(req, 'properties.write', async (tx) => {
+        const [link] = await tx
+          .select({
+            id: channelListings.id,
+            channel: channelListings.channel,
+            status: channelListings.status,
+          })
+          .from(channelListings)
+          .where(
+            and(eq(channelListings.id, req.params.linkId), eq(channelListings.propertyId, req.params.id)),
+          );
+        if (link?.status !== 'live') throw new HttpError(404, 'link_not_found', 'That link is not live.');
+        if (link.channel !== 'airbnb') {
+          throw new HttpError(
+            409,
+            'not_on_this_channel',
+            `${CHANNEL_LABELS[link.channel]} listings are paused on ${CHANNEL_LABELS[link.channel]} itself for now.`,
+          );
+        }
+        await tx
+          .update(channelListings)
+          .set({ publishedWanted: req.params.action === 'resume', lastError: null })
+          .where(eq(channelListings.id, link.id));
         return { links: await linksOf(tx, req.params.id) };
       }),
   );

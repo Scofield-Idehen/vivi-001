@@ -1,10 +1,12 @@
 import {
+  type AirbnbListingSettings,
   type AvailabilityUpdate,
   type BookingChannel,
   type BookingRevision,
   ChannelError,
   type ChannelListingRef,
   type ChannelMapping,
+  type ChannelMappingRef,
   type ChannelProvider,
   type ChannelRef,
   type ChannelSetup,
@@ -29,6 +31,15 @@ const AUTO_CLOSE_SETTINGS = {
   allow_availability_autoupdate_on_cancellation: true,
 } as const;
 const AUTO_CLOSE_KEYS = Object.keys(AUTO_CLOSE_SETTINGS) as (keyof typeof AUTO_CLOSE_SETTINGS)[];
+
+/** V-01's cancellation policies in Airbnb's words. "Firm" is Airbnb's own name; the rest map by meaning. */
+const AIRBNB_CANCELLATION: Record<AirbnbListingSettings['cancellationPolicy'], string> = {
+  flexible: 'flexible',
+  moderate: 'moderate',
+  firm: 'firm',
+  strict: 'strict_14_with_grace_period',
+  non_refundable: 'strict_14_with_grace_period',
+};
 
 const CHANNEX_CHANNEL_NAMES: Record<ChannelSetup['channel'], string> = {
   airbnb: 'AirBNB',
@@ -294,8 +305,8 @@ export class ChannexProvider implements ChannelProvider {
     });
   }
 
-  async setChannelMappings(channelId: string, mappings: ChannelMapping[]): Promise<void> {
-    await this.client.request('PUT', `/channels/${encodeURIComponent(channelId)}`, {
+  async setChannelMappings(channelId: string, mappings: ChannelMapping[]): Promise<ChannelMappingRef[]> {
+    const updated = await this.client.request('PUT', `/channels/${encodeURIComponent(channelId)}`, {
       channel: {
         rate_plans: mappings.map((m) => ({
           rate_plan_id: m.ratePlanId,
@@ -303,6 +314,65 @@ export class ChannexProvider implements ChannelProvider {
         })),
       },
     });
+    const ratePlans = attributesOf(updated).rate_plans;
+    const rows = Array.isArray(ratePlans) ? (ratePlans as Record<string, unknown>[]) : [];
+    return mappings.map((m) => {
+      const row = rows.find((r) => r.rate_plan_id === m.ratePlanId);
+      const id = typeof row?.id === 'string' ? row.id : `${channelId}:${m.ratePlanId}`;
+      return { ...m, mappingId: id };
+    });
+  }
+
+  async setAirbnbListingSettings(
+    channelId: string,
+    mappingId: string,
+    s: AirbnbListingSettings,
+  ): Promise<void> {
+    const base = `/channels/${encodeURIComponent(channelId)}`;
+    const fees: Record<string, unknown>[] = [];
+    if (s.cleaningFee)
+      fees.push({ fee_type: 'PASS_THROUGH_CLEANING_FEE', amount_type: 'flat', amount: s.cleaningFee });
+    if (s.securityDeposit)
+      fees.push({
+        fee_type: 'PASS_THROUGH_SECURITY_DEPOSIT',
+        amount_type: 'flat',
+        amount: s.securityDeposit,
+      });
+    await this.client.request('PUT', `${base}/mappings/${encodeURIComponent(mappingId)}/pricing_settings`, {
+      pricing_settings: {
+        currency: s.currency,
+        default_daily_price: s.defaultDailyPrice,
+        ...(s.weekendPrice ? { weekend_price: s.weekendPrice } : {}),
+        guests_included: s.guestsIncluded,
+        price_per_extra_person: s.pricePerExtraPerson,
+        standard_fees: fees,
+      },
+    });
+    await this.client.request('PUT', `${base}/execute/update_booking_setting`, {
+      channel_rate_plan_id: mappingId,
+      data: {
+        instant_booking_allowed_category: s.instantBook ? 'everyone' : 'well_reviewed_guests',
+        check_in_time_start: s.checkInTime.slice(0, 2),
+        check_in_time_end: 'FLEXIBLE',
+        check_out_time: Number(s.checkOutTime.slice(0, 2)),
+        cancellation_policy_settings: {
+          cancellation_policy_category: AIRBNB_CANCELLATION[s.cancellationPolicy],
+        },
+      },
+    });
+  }
+
+  async setListingPublished(channelId: string, externalListingId: string, published: boolean): Promise<void> {
+    await this.client.request(
+      'PUT',
+      `/channels/${encodeURIComponent(channelId)}/execute/${published ? 'publish' : 'unpublish'}`,
+      {
+        listing_id: externalListingId,
+        ...(published
+          ? {}
+          : { deactivation_reason: 'OtherReason', deactivation_details: 'Paused by the host' }),
+      },
+    );
   }
 
   async activateChannel(channelId: string): Promise<void> {

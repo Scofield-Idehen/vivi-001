@@ -11,7 +11,7 @@ import {
   type Tx,
 } from '@v01/db';
 import { listingUrl, todayIn } from '@v01/shared';
-import { and, eq, inArray, isNotNull, notInArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import type { WorkerDeps } from './deps.ts';
 
 /**
@@ -330,7 +330,9 @@ async function syncLinks(deps: WorkerDeps, orgId: string, stats: LinkStats): Pro
       .filter((l) => l.status !== 'closing' && l.ratePlanId)
       .map((l) => ({ ratePlanId: l.ratePlanId as string, externalListingId: l.externalListingId }));
     try {
-      await deps.provider.setChannelMappings(account.channelId, mappings);
+      const refs = await deps.provider.setChannelMappings(account.channelId, mappings);
+      const mappingIdOf = (listingId: string) =>
+        refs.find((r) => r.externalListingId === listingId)?.mappingId ?? null;
       if (!account.active && mappings.length) {
         await deps.provider.activateChannel(account.channelId);
       }
@@ -351,13 +353,28 @@ async function syncLinks(deps: WorkerDeps, orgId: string, stats: LinkStats): Pro
           } else if (link.ratePlanId) {
             await tx
               .update(channelListings)
-              .set({ status: 'live', liveFrom: today, lastError: null })
+              .set({
+                status: 'live',
+                liveFrom: today,
+                lastError: null,
+                channexMappingId: mappingIdOf(link.externalListingId),
+              })
               .where(eq(channelListings.id, link.id));
             await log(tx, orgId, link.propertyId, 'link', 'ok', {
               account: account.label,
               listing: link.externalListingId,
             });
             stats.linked += 1;
+          }
+        }
+        for (const link of links) {
+          if (link.status === 'live') {
+            const mappingId = mappingIdOf(link.externalListingId);
+            if (mappingId)
+              await tx
+                .update(channelListings)
+                .set({ channexMappingId: mappingId })
+                .where(eq(channelListings.id, link.id));
           }
         }
         if (!account.active && mappings.length) {
@@ -404,24 +421,138 @@ export async function syncChannelLinks(
     await connectPending(deps, org.id, stats);
     await checkConnections(deps, org.id, stats, options.refreshAll ?? false);
     await syncLinks(deps, org.id, stats);
+    await syncAirbnb(deps, org.id, stats);
   }
   return stats;
 }
 
-/** For tests and the connect step: everything cached for one account. */
-export async function cachedListings(deps: WorkerDeps, orgId: string, accountId: string) {
-  return deps.db.withOrg({ orgId }, (tx) =>
+/** Pence to pounds (or cents to dollars): Airbnb takes major units. */
+const major = (minor: number | null) => (minor === null ? null : Math.round(minor) / 100);
+
+/**
+ * Airbnb specifics (step 8), through Channex: each live Airbnb link gets the property's fees,
+ * prices and booking rules whenever they change (a database trigger marks the link due), and is
+ * taken off Airbnb or put back when the team pauses or resumes it.
+ */
+async function syncAirbnb(deps: WorkerDeps, orgId: string, stats: LinkStats): Promise<void> {
+  const now = (deps.now?.() ?? new Date()).toISOString();
+  const due = await deps.db.withOrg({ orgId }, (tx) =>
     tx
       .select({
-        externalListingId: channelAccountListings.externalListingId,
-        title: channelAccountListings.title,
+        id: channelListings.id,
+        propertyId: channelListings.propertyId,
+        externalListingId: channelListings.externalListingId,
+        mappingId: channelListings.channexMappingId,
+        settingsSyncedAt: channelListings.settingsSyncedAt,
+        publishedWanted: channelListings.publishedWanted,
+        published: channelListings.published,
+        channelId: channexChannels.channexChannelId,
+        currency: sql<string>`coalesce((select currency from app.organisation_settings limit 1), 'GBP')`,
+        basePriceMinor: properties.basePriceMinor,
+        weekendPriceMinor: properties.weekendPriceMinor,
+        cleaningFeeMinor: properties.cleaningFeeMinor,
+        extraGuestFeeMinor: properties.extraGuestFeeMinor,
+        extraGuestFrom: properties.extraGuestFrom,
+        securityDepositMinor: properties.securityDepositMinor,
+        maxGuests: properties.maxGuests,
+        instantBook: properties.instantBook,
+        checkInTime: properties.checkInTime,
+        checkOutTime: properties.checkOutTime,
+        cancellationPolicy: properties.cancellationPolicy,
       })
-      .from(channelAccountListings)
+      .from(channelListings)
+      .innerJoin(properties, eq(properties.id, channelListings.propertyId))
+      .innerJoin(channexChannels, eq(channexChannels.channelAccountId, channelListings.channelAccountId))
       .where(
         and(
-          eq(channelAccountListings.channelAccountId, accountId),
-          isNotNull(channelAccountListings.externalListingId),
+          eq(channelListings.channel, 'airbnb'),
+          eq(channelListings.status, 'live'),
+          sql`(${channelListings.settingsSyncedAt} is null or ${channelListings.published} is distinct from ${channelListings.publishedWanted})`,
         ),
       ),
   );
+  for (const link of due) {
+    try {
+      if (link.settingsSyncedAt === null && link.mappingId && link.basePriceMinor) {
+        await deps.provider.setAirbnbListingSettings(link.channelId, link.mappingId, {
+          currency: link.currency,
+          defaultDailyPrice: major(link.basePriceMinor) as number,
+          weekendPrice: major(link.weekendPriceMinor),
+          guestsIncluded:
+            link.extraGuestFeeMinor && link.extraGuestFrom
+              ? Math.max(1, link.extraGuestFrom - 1)
+              : link.maxGuests,
+          pricePerExtraPerson: major(link.extraGuestFeeMinor) ?? 0,
+          cleaningFee: major(link.cleaningFeeMinor),
+          securityDeposit: major(link.securityDepositMinor),
+          instantBook: link.instantBook,
+          checkInTime: link.checkInTime.slice(0, 5),
+          checkOutTime: link.checkOutTime.slice(0, 5),
+          cancellationPolicy: (link.cancellationPolicy ?? 'moderate') as
+            | 'flexible'
+            | 'moderate'
+            | 'firm'
+            | 'strict'
+            | 'non_refundable',
+        });
+        await deps.db.withOrg({ orgId }, async (tx) => {
+          await tx
+            .update(channelListings)
+            .set({ settingsSyncedAt: now, settingsError: null })
+            .where(eq(channelListings.id, link.id));
+          await log(tx, orgId, link.propertyId, 'airbnb_settings', 'ok', { listing: link.externalListingId });
+        });
+      } else if (link.settingsSyncedAt === null) {
+        // No price yet, or no mapping id: nothing to send until there is.
+        await deps.db.withOrg({ orgId }, (tx) =>
+          tx
+            .update(channelListings)
+            .set({
+              settingsSyncedAt: now,
+              settingsError: link.mappingId ? 'Set a nightly price before Airbnb can take the fees.' : null,
+            })
+            .where(eq(channelListings.id, link.id)),
+        );
+      }
+      if (link.published !== link.publishedWanted) {
+        await deps.provider.setListingPublished(link.channelId, link.externalListingId, link.publishedWanted);
+        await deps.db.withOrg({ orgId }, async (tx) => {
+          await tx
+            .update(channelListings)
+            .set({ published: link.publishedWanted, lastError: null })
+            .where(eq(channelListings.id, link.id));
+          await log(
+            tx,
+            orgId,
+            link.propertyId,
+            link.publishedWanted ? 'airbnb_resume' : 'airbnb_pause',
+            'ok',
+            {
+              listing: link.externalListingId,
+            },
+          );
+        });
+      }
+    } catch (error) {
+      const message = messageOf(error);
+      // A refusal stays on the link until the property changes again; a hiccup is tried next time.
+      const permanent = !(error instanceof ChannelError && error.retryable);
+      await deps.db.withOrg({ orgId }, async (tx) => {
+        await tx
+          .update(channelListings)
+          .set(
+            link.settingsSyncedAt === null
+              ? { settingsError: message, ...(permanent ? { settingsSyncedAt: now } : {}) }
+              : { lastError: message, ...(permanent ? { published: link.publishedWanted } : {}) },
+          )
+          .where(eq(channelListings.id, link.id));
+        await log(tx, orgId, link.propertyId, 'airbnb_settings', 'error', {
+          listing: link.externalListingId,
+          error: message,
+        });
+      });
+      stats.failed += 1;
+      if (!(error instanceof ChannelError)) throw error;
+    }
+  }
 }

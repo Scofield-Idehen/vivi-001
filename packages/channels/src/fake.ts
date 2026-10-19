@@ -1,9 +1,11 @@
 import {
+  type AirbnbListingSettings,
   type AvailabilityUpdate,
   type BookingRevision,
   ChannelError,
   type ChannelListingRef,
   type ChannelMapping,
+  type ChannelMappingRef,
   type ChannelProvider,
   type ChannelRef,
   type ChannelSetup,
@@ -126,11 +128,34 @@ export class FakeChannelProvider implements ChannelProvider {
     return this.channels.get(channelId)?.listings ?? [];
   }
 
-  async setChannelMappings(channelId: string, mappings: ChannelMapping[]): Promise<void> {
+  async setChannelMappings(channelId: string, mappings: ChannelMapping[]): Promise<ChannelMappingRef[]> {
     this.maybeFail();
     const channel = this.channels.get(channelId);
     if (!channel) throw new ChannelError('No such channel', 'validation', 404);
     channel.mappings = [...mappings];
+    return mappings.map((m) => ({ ...m, mappingId: `fake-mapping-${m.ratePlanId}-${m.externalListingId}` }));
+  }
+
+  /** Airbnb settings sent, by mapping id; and which listings are published (absent means never asked). */
+  readonly airbnbSettings = new Map<string, AirbnbListingSettings>();
+  readonly published = new Map<string, boolean>();
+
+  async setAirbnbListingSettings(
+    _channelId: string,
+    mappingId: string,
+    settings: AirbnbListingSettings,
+  ): Promise<void> {
+    this.maybeFail();
+    this.airbnbSettings.set(mappingId, settings);
+  }
+
+  async setListingPublished(
+    _channelId: string,
+    externalListingId: string,
+    published: boolean,
+  ): Promise<void> {
+    this.maybeFail();
+    this.published.set(externalListingId, published);
   }
 
   async activateChannel(channelId: string): Promise<void> {

@@ -1181,3 +1181,127 @@ describe('channel accounts and listing links', () => {
     });
   });
 });
+
+describe('Airbnb specifics through Channex', () => {
+  let airbnbA: string;
+  let channelId: string;
+  const linkRow = async () => {
+    const [row] = await owner<{
+      channex_mapping_id: string | null;
+      settings_synced: boolean;
+      settings_error: string | null;
+      published: boolean | null;
+      published_wanted: boolean;
+    }>(
+      `select channex_mapping_id, settings_synced_at is not null as settings_synced, settings_error, published, published_wanted
+         from app.channel_listings where property_id = $1 and channel = 'airbnb' and status = 'live'`,
+      [mapped],
+    );
+    return row;
+  };
+  const providerWith = () => {
+    const fresh = new FakeChannelProvider();
+    fresh.channels.set(channelId, {
+      setup: { channel: 'airbnb', title: 'Airbnb A', groupId: 'g', externalPropertyIds: ['cx-hvl'] },
+      active: true,
+      mappings: [],
+      listings: [],
+    });
+    return fresh;
+  };
+
+  beforeAll(async () => {
+    const [account] = await owner<{ id: string }>(
+      `select a.id from app.channel_accounts a where a.organisation_id = $1 and a.label = 'Airbnb A'`,
+      [op.orgId],
+    );
+    airbnbA = account!.id;
+    const [conn] = await owner<{ channex_channel_id: string }>(
+      'select channex_channel_id from app.channex_channels where channel_account_id = $1',
+      [airbnbA],
+    );
+    channelId = conn!.channex_channel_id;
+    await owner(
+      `update app.properties set base_price_minor = 15000, weekend_price_minor = 17500, cleaning_fee_minor = 6000,
+          extra_guest_fee_minor = 2500, extra_guest_from = 3, security_deposit_minor = 20000, instant_book = true,
+          cancellation_policy = 'strict' where id = $1`,
+      [mapped],
+    );
+    // Only the Airbnb account is in play here: the Booking.com one stops waiting for its owner.
+    await owner(
+      `update app.channel_accounts set status = 'disconnected' where organisation_id = $1 and channel = 'booking_com'`,
+      [op.orgId],
+    );
+    await owner(`delete from app.channel_listings where channel = 'booking_com'`);
+    // A fresh live link, as the worker leaves one after linking.
+    await owner(`delete from app.channel_listings where property_id = $1 and channel_account_id = $2`, [
+      mapped,
+      airbnbA,
+    ]);
+    await owner(
+      `insert into app.channel_listings (organisation_id, property_id, channel_account_id, channel, external_listing_id, status, live_from, channex_mapping_id)
+       values ($1, $2, $3, 'airbnb', '55512345', 'live', '2026-10-15', 'fake-mapping-cx-hvl-rate-55512345')`,
+      [op.orgId, mapped, airbnbA],
+    );
+  });
+
+  it('sends the property’s fees, prices and booking rules to Airbnb once the link is live', async () => {
+    const fresh = providerWith();
+    await syncChannelLinks({ ...deps, provider: fresh });
+    expect(fresh.airbnbSettings.get('fake-mapping-cx-hvl-rate-55512345')).toEqual({
+      currency: 'GBP',
+      defaultDailyPrice: 150,
+      weekendPrice: 175,
+      guestsIncluded: 2,
+      pricePerExtraPerson: 25,
+      cleaningFee: 60,
+      securityDeposit: 200,
+      instantBook: true,
+      checkInTime: '15:00',
+      checkOutTime: '10:00',
+      cancellationPolicy: 'strict',
+    });
+    expect(await linkRow()).toMatchObject({ settings_synced: true, settings_error: null });
+  });
+
+  it('sends them again when the property’s fees or rules change', async () => {
+    await owner(`update app.properties set cleaning_fee_minor = 7500 where id = $1`, [mapped]);
+    expect(await linkRow()).toMatchObject({ settings_synced: false });
+    const fresh = providerWith();
+    await syncChannelLinks({ ...deps, provider: fresh });
+    expect(fresh.airbnbSettings.get('fake-mapping-cx-hvl-rate-55512345')?.cleaningFee).toBe(75);
+    // A change to something Airbnb doesn't take (the title) leaves it alone.
+    await owner(`update app.properties set title = 'Harbour View Lodge, sea views' where id = $1`, [mapped]);
+    expect(await linkRow()).toMatchObject({ settings_synced: true });
+  });
+
+  it('pauses the listing on Airbnb when asked, and puts it back', async () => {
+    await owner(
+      `update app.channel_listings set published_wanted = false where property_id = $1 and channel = 'airbnb'`,
+      [mapped],
+    );
+    let fresh = providerWith();
+    await syncChannelLinks({ ...deps, provider: fresh });
+    expect(fresh.published.get('55512345')).toBe(false);
+    expect(await linkRow()).toMatchObject({ published: false, published_wanted: false });
+    await owner(
+      `update app.channel_listings set published_wanted = true where property_id = $1 and channel = 'airbnb'`,
+      [mapped],
+    );
+    fresh = providerWith();
+    await syncChannelLinks({ ...deps, provider: fresh });
+    expect(fresh.published.get('55512345')).toBe(true);
+    expect(await linkRow()).toMatchObject({ published: true });
+  });
+
+  it('keeps a refusal on the link instead of asking Airbnb again and again', async () => {
+    await owner(`update app.properties set cleaning_fee_minor = 8000 where id = $1`, [mapped]);
+    const fresh = providerWith();
+    fresh.failNextCallWith(new ChannelError('Airbnb refused the cleaning fee', 'validation', 422));
+    await syncChannelLinks({ ...deps, provider: fresh });
+    expect(await linkRow()).toMatchObject({
+      settings_synced: true,
+      settings_error: 'Airbnb refused the cleaning fee',
+    });
+  });
+});

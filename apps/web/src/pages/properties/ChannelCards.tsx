@@ -16,6 +16,7 @@ import {
   useAccountListings,
   useChannelAccounts,
   useLinkListing,
+  usePauseListing,
   useUnlinkListing,
 } from '../../lib/api.ts';
 import { shortDate, V01 } from '../../lib/format.ts';
@@ -148,6 +149,7 @@ function ChannelCard({
   const [picking, setPicking] = useState(false);
   const [asking, setAsking] = useState(false);
   const unlink = useUnlinkListing(orgId, d.id);
+  const pause = usePauseListing(orgId, d.id);
   const label = CHANNEL_LABELS[channel];
   const inChannex = d.channex.status === 'connected';
 
@@ -163,7 +165,19 @@ function ChannelCard({
           {link.account} · <span className="tnum">{link.externalListingId}</span>
         </p>
         <div className="mt-3">
-          {link.status === 'live' ? (
+          {link.status === 'live' && link.channel === 'airbnb' && !link.publishedWanted ? (
+            link.published === false ? (
+              <StatusDot status="pending">Paused: taken off Airbnb, not taking bookings.</StatusDot>
+            ) : (
+              <span className="inline-flex items-center gap-2 text-[13.5px] text-slate">
+                <Spinner size={14} /> Taking it off Airbnb
+              </span>
+            )
+          ) : link.status === 'live' && link.channel === 'airbnb' && link.published === false ? (
+            <span className="inline-flex items-center gap-2 text-[13.5px] text-slate">
+              <Spinner size={14} /> Putting it back on Airbnb
+            </span>
+          ) : link.status === 'live' ? (
             <StatusDot status="done">
               Taking bookings through {V01}
               {link.liveFrom ? ` since ${shortDate(`${link.liveFrom}T12:00:00`)}` : ''}
@@ -183,6 +197,15 @@ function ChannelCard({
               {link.lastError}
             </p>
           ) : null}
+          {link.channel === 'airbnb' && link.status === 'live' ? (
+            <p className={cx('mt-1.5 text-[12.5px]', link.settingsError ? 'text-urgent' : 'text-mist')}>
+              {link.settingsError
+                ? `Fees and booking rules: ${link.settingsError}`
+                : link.settingsSyncedAt
+                  ? `Fees and booking rules sent ${shortDate(link.settingsSyncedAt)}.`
+                  : 'Fees and booking rules go to Airbnb next.'}
+            </p>
+          ) : null}
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {link.url ? (
@@ -195,6 +218,17 @@ function ChannelCard({
               Open on {label}
               <IconExternalLink size={14} stroke={1.75} aria-hidden />
             </a>
+          ) : null}
+          {canEdit && link.status === 'live' && link.channel === 'airbnb' && !asking ? (
+            <Button
+              variant="quiet"
+              disabled={pause.isPending || link.published !== link.publishedWanted}
+              onClick={() =>
+                pause.mutate({ linkId: link.id, action: link.publishedWanted ? 'pause' : 'resume' })
+              }
+            >
+              {link.publishedWanted ? 'Pause on Airbnb' : 'Resume on Airbnb'}
+            </Button>
           ) : null}
           {canEdit && link.status !== 'closing' ? (
             asking ? (
@@ -218,9 +252,9 @@ function ChannelCard({
             )
           ) : null}
         </div>
-        {unlink.error ? (
+        {unlink.error || pause.error ? (
           <div className="mt-2">
-            <Notice tone="urgent">{explain(unlink.error)}</Notice>
+            <Notice tone="urgent">{explain(unlink.error ?? pause.error)}</Notice>
           </div>
         ) : null}
       </>
@@ -287,7 +321,12 @@ export function ChannelCards({
   refresh(): void;
 }) {
   const accounts = useChannelAccounts(orgId);
-  const busy = d.links.some((l) => l.status === 'linking' || l.status === 'closing');
+  const busy = d.links.some(
+    (l) =>
+      l.status === 'linking' ||
+      l.status === 'closing' ||
+      (l.status === 'live' && l.published !== null && l.published !== l.publishedWanted),
+  );
   // The worker is on it: look again every few seconds until it is done.
   useEffect(() => {
     if (!busy) return;

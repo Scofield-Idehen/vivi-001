@@ -78,6 +78,15 @@ export const channelListings = app.table(
     /** The last thing that went wrong linking or unlinking, for the page. */
     lastError: text('last_error'),
     requestedBy: uuid('requested_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    /** Channex's id for the mapping (rate plan to listing), needed for Airbnb's listing settings. */
+    channexMappingId: text('channex_mapping_id'),
+    /** Airbnb only: the team wants the listing live on the channel (true) or paused (false). */
+    publishedWanted: boolean('published_wanted').notNull().default(true),
+    /** What the channel last confirmed. Null until the worker has asked. */
+    published: boolean('published'),
+    /** When the property's fees and booking rules last went to the channel; null means they are due. */
+    settingsSyncedAt: timestamp('settings_synced_at', { withTimezone: true, mode: 'string' }),
+    settingsError: text('settings_error'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

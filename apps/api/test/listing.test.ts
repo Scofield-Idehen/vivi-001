@@ -923,3 +923,56 @@ describe('channel accounts and listing links', () => {
     expect((await call('GET', `/v1/channel-accounts/${airbnbA}/listings`, { as: asB() })).status).toBe(404);
   });
 });
+
+describe('Airbnb pause and resume', () => {
+  it('pauses a live Airbnb link for the worker, resumes it, and refuses other channels', async () => {
+    const { body: house } = await call('POST', '/v1/properties', {
+      as: asA(),
+      body: { name: 'Pause House', countryCode: 'GB', maxGuests: 2 },
+    });
+    const [account] = await ownerRows<{ id: string }>(
+      `select id from app.channel_accounts where organisation_id = $1 and label = 'Airbnb A'`,
+      [a.orgId],
+    );
+    const [booking] = await ownerRows<{ id: string }>(
+      `select id from app.channel_accounts where organisation_id = $1 and label = 'Booking.com A'`,
+      [a.orgId],
+    );
+    await ownerRows(
+      `insert into app.channel_listings (organisation_id, property_id, channel_account_id, channel, external_listing_id, status, live_from)
+       values ($1, $2, $3, 'airbnb', '77700001', 'live', '2026-10-15'), ($1, $2, $4, 'booking_com', '8800001', 'live', '2026-10-15')`,
+      [a.orgId, house.id, account?.id, booking?.id],
+    );
+    const links = (await call('GET', `/v1/properties/${house.id}/links`, { as: asA() })).body.links as {
+      id: string;
+      channel: string;
+      publishedWanted: boolean;
+    }[];
+    const airbnb = links.find((l) => l.channel === 'airbnb');
+    const bcom = links.find((l) => l.channel === 'booking_com');
+    expect(airbnb).toMatchObject({ publishedWanted: true, published: null });
+
+    const paused = await call('POST', `/v1/properties/${house.id}/links/${airbnb?.id}/pause`, { as: asA() });
+    expect(paused.status).toBe(200);
+    expect(
+      (paused.body.links as { channel: string; publishedWanted: boolean }[]).find(
+        (l) => l.channel === 'airbnb',
+      ),
+    ).toMatchObject({
+      publishedWanted: false,
+    });
+    const resumed = await call('POST', `/v1/properties/${house.id}/links/${airbnb?.id}/resume`, {
+      as: asA(),
+    });
+    expect(
+      (resumed.body.links as { channel: string; publishedWanted: boolean }[]).find(
+        (l) => l.channel === 'airbnb',
+      ),
+    ).toMatchObject({
+      publishedWanted: true,
+    });
+    const other = await call('POST', `/v1/properties/${house.id}/links/${bcom?.id}/pause`, { as: asA() });
+    expect(other.status).toBe(409);
+    expect(other.body.error.code).toBe('not_on_this_channel');
+  });
+});

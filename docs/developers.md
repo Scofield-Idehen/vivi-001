@@ -155,7 +155,8 @@ Not set up yet. These are the steps for when the staging and production accounts
   Channels & sync screen). The Channex adapter's channel endpoints (`/channels`, `connection_link`,
   `all_listings`, `rate_plans` mappings, `activate`) follow docs.channex.io and are to be confirmed on
   staging before certification.
-- Airbnb specifics (step 8): requests and enquiries, fees and booking rules through Channex.
+- Airbnb requests and enquiries (accept, decline, pre-approve): waiting on Channex's answer about
+  the API; fees, booking rules and pause/resume (step 8) are built.
 - Nightly cross-check.
 
 Design sign-off: Alpha and Alessio, at every design gate.

@@ -126,6 +126,10 @@ interface DemoLink {
   status: 'linking' | 'live' | 'closing' | 'archived';
   liveFrom: string | null;
   requestedAt: string;
+  /** Airbnb only: paused by the team; the stand-in worker confirms a few seconds later. */
+  publishedWanted?: boolean;
+  published?: boolean;
+  pausedAt?: string;
 }
 
 interface DemoLive {
@@ -1549,6 +1553,16 @@ function settleLinks(operator: DemoOperator): void {
       link.status = 'archived';
       changed = true;
     }
+    if (
+      link.status === 'live' &&
+      link.publishedWanted !== undefined &&
+      (link.published ?? true) !== link.publishedWanted &&
+      link.pausedAt &&
+      now - Date.parse(link.pausedAt) > 3000
+    ) {
+      link.published = link.publishedWanted;
+      changed = true;
+    }
   }
   for (const a of operator.channelAccounts) {
     if (a.status === 'pending' && a.requestedAt && now - Date.parse(a.requestedAt) > 6000) {
@@ -1579,6 +1593,15 @@ function toLink(operator: DemoOperator, l: DemoLink): PropertyLink {
     liveFrom: l.liveFrom,
     lastError: null,
     requestedBy: 'Demo user',
+    publishedWanted: l.publishedWanted ?? true,
+    published: account?.channel === 'airbnb' && l.status === 'live' ? (l.published ?? true) : null,
+    settingsSyncedAt:
+      account?.channel === 'airbnb' && l.status === 'live'
+        ? l.liveFrom
+          ? `${l.liveFrom}T10:05:00.000Z`
+          : null
+        : null,
+    settingsError: null,
   };
 }
 
@@ -2090,7 +2113,7 @@ const PROPERTY_PATH =
   /^\/v1\/properties\/([0-9a-f-]{36})(\/rooms|\/amenities|\/photos\/order|\/archive|\/fields)?$/;
 const FIELD_PATH = /^\/v1\/custom-fields(?:\/([0-9a-f-]{36}))?$/;
 const ACCOUNT_PATH = /^\/v1\/channel-accounts(?:\/([0-9a-f-]{36})(\/connect|\/listings)?)?$/;
-const LINK_PATH = /^\/v1\/properties\/([0-9a-f-]{36})\/links(?:\/([0-9a-f-]{36}))?$/;
+const LINK_PATH = /^\/v1\/properties\/([0-9a-f-]{36})\/links(?:\/([0-9a-f-]{36})(\/pause|\/resume)?)?$/;
 const PHOTO_PATH = /^\/v1\/properties\/([0-9a-f-]{36})\/photos\/([0-9a-f-]{36})$/;
 
 export async function demoFetch<T>(
@@ -2481,7 +2504,25 @@ export async function demoFetch<T>(
 
   const linkMatch = LINK_PATH.exec(path);
   if (linkMatch?.[1]) {
-    const [, propertyId, linkId] = linkMatch;
+    const [, propertyId, linkId, pauseAction] = linkMatch;
+    if (method === 'POST' && linkId && pauseAction) {
+      const { operator } = access(options.orgId, 'properties.write');
+      const link = operator.links.find(
+        (l) => l.id === linkId && l.propertyId === propertyId && l.status === 'live',
+      );
+      if (!link) throw new ApiError(404, 'link_not_found', 'That link is not live.');
+      const a = operator.channelAccounts.find((x) => x.id === link.accountId);
+      if (a?.channel !== 'airbnb')
+        throw new ApiError(
+          409,
+          'not_on_this_channel',
+          `${CHANNEL_LABELS[a?.channel ?? 'booking_com']} listings are paused on the channel itself for now.`,
+        );
+      link.publishedWanted = pauseAction === '/resume';
+      link.pausedAt = new Date().toISOString();
+      save();
+      return { links: linksOf(operator, propertyId) } as T;
+    }
     if (method === 'GET') {
       const { operator } = access(options.orgId, 'channels.read');
       return { links: linksOf(operator, propertyId) } as T;

@@ -661,6 +661,15 @@ export const useLinkListing = (orgId: string | null, propertyId: string) =>
     apiFetch(`/v1/properties/${propertyId}/links`, { token, orgId, method: 'POST', body }),
   );
 
+/** Airbnb only: pause takes the listing off Airbnb through Channex; resume puts it back. */
+export const usePauseListing = (orgId: string | null, propertyId: string) =>
+  useLinkChange<{ linkId: string; action: 'pause' | 'resume' }>(
+    orgId,
+    propertyId,
+    (token, { linkId, action }) =>
+      apiFetch(`/v1/properties/${propertyId}/links/${linkId}/${action}`, { token, orgId, method: 'POST' }),
+  );
+
 export const useUnlinkListing = (orgId: string | null, propertyId: string) =>
   useLinkChange<string>(orgId, propertyId, (token, linkId) =>
     apiFetch(`/v1/properties/${propertyId}/links/${linkId}`, { token, orgId, method: 'DELETE' }),

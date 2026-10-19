@@ -132,9 +132,39 @@ export interface ChannelProvider {
    * Replaces the connection's mappings: which rate plan feeds which listing. The whole set is sent
    * each time, as the channel manager takes it. An empty set unmaps everything.
    */
-  setChannelMappings(channelId: string, mappings: ChannelMapping[]): Promise<void>;
+  setChannelMappings(channelId: string, mappings: ChannelMapping[]): Promise<ChannelMappingRef[]>;
   /** Turns the connection on; needs at least one mapping. */
   activateChannel(channelId: string): Promise<void>;
+  /** Airbnb only: the listing's fees, prices and booking rules, set from the property's own. */
+  setAirbnbListingSettings(
+    channelId: string,
+    mappingId: string,
+    settings: AirbnbListingSettings,
+  ): Promise<void>;
+  /** Airbnb only: takes the listing off Airbnb (paused) or puts it back. */
+  setListingPublished(channelId: string, externalListingId: string, published: boolean): Promise<void>;
+}
+
+/** A mapping as the channel manager keeps it, with its own id. */
+export interface ChannelMappingRef extends ChannelMapping {
+  mappingId: string;
+}
+
+export interface AirbnbListingSettings {
+  currency: string;
+  /** Major units, as Airbnb takes them. */
+  defaultDailyPrice: number;
+  weekendPrice: number | null;
+  guestsIncluded: number;
+  pricePerExtraPerson: number;
+  cleaningFee: number | null;
+  securityDeposit: number | null;
+  instantBook: boolean;
+  /** "15:00" */
+  checkInTime: string;
+  /** "10:00" */
+  checkOutTime: string;
+  cancellationPolicy: 'flexible' | 'moderate' | 'firm' | 'strict' | 'non_refundable';
 }
 
 export interface ChannelSetup {

@@ -5,6 +5,21 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-19
 
+- **Airbnb specifics go through Channex's Airbnb API (integration step 8).** Once a property's Airbnb
+  listing is live, the worker sends the property's own fees and booking rules to the listing:
+  nightly and weekend price, guests included and the extra-guest fee, cleaning fee and security
+  deposit, instant book, check-in and check-out times, and the cancellation policy in Airbnb's
+  words. A database trigger marks the link due again whenever one of those changes on the property
+  (migration 0022), so the two never drift; a refusal from Airbnb stays on the card until the
+  property changes again. The team can **pause** an Airbnb listing from its card (Guesty's
+  "temporarily unlist"): Channex takes it off Airbnb, the card says so, and Resume puts it back.
+  Booking.com and Vrbo listings are still paused on the channel itself; Channex's documented API
+  offers publish and unpublish for Airbnb only.
+- **Accepting or declining Airbnb booking requests and enquiries is not built yet.** Channex's
+  documentation names them but the fetched API pages show no endpoints for them, so building
+  against a guess would be wrong. Added to the Channex questions; until answered, requests are
+  handled in the Airbnb app as today.
+
 - **List on channels is built as channel accounts, listing links and a card per channel
   (integration step 7).** An admin adds an account for each sign-in on a channel (Airbnb A and B,
   Booking.com A and B, Vrbo) on the new Channels & sync page and asks to connect it; the worker makes

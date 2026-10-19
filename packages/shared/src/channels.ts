@@ -87,6 +87,12 @@ export const PropertyLinkSchema = z.object({
   liveFrom: z.string().nullable(),
   lastError: z.string().nullable(),
   requestedBy: z.string().nullable(),
+  /** Airbnb only: the team wants it live (true) or paused (false); `published` is what Airbnb last confirmed. */
+  publishedWanted: z.boolean(),
+  published: z.boolean().nullable(),
+  /** Airbnb only: when the property's fees and booking rules last reached the listing, and any refusal. */
+  settingsSyncedAt: Timestamp.nullable(),
+  settingsError: z.string().nullable(),
 });
 export type PropertyLink = z.infer<typeof PropertyLinkSchema>;
 
