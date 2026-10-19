@@ -3,6 +3,16 @@
 Newest first. Each entry says what was decided and why. Product decisions also live in the
 V-01 Build Playbook and Design Roadmap.
 
+## 2026-10-19
+
+- **On the Calendar the whole box beside a property opens its page, not just its name (Alpha, 19 Oct
+  2026: "I want the box, so it's easy; no one has to click").** The box lights up under the mouse;
+  the cleaning switch inside it still only flips clean or dirty. The name stays a link for keyboards.
+- **The app's start stays on screen at least 1.4 seconds (Alpha, 19 Oct 2026: "the Vivistays loading
+  at the beginning is too fast").** It was fast because the demo has no server to wait for; on the
+  real thing the wait is the sign-in check and the workspace answer, usually under a second on a
+  good line. Either way the mark and the ring now settle rather than flash.
+
 ## 2026-10-18
 
 - **Connecting a property to Channex is asked for from its page and done by the worker (integration

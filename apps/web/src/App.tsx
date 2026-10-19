@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createBrowserRouter, createMemoryRouter, Navigate, Outlet, RouterProvider } from 'react-router';
 import { AppShell } from './components/AppShell.tsx';
 import { ConsoleShell } from './components/ConsoleShell.tsx';
@@ -25,11 +25,27 @@ import { SignIn } from './pages/SignIn.tsx';
 import { Today } from './pages/Today.tsx';
 import { WorkspacePage } from './pages/WorkspacePage.tsx';
 
+/**
+ * The app's start stays on screen at least this long, so the mark and the turning ring settle
+ * rather than flash when the answer comes back at once (as it does in the demo, and on a fast line).
+ */
+const START_MIN_MS = 1400;
+
+function useStartHeld(): boolean {
+  const [held, setHeld] = useState(true);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setHeld(false), START_MIN_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+  return held;
+}
+
 /** Signed in, known to the API, and either V-01 staff or able to open at least one workspace. */
 function Gate() {
   const { session, loading } = useSession();
   const me = useMe();
   const entries = useMemo(() => (me.data ? workspaceEntries(me.data) : []), [me.data]);
+  const held = useStartHeld();
 
   if (loading)
     return (
@@ -38,7 +54,7 @@ function Gate() {
       </Splash>
     );
   if (!session) return <Navigate to="/sign-in" replace />;
-  if (me.isPending)
+  if (me.isPending || held)
     return (
       <Splash>
         <StartLoading>Opening your workspace</StartLoading>

@@ -22,7 +22,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { ChannelMark, Mark } from './marks.tsx';
 import {
   type Bar,
@@ -537,6 +537,7 @@ export function CalendarGrid({
   marked,
   maxHeight,
 }: GridProps) {
+  const navigate = useNavigate();
   const scroller = useRef<HTMLDivElement>(null);
   const cells = useRef(new Map<string, HTMLElement>());
   const anchor = useRef<GridPoint | null>(null);
@@ -892,15 +893,23 @@ export function CalendarGrid({
               className="absolute right-0 left-0 flex border-b border-hairline"
               style={{ top: index * ROW_HEIGHT, height: ROW_HEIGHT }}
             >
+              {/* The whole box opens the property, not just its name; the cleaning switch is the one exception. */}
+              {/* biome-ignore lint/a11y/useKeyWithClickEvents: the name inside is the link; this only widens its target */}
+              {/* biome-ignore lint/a11y/noStaticElementInteractions: same */}
               <div
-                className="sticky left-0 z-[4] flex shrink-0 items-center gap-3 border-r border-hairline bg-paper px-3"
+                className="sticky left-0 z-[4] flex shrink-0 cursor-pointer items-center gap-3 border-r border-hairline bg-paper px-3 transition-colors hover:bg-linen"
                 style={{ width: nameWidth }}
+                onClick={(event) => {
+                  const hit = event.target as HTMLElement;
+                  if (hit.closest('a, button')) return;
+                  navigate(`/properties/${row.property.id}`);
+                }}
               >
                 {nameWidth > 160 ? <Thumbnail property={row.property} /> : null}
                 <div className="min-w-0">
                   <Link
                     to={`/properties/${row.property.id}`}
-                    className="block truncate font-serif text-[14.5px] leading-tight text-ink underline-offset-4 hover:underline"
+                    className="block truncate font-serif text-[14.5px] leading-tight text-ink outline-offset-2"
                   >
                     {row.property.name}
                   </Link>
