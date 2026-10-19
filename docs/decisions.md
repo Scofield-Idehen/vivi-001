@@ -5,6 +5,13 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-19
 
+- **First real connection from the app, 19 Oct 2026, 14:48.** On Alpha's laptop, against Supabase
+  staging and the real Channex staging key: a property added in V-01 (photos in the public
+  `property-photos` bucket) was created in Channex by the worker, in a Vivistays group, and the
+  auto-close setting was read back and recorded. Integration steps 1–3 and 6 are proven live;
+  steps 7 and 8 (channel accounts, listing links, Airbnb settings) are next to try on staging with
+  Channex's test Airbnb account.
+
 - **Staging runs on Alpha's laptop against Supabase `v01-staging` (Ireland, eu-west-1) from 19 Oct
   2026.** Migrations, roles and the seed ran through the session pooler (the direct address is
   IPv6-only and unreachable from his network); the API, worker and web app start with `pnpm dev`;
