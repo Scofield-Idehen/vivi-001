@@ -141,11 +141,7 @@ function ReviewRow({ title, children, onChange }: { title: string; children: Rea
       <dt className="text-[13.5px] text-slate">{title}</dt>
       <dd className="col-start-1 text-[14.5px] leading-relaxed text-ink @lg:col-start-2">{children}</dd>
       <dd className="col-start-2 row-span-2 row-start-1 @lg:col-start-3 @lg:row-span-1">
-        <button
-          type="button"
-          onClick={onChange}
-          className="text-[13.5px] text-accent underline-offset-4 hover:underline"
-        >
+        <button type="button" onClick={onChange} className="text-[13.5px] action">
           Change<span className="sr-only"> {title.toLowerCase()}</span>
         </button>
       </dd>
@@ -1022,11 +1018,7 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
           <div className="mt-6">
             <Notice>
               A property needs a name before it can be added.{' '}
-              <button
-                type="button"
-                onClick={() => go(STEP_INDEX.name)}
-                className="text-accent underline-offset-4 hover:underline"
-              >
+              <button type="button" onClick={() => go(STEP_INDEX.name)} className="action">
                 Add a name
               </button>
             </Notice>
@@ -1213,11 +1205,7 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
               {showRestored ? (
                 <div className="mb-8 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl bg-paper px-4 py-3 text-[13.5px] text-ink">
                   <span>Picked up where you left off.</span>
-                  <button
-                    type="button"
-                    onClick={startOver}
-                    className="text-accent underline-offset-4 hover:underline"
-                  >
+                  <button type="button" onClick={startOver} className="action">
                     Start over
                   </button>
                 </div>
@@ -1247,7 +1235,7 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
               <button
                 type="button"
                 onClick={startOver}
-                className="h-10 rounded-lg px-4 text-[14px] font-medium text-ink underline-offset-4 hover:underline"
+                className="h-10 rounded-lg px-4 text-[14px] font-medium action action-ink"
               >
                 Add another
               </button>
@@ -1275,7 +1263,7 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
                 onClick={() => go(Math.max(0, step - 1))}
                 disabled={busy}
                 className={cx(
-                  'h-10 rounded-lg px-4 text-[14px] font-medium text-ink underline-offset-4 hover:underline disabled:opacity-50',
+                  'h-10 rounded-lg px-4 text-[14px] font-medium action action-ink disabled:opacity-50',
                   step === 0 && 'invisible',
                 )}
               >

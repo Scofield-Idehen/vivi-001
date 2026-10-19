@@ -275,7 +275,7 @@ export function CopyButton({ text, label = 'Copy' }: { text: string; label?: str
           .then(() => setCopied(true))
           .catch(() => {});
       }}
-      className="inline-flex items-center gap-1 text-[12.5px] text-accent underline-offset-4 hover:underline"
+      className="inline-flex items-center gap-1 text-[12.5px] action"
     >
       {copied ? (
         <IconCheck size={14} stroke={2} aria-hidden />

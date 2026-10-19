@@ -159,7 +159,7 @@ function SupportEnded() {
         <Link
           to={`/console/operators/${orgId}`}
           onClick={() => void queryClient.invalidateQueries({ queryKey: ['me'] })}
-          className="text-[14px] text-accent underline-offset-4 hover:underline"
+          className="text-[14px] action"
         >
           Back to {entry.organisationName} in the console
         </Link>

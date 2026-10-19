@@ -286,7 +286,7 @@ export function PhotosSection({ d, canEdit, orgId }: { d: PropertyDetail; canEdi
                       <span className="text-ink">Remove it?</span>
                       <button
                         type="button"
-                        className="font-medium text-urgent underline-offset-4 hover:underline"
+                        className="font-medium action action-urgent"
                         onClick={() => {
                           remove.mutate(photo.id);
                           setConfirming(null);
@@ -294,11 +294,7 @@ export function PhotosSection({ d, canEdit, orgId }: { d: PropertyDetail; canEdi
                       >
                         Remove
                       </button>
-                      <button
-                        type="button"
-                        className="text-accent underline-offset-4 hover:underline"
-                        onClick={() => setConfirming(null)}
-                      >
+                      <button type="button" className="action" onClick={() => setConfirming(null)}>
                         Keep
                       </button>
                     </div>

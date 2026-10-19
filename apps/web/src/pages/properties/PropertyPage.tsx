@@ -138,7 +138,7 @@ function Readiness({ checks }: { checks: ListingCheck[] }) {
               <button
                 type="button"
                 onClick={() => goTo(check.section)}
-                className="text-left text-ink underline decoration-hairline underline-offset-4 hover:decoration-ink"
+                className="-ml-2.5 text-left action action-ink"
               >
                 {check.label}
               </button>
@@ -204,7 +204,7 @@ export function PropertyPage() {
       <EmptyState
         title={gone ? 'This property isn’t here' : 'The property could not be loaded'}
         action={
-          <Link to="/properties" className="text-[14px] text-accent underline-offset-4 hover:underline">
+          <Link to="/properties" className="text-[14px] action">
             Back to properties
           </Link>
         }
@@ -231,10 +231,7 @@ export function PropertyPage() {
 
   return (
     <div>
-      <Link
-        to="/properties"
-        className="inline-flex items-center gap-1.5 text-[13px] text-accent underline-offset-4 hover:underline"
-      >
+      <Link to="/properties" className="-ml-2.5 inline-flex items-center gap-1.5 text-[13px] action">
         <IconArrowLeft size={15} stroke={1.75} aria-hidden />
         Properties
       </Link>

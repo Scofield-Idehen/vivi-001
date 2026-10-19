@@ -99,10 +99,7 @@ export function ReservationPage() {
   }, [saved]);
 
   const back = (
-    <Link
-      to="/reservations"
-      className="inline-flex items-center gap-1.5 text-[13px] text-accent underline-offset-4 hover:underline"
-    >
+    <Link to="/reservations" className="-ml-2.5 inline-flex items-center gap-1.5 text-[13px] action">
       <IconArrowLeft size={15} stroke={1.75} aria-hidden />
       Reservations
     </Link>
@@ -193,10 +190,7 @@ export function ReservationPage() {
                     {
                       label: 'Property',
                       value: (
-                        <Link
-                          to={`/properties/${r.propertyId}`}
-                          className="text-ink underline decoration-hairline underline-offset-4 hover:decoration-ink"
-                        >
+                        <Link to={`/properties/${r.propertyId}`} className="-ml-2.5 action action-ink">
                           {r.propertyName}
                         </Link>
                       ),
@@ -235,10 +229,7 @@ export function ReservationPage() {
                     {
                       label: 'Email',
                       value: r.guestEmail ? (
-                        <a
-                          href={`mailto:${r.guestEmail}`}
-                          className="underline decoration-hairline underline-offset-4 hover:decoration-ink"
-                        >
+                        <a href={`mailto:${r.guestEmail}`} className="-ml-2.5 action action-ink">
                           {r.guestEmail}
                         </a>
                       ) : (
@@ -250,7 +241,7 @@ export function ReservationPage() {
                       value: r.guestPhone ? (
                         <a
                           href={`tel:${r.guestPhone.replace(/[^\d+]/g, '')}`}
-                          className="tnum underline decoration-hairline underline-offset-4 hover:decoration-ink"
+                          className="-ml-2.5 action action-ink tnum"
                         >
                           {r.guestPhone}
                         </a>
@@ -281,7 +272,7 @@ export function ReservationPage() {
           <Booked r={r} locale={locale} timeZone={timeZone} />
           <Link
             to={`/calendar?from=${r.checkIn}`}
-            className="inline-flex items-center gap-2 px-1 text-[13.5px] text-accent underline-offset-4 hover:underline"
+            className="inline-flex items-center gap-2 px-1 text-[13.5px] action"
           >
             <IconCalendarMonth size={16} stroke={1.75} aria-hidden />
             See it on the Calendar

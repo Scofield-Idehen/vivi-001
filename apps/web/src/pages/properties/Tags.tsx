@@ -61,7 +61,7 @@ export function Tags({
             }}
             className={
               tags.length
-                ? 'ml-1 text-[13px] text-accent underline-offset-4 hover:underline'
+                ? 'ml-1 text-[13px] action'
                 : 'inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-edge px-2.5 text-[12.5px] text-slate hover:border-ink hover:text-ink'
             }
           >

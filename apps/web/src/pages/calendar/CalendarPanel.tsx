@@ -417,7 +417,7 @@ function ChangeBody({
               <button
                 type="button"
                 onClick={() => setAction(null)}
-                className="inline-flex items-center gap-1.5 text-[13px] text-accent underline-offset-4 hover:underline"
+                className="-ml-2.5 inline-flex items-center gap-1.5 text-[13px] action"
               >
                 <IconArrowLeft size={15} stroke={1.75} aria-hidden />
                 All actions

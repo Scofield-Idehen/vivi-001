@@ -56,7 +56,7 @@ function LinkPicker({
         {any
           ? `The ${CHANNEL_LABELS[channel]} account isn't connected yet. `
           : `There is no ${CHANNEL_LABELS[channel]} account in this workspace yet. `}
-        <Link to="/channels" className="text-accent underline-offset-4 hover:underline">
+        <Link to="/channels" className="action">
           Channels &amp; sync
         </Link>{' '}
         is where accounts are added and connected.

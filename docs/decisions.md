@@ -5,6 +5,14 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-19
 
+- **Text actions are buttons, never underlined (Alpha, 19 Oct 2026: "the underline is not good at
+  all… makes this project half done").** Every action that used to be a teal word with an underline
+  on hover (Show, Rename, Remove, Unlink, Pause on Airbnb, Manage fields, Back to properties, a
+  clickable value on a page) is now the `action` pill (apps/web/src/styles.css): a shape appears
+  under the mouse, darkens on press, and the keyboard ring hugs the pill. `action-ink` for values
+  on a page, `action-urgent` for removals. Inline values and back links carry `-ml-2.5` so their
+  text stays on the column line and the pill grows to the left.
+
 - **The import from Guesty (integration step 1, built 19 Oct 2026; waits for the credentials).**
   `pnpm guesty:import --org vivistays [--dry-run]` in `apps/worker`, with `GUESTY_CLIENT_ID`,
   `GUESTY_CLIENT_SECRET` and `FIELD_SECRET_KEY` in the worker's `.env`. Through Guesty's Open API

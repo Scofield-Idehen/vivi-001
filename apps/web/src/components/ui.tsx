@@ -21,7 +21,7 @@ export function Button({
         'inline-flex items-center justify-center gap-2 rounded-md text-[13.5px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
         variant === 'primary' && 'h-9 bg-ink px-4 text-canvas hover:bg-ink/88',
         variant === 'secondary' && 'h-9 border border-hairline px-4 text-ink hover:bg-linen',
-        variant === 'quiet' && 'text-accent underline-offset-4 hover:underline',
+        variant === 'quiet' && 'action',
         className,
       )}
     />

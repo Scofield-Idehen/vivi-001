@@ -15,7 +15,7 @@ export function ModuleToCome({ module }: { module: ModuleEntry }) {
         </StatusDot>
       </p>
       <p className="mt-6 text-[14px]">
-        <Link to="/today" className="text-accent underline-offset-4 hover:underline">
+        <Link to="/today" className="action">
           Back to Today
         </Link>
       </p>
@@ -27,7 +27,7 @@ export function NotFound({ home = '/today' }: { home?: string }) {
   return (
     <>
       <PageHeader title="Page not found" description="This page doesn't exist or has moved." />
-      <Link to={home} className="text-[14px] text-accent underline-offset-4 hover:underline">
+      <Link to={home} className="text-[14px] action">
         {home === '/today' ? 'Go to Today' : 'Go to the overview'}
       </Link>
     </>

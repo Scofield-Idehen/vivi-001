@@ -41,7 +41,7 @@ function Secret({ value, name }: { value: string; name: string }) {
         type="button"
         onClick={() => setShown((s) => !s)}
         aria-label={shown ? `Hide ${name}` : `Show ${name}`}
-        className="inline-flex items-center gap-1 rounded text-[12.5px] text-accent underline-offset-4 hover:underline"
+        className="inline-flex items-center gap-1 rounded text-[12.5px] action"
       >
         {shown ? (
           <IconEyeOff size={14} stroke={1.75} aria-hidden />
@@ -72,7 +72,7 @@ function Value({ field }: { field: PropertyField }) {
           href={field.value}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex max-w-full items-center gap-1 text-accent underline-offset-4 hover:underline"
+          className="-ml-2.5 inline-flex max-w-full items-center gap-1 action"
         >
           <span className="truncate">{field.value.replace(/^https?:\/\//, '')}</span>
           <IconExternalLink size={14} stroke={1.75} aria-hidden className="shrink-0" />
@@ -120,11 +120,7 @@ function ValueInput({
             <label htmlFor={id} className="text-[13px] text-slate">
               {field.name}
             </label>
-            <button
-              type="button"
-              onClick={() => setShown((s) => !s)}
-              className="text-[12.5px] text-accent underline-offset-4 hover:underline"
-            >
+            <button type="button" onClick={() => setShown((s) => !s)} className="text-[12.5px] action">
               {shown ? 'Hide' : 'Show'}
             </button>
           </div>

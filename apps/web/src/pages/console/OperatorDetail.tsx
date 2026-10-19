@@ -52,7 +52,7 @@ export function ConsoleOperatorDetail() {
   const back = (
     <Link
       to="/console/operators"
-      className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-accent underline-offset-4 hover:underline"
+      className="-ml-2.5 mb-4 inline-flex items-center gap-1.5 text-[13px] action"
     >
       <IconArrowLeft size={14} stroke={1.75} aria-hidden />
       Operators

@@ -383,7 +383,7 @@ function CalendarScreen() {
           <EmptyState
             title="No properties yet"
             action={
-              <Link to="/properties" className="text-[14px] text-accent underline-offset-4 hover:underline">
+              <Link to="/properties" className="text-[14px] action">
                 Go to Properties
               </Link>
             }

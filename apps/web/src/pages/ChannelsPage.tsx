@@ -35,12 +35,7 @@ function ConnectLink({ url }: { url: string }) {
       <span className="text-slate">
         Whoever signs in to this account opens this link and approves Channex:
       </span>
-      <a
-        href={url}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline"
-      >
+      <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 action">
         Open the link <IconExternalLink size={14} stroke={1.75} aria-hidden />
       </a>
       <button
@@ -48,7 +43,7 @@ function ConnectLink({ url }: { url: string }) {
         onClick={() => {
           void navigator.clipboard?.writeText(url).then(() => setCopied(true));
         }}
-        className="inline-flex items-center gap-1 text-[13px] text-accent underline-offset-4 hover:underline"
+        className="inline-flex items-center gap-1 text-[13px] action"
       >
         <IconCopy size={14} stroke={1.75} aria-hidden />
         {copied ? 'Copied' : 'Copy it to send'}
@@ -181,10 +176,7 @@ function Account({ a, orgId, canManage }: { a: ChannelAccount; orgId: string; ca
                     <p className="text-[12px] text-mist tnum">{l.externalListingId}</p>
                   </div>
                   {l.linkedPropertyId ? (
-                    <Link
-                      to={`/properties/${l.linkedPropertyId}`}
-                      className="text-[13.5px] text-accent underline-offset-4 hover:underline"
-                    >
+                    <Link to={`/properties/${l.linkedPropertyId}`} className="text-[13.5px] action">
                       {l.linkedPropertyName}
                     </Link>
                   ) : (

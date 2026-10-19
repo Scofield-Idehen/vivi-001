@@ -144,10 +144,7 @@ export function ConsoleOverview() {
           <SectionHeading
             id="operators"
             action={
-              <Link
-                to="/console/operators"
-                className="text-[13px] text-accent underline-offset-4 hover:underline"
-              >
+              <Link to="/console/operators" className="text-[13px] action">
                 All operators
               </Link>
             }
