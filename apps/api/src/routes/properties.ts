@@ -281,7 +281,7 @@ const PhotoParams = z.object({ id: z.uuid(), photoId: z.uuid() });
 
 export function propertyRoutes(
   app: FastifyInstance,
-  deps: { scope: RequestScope; photos: PhotoStore; box: SecretBox | undefined },
+  deps: { scope: RequestScope; photos: PhotoStore; box: SecretBox | undefined; bucket: string },
 ) {
   const viewer = (ctx: { role: WorkspaceRole }): Viewer => ({ role: ctx.role, box: deps.box });
   const typed = app.withTypeProvider<ZodTypeProvider>();
@@ -504,10 +504,21 @@ export function propertyRoutes(
         if ((row?.count ?? 0) >= PHOTO_MAX_COUNT) {
           throw new HttpError(409, 'too_many_photos', `A property can have up to ${PHOTO_MAX_COUNT} photos.`);
         }
-        return deps.photos.ticket(
-          newPhotoPath(ctx.orgId, req.params.id, req.body.contentType),
-          req.body.contentType,
-        );
+        try {
+          return await deps.photos.ticket(
+            newPhotoPath(ctx.orgId, req.params.id, req.body.contentType),
+            req.body.contentType,
+          );
+        } catch (error) {
+          // Storage said no: the bucket is missing or misnamed, or the key is wrong. Say so on the page.
+          const reason = error instanceof Error ? error.message : String(error);
+          req.log.error({ error: reason }, 'Photo storage refused an upload ticket');
+          throw new HttpError(
+            503,
+            'photo_storage_refused',
+            `Photo storage refused the upload: ${reason}. Check the bucket is named "${deps.bucket}" and is public, and that the API has the service role key.`,
+          );
+        }
       }),
   );
 

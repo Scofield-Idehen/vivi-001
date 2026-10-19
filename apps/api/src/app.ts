@@ -111,7 +111,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const box = deps.env.FIELD_SECRET_KEY ? new SecretBox(deps.env.FIELD_SECRET_KEY) : undefined;
   meRoutes(app, { db: deps.db, scope });
   workspaceRoutes(app, { scope });
-  propertyRoutes(app, { scope, photos: deps.photos ?? photoStoreFrom(deps.env), box });
+  propertyRoutes(app, {
+    scope,
+    photos: deps.photos ?? photoStoreFrom(deps.env),
+    box,
+    bucket: deps.env.PHOTO_BUCKET,
+  });
   fieldRoutes(app, { scope, box });
   calendarRoutes(app, { scope });
   reservationRoutes(app, { scope });

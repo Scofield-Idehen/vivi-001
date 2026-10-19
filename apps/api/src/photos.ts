@@ -68,7 +68,10 @@ export class SupabasePhotoStore implements PhotoStore {
     const response = await this.request(`/object/upload/sign/${this.options.bucket}/${path}`, {
       method: 'POST',
     });
-    if (!response.ok) throw new Error(`Storage refused an upload ticket (${response.status})`);
+    if (!response.ok) {
+      const detail = (await response.text().catch(() => '')).slice(0, 200);
+      throw new Error(`Storage refused an upload ticket (${response.status}${detail ? `: ${detail}` : ''})`);
+    }
     const body = (await response.json()) as { url?: string };
     if (!body.url) throw new Error('Storage returned no upload address');
     return {
