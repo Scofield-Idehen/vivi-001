@@ -360,6 +360,8 @@ function sampleProperty(p: {
     tags: p.tags ?? [],
     createdAt,
     ...listingDefaults(),
+    // The sample properties V-01 runs were connected when they were added; the rest wait.
+    channex: p.managedBy === 'v01' ? connectedSince(createdAt) : NOT_CONNECTED,
     title: p.title ?? null,
     amenities: p.amenities ?? [],
     basePriceMinor: p.usual?.base ?? null,
