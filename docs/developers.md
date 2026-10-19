@@ -131,7 +131,8 @@ It never makes anything on live.
 
 ## Supabase and Render
 
-Not set up yet. These are the steps for when the staging and production accounts exist.
+Staging: Supabase project `v01-staging` (ref `nznzkjsbdkzujkoieemo`, London), created 19 Oct 2026 in
+Vivistays' name. Production and the Firebase hosting are still to come. The steps:
 
 1. Create two Supabase projects, staging and production, in London (eu-west-2). Keep "Confirm email" on
    in Auth settings; the app signs in with email links.

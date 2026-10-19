@@ -45,7 +45,11 @@ GRANT USAGE, CREATE ON SCHEMA pgboss TO app_jobs;
 --> statement-breakpoint
 DO $$
 BEGIN
+  -- pg-boss keeps its own schema; it is made above. On Supabase the postgres role does not own the
+  -- database, so this extra grant is skipped there rather than failing the migration.
   EXECUTE format('GRANT CREATE ON DATABASE %I TO app_jobs', current_database());
+EXCEPTION WHEN insufficient_privilege THEN
+  RAISE NOTICE 'Skipped GRANT CREATE ON DATABASE for app_jobs (not the database owner)';
 END
 $$;
 --> statement-breakpoint
