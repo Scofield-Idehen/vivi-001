@@ -1,4 +1,4 @@
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Button, PageHeader, StatusDot } from '../../components/ui.tsx';
 import { useEndSupportAccess, useMe, useSupportLog } from '../../lib/api.ts';
 import { dateTime, duration, plural, useNow } from '../../lib/format.ts';
@@ -6,6 +6,7 @@ import { useSession } from '../../lib/session.tsx';
 import { cx, GrantStatus, LoadError, Loading, tableHead, td, th } from './parts.tsx';
 
 export function ConsoleSupportLog() {
+  const navigate = useNavigate();
   const log = useSupportLog();
   const end = useEndSupportAccess();
   const email = useSession().session?.user.email;
@@ -56,7 +57,11 @@ export function ConsoleSupportLog() {
                 const open = g.active && Date.parse(g.expiresAt) > now;
                 const canEnd = open && (g.staffEmail === email || platformRole === 'owner');
                 return (
-                  <tr key={g.id}>
+                  <tr
+                    key={g.id}
+                    onClick={() => navigate(`/console/operators/${g.organisationId}`)}
+                    className="cursor-pointer transition-colors hover:bg-linen"
+                  >
                     <td className={cx(td, 'whitespace-nowrap text-slate')}>
                       {dateTime(g.startedAt)}
                       <div className="text-[12.5px] text-mist">
@@ -66,7 +71,8 @@ export function ConsoleSupportLog() {
                     <td className={td}>
                       <Link
                         to={`/console/operators/${g.organisationId}`}
-                        className="font-medium text-ink underline-offset-4 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-medium text-ink"
                       >
                         {g.organisationName}
                       </Link>

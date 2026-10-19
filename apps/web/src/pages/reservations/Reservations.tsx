@@ -196,13 +196,13 @@ export function Reservations() {
                       key={r.id}
                       // The name is the link for keyboards and screen readers; the whole row works for a mouse.
                       onClick={() => navigate(`/reservations/${r.id}`)}
-                      className="h-16 cursor-pointer hover:bg-linen/60"
+                      className="h-16 cursor-pointer transition-colors hover:bg-linen"
                     >
                       <td className="py-2 pr-4">
                         <Link
                           to={`/reservations/${r.id}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="font-serif text-[16px] text-ink underline-offset-4 hover:underline"
+                          className="font-serif text-[16px] text-ink"
                         >
                           {r.guestName ?? 'Guest'}
                         </Link>

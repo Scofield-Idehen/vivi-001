@@ -1,4 +1,4 @@
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { PageHeader } from '../../components/ui.tsx';
 import { useConsoleOperators } from '../../lib/api.ts';
 import { plural, relativeTime, useNow, V01 } from '../../lib/format.ts';
@@ -15,6 +15,7 @@ import {
 } from './parts.tsx';
 
 export function ConsoleOperators() {
+  const navigate = useNavigate();
   const operators = useConsoleOperators();
   const now = useNow();
 
@@ -79,11 +80,17 @@ export function ConsoleOperators() {
           </thead>
           <tbody className="divide-y divide-hairline">
             {list.map((op) => (
-              <tr key={op.id} className="hover:bg-linen/50">
+              <tr
+                key={op.id}
+                // The name is the link for keyboards and screen readers; the whole row works for a mouse.
+                onClick={() => navigate(`/console/operators/${op.id}`)}
+                className="cursor-pointer transition-colors hover:bg-linen"
+              >
                 <td className={td}>
                   <Link
                     to={`/console/operators/${op.id}`}
-                    className="font-medium text-ink underline-offset-4 hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                    className="font-medium text-ink"
                   >
                     {op.name}
                   </Link>

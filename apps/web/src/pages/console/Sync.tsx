@@ -1,4 +1,4 @@
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { PageHeader, SectionHeading, StatusDot } from '../../components/ui.tsx';
 import { useConsoleSync } from '../../lib/api.ts';
 import { dateTime, number, relativeTime, useNow } from '../../lib/format.ts';
@@ -25,6 +25,7 @@ function Count({ value, urgent }: { value: number; urgent?: boolean }) {
 }
 
 export function ConsoleSync() {
+  const navigate = useNavigate();
   const sync = useConsoleSync();
   const now = useNow();
 
@@ -102,12 +103,19 @@ export function ConsoleSync() {
             </thead>
             <tbody className="divide-y divide-hairline">
               {rows.map((r) => (
-                <tr key={r.organisationId ?? 'unmatched'}>
+                <tr
+                  key={r.organisationId ?? 'unmatched'}
+                  onClick={
+                    r.organisationId ? () => navigate(`/console/operators/${r.organisationId}`) : undefined
+                  }
+                  className={r.organisationId ? 'cursor-pointer transition-colors hover:bg-linen' : undefined}
+                >
                   <td className={td}>
                     {r.organisationId ? (
                       <Link
                         to={`/console/operators/${r.organisationId}`}
-                        className="font-medium text-ink underline-offset-4 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-medium text-ink"
                       >
                         {r.organisationName}
                       </Link>

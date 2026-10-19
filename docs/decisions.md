@@ -5,6 +5,11 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-19
 
+- **Rows are the click target, never an underlined word (Alpha, 19 Oct 2026: "underline is not a
+  good UX design").** Every table row that leads somewhere (operators, sync health, the support
+  log, properties, reservations) lights up under the mouse and opens on click; the name inside
+  stays a plain link for keyboards and screen readers. Text links in prose keep their underline.
+
 - **The downtime safety net is the worker's job, not a runbook step (integration step 6).** Every
   property is made in Channex with its availability auto-update settings on, so Channex closes a
   booked night by itself the moment a booking arrives; the worker reads that back after every

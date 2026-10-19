@@ -133,7 +133,7 @@ export function Properties() {
                   key={p.id}
                   // The name is the link for keyboards and screen readers; the whole row works for a mouse.
                   onClick={() => navigate(`/properties/${p.id}`)}
-                  className="h-16 cursor-pointer hover:bg-linen/60"
+                  className="h-16 cursor-pointer transition-colors hover:bg-linen"
                 >
                   <td className="py-2 pr-4">
                     <div className="flex items-center gap-3.5">
@@ -142,7 +142,7 @@ export function Properties() {
                         <Link
                           to={`/properties/${p.id}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="font-serif text-[16px] text-ink underline-offset-4 hover:underline"
+                          className="font-serif text-[16px] text-ink"
                         >
                           {p.name}
                         </Link>
