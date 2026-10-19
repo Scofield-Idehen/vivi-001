@@ -16,6 +16,7 @@ const NOT_OPERATOR_TABLES: Record<string, string> = {
   platform_audit: 'V-01 staff activity across operators; written and read only through functions',
   worker_runs:
     "the worker's own heartbeats and recoveries; worker-only policy, console reads through a function",
+  integration_tokens: 'access tokens for outside services (Guesty); worker-only policy, never read back',
 };
 
 const APP_ROLES = ['app_base', 'app_api', 'app_worker', 'app_jobs'];

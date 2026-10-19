@@ -16,6 +16,12 @@ const EnvSchema = z
     SLACK_ALERTS_WEBHOOK_URL: z.url().optional(),
     /** Where the staff app lives, so an alert can link to the page that fixes it. */
     APP_URL: z.url().optional(),
+    /** Guesty Open API credentials (Guesty → Settings → Integrations → Open API), for the import only. */
+    GUESTY_CLIENT_ID: z.string().min(1).optional(),
+    GUESTY_CLIENT_SECRET: z.string().min(1).optional(),
+    GUESTY_API_URL: z.url().optional(),
+    /** The same key the API uses to seal secret custom fields; the import needs it for lock codes. */
+    FIELD_SECRET_KEY: z.string().min(32).optional(),
     /** Changes are batched per property every 30–60 seconds (playbook, Section 4). */
     OUTBOX_INTERVAL_MS: z.coerce.number().int().min(1000).default(30_000),
     WEBHOOK_INTERVAL_MS: z.coerce.number().int().min(500).default(5_000),

@@ -9,6 +9,7 @@
     "start": "node --enable-source-maps dist/main.js",
     "channex:check": "tsx --env-file-if-exists=.env scripts/channex-check.ts",
     "cross-check": "tsx --env-file-if-exists=.env scripts/cross-check.ts",
+    "guesty:import": "tsx --env-file-if-exists=.env scripts/guesty-import.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },

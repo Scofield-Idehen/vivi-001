@@ -77,6 +77,8 @@ beforeAll(async () => {
     slug: 'operator-b',
     userEmail: 'admin-b@example.test',
   });
+  // Every workspace starts with the standard fields (migration 0024); these tests define their own.
+  await owner('delete from app.custom_fields');
   people.adminA.userId = a.userId;
   people.adminB.userId = b.userId;
   // The owner is added by email only, as `pnpm db:staff add` does, and linked on first sign-in.

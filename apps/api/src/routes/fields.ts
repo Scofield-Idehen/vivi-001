@@ -1,4 +1,5 @@
 import { customFields, properties, propertyFieldValues, type Tx } from '@v01/db';
+import type { SecretBox } from '@v01/integrations';
 import {
   type CustomField,
   CustomFieldCreateSchema,
@@ -19,7 +20,6 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { pgConstraint, type RequestScope } from '../context.ts';
 import { HttpError } from '../errors.ts';
-import type { SecretBox } from '../secrets.ts';
 
 const FieldParams = z.object({ id: z.uuid() });
 const PropertyParams = z.object({ id: z.uuid() });

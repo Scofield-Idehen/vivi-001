@@ -8,6 +8,7 @@ import {
   propertyRooms,
   type Tx,
 } from '@v01/db';
+import type { SecretBox } from '@v01/integrations';
 import {
   AmenitiesUpdateSchema,
   AmenityCodesSchema,
@@ -38,7 +39,6 @@ import { z } from 'zod';
 import { pgConstraint, pgErrorCode, type RequestScope, toIso } from '../context.ts';
 import { HttpError } from '../errors.ts';
 import { newPhotoPath, type PhotoStore, photoPathBelongsTo } from '../photos.ts';
-import type { SecretBox } from '../secrets.ts';
 import { linksOf } from './channels.ts';
 import { channexStateOf, channexStatusesOf } from './channex.ts';
 import { fieldsOf } from './fields.ts';

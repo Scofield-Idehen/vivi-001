@@ -14,3 +14,18 @@ export {
  *   stripe/     Phase 4: Stripe Connect payment links on each operator's own account
  *   email/      Phase 2: confirmations and digests from the operator's own domain
  */
+export {
+  GUESTY_API_URL,
+  type GuestyCalendarDay,
+  GuestyClient,
+  type GuestyConfig,
+  type GuestyCustomField,
+  GuestyError,
+  type GuestyIntegration,
+  type GuestyListing,
+  type GuestyReservation,
+  type GuestyToken,
+  type GuestyTokenStore,
+  MemoryTokenStore,
+} from './guesty/client.ts';
+export { SecretBox } from './secrets.ts';

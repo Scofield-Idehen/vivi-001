@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import { appBrand } from '@v01/brand';
 import type { ApiDatabase } from '@v01/db';
+import { SecretBox } from '@v01/integrations';
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import {
   hasZodFastifySchemaValidationErrors,
@@ -26,7 +27,6 @@ import { reservationRoutes } from './routes/reservations.ts';
 import { todayRoutes } from './routes/today.ts';
 import { webhookRoutes } from './routes/webhooks.ts';
 import { workspaceRoutes } from './routes/workspace.ts';
-import { SecretBox } from './secrets.ts';
 
 export interface AppDeps {
   env: Env;

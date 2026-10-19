@@ -196,7 +196,7 @@ describe('outbox sender', () => {
       `select status, last_error from app.ari_outbox where property_id = $1`,
       [onGuesty],
     );
-    expect(row?.status).toBe('failed');
+    expect(row?.status).toBe('skipped');
     expect(row?.last_error).toContain('Guesty');
   });
 
@@ -209,7 +209,7 @@ describe('outbox sender', () => {
       [notConnected],
     );
     expect(row).toEqual({
-      status: 'failed',
+      status: 'skipped',
       last_error: "Skipped: this property's listings are not connected to V-01 yet.",
     });
   });

@@ -5,6 +5,35 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-19
 
+- **The import from Guesty (integration step 1, built 19 Oct 2026; waits for the credentials).**
+  `pnpm guesty:import --org vivistays [--dry-run]` in `apps/worker`, with `GUESTY_CLIENT_ID`,
+  `GUESTY_CLIENT_SECRET` and `FIELD_SECRET_KEY` in the worker's `.env`. Through Guesty's Open API
+  (`/v1/listings`, `/v1/reservations`, the calendar and custom-field endpoints; 15 requests a
+  second, five tokens a day per client, so the token is kept in `app.integration_tokens`) it
+  brings: every listing as a property Guesty still runs (`managed_by = 'guesty'`; active ones live,
+  inactive ones archived, as decided), with address, type, sizes, prices and fees in minor units,
+  stay rules, descriptions, house rules, tags, amenities (Airbnb's names matched to V-01's codes;
+  the rest reported), photos (on Guesty's addresses for now; copying them into V-01's storage is a
+  follow-up), custom fields (matched to the standard fields by name, lock codes sealed with the
+  API's key, new fields made for the rest) and the calendar (hand-made blocks and nights with their
+  own price or rules, two years ahead); every booking from a year back as a reservation with its
+  guest (the channel's own code as the reference, so a booking Channex later sends is linked, not
+  doubled; an overlap is kept as a conflict); and the **account map**: one V-01 channel account per
+  account the listings sit on ("Airbnb A", "Airbnb B", "Booking.com A"), with each listing's id on
+  each channel in `app.guesty_channel_listings`, for the move-over step to link from. Multi-unit
+  parents are skipped (their units come as listings of their own). Everything lands in one
+  transaction or not at all; a dry run does the work and rolls it back, printing the report. Run
+  again, it updates. **To confirm on the first real pull:** which field in Guesty's listing
+  integrations names the channel account (the import tries several and reports the key it used).
+- **Standard custom fields (Alpha, 19 Oct 2026):** every workspace starts with Top lock code
+  (secret, for guests), Bottom lock code (secret, for maintenance), Wi-Fi name, Wi-Fi password
+  (secret) and Check-in instructions (link). Added by a trigger when an operator is made, and once
+  by migration 0024 for operators without fields. Open: whether the field team should see the
+  bottom lock code; secrets are admins, operations and guest comms only today.
+- **A change queued for a property V-01 doesn't run is `skipped`, not failed (19 Oct 2026).** It
+  used to count as a failed send, which would have put every Guesty booking on Today's Needs
+  attention once the import ran.
+
 - **Checks and alerts (integration step 6, built 19 Oct 2026).** Three parts. (1) The nightly
   cross-check (`nightly-cross-check`, 03:30 London, an hour after the full sync): for every property
   V-01 runs, the worker reads back what Channex holds for the next 90 nights (availability, and the

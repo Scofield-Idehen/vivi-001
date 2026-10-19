@@ -134,6 +134,28 @@ against what Channex holds for the next 90 nights (`--days 500` for the whole ho
 nights are sent again through the outbox and logged; the Today page lists them. Set `APP_URL` in the
 worker's `.env` so alerts link to the page that fixes them.
 
+## Importing from Guesty
+
+Put the Open API credentials (Guesty → Settings → Integrations → Open API → create an application)
+in `apps/worker/.env`, with the same `FIELD_SECRET_KEY` the API uses, so lock codes land sealed:
+
+```bash
+GUESTY_CLIENT_ID=<client id>
+GUESTY_CLIENT_SECRET=<client secret>
+FIELD_SECRET_KEY=<the API's key>
+```
+
+Then, in `apps/worker`: `pnpm guesty:import --org vivistays --dry-run` does the whole import and
+rolls it back, printing what it would make and what to look at (amenities without a match, a cut
+title, a secret it couldn't seal, the account keys it found). `pnpm guesty:import --org vivistays`
+keeps it. Run it again any time: it updates what it made before. `--bookings-days-back 365` and
+`--calendar-days 730` are the defaults. Guesty allows five tokens a day per client; the token is
+kept in the database, so runs and restarts share it.
+
+What the import does is in `apps/worker/src/guesty/mapping.ts` (Guesty's words into V-01's, pure
+functions) and `import.ts` (the database work), tested in `apps/worker/test/guesty.test.ts`
+against a stand-in for Guesty's API.
+
 ## Supabase and Render
 
 Staging: Supabase project `v01-staging` (ref `nznzkjsbdkzujkoieemo`, Ireland, eu-west-1), created 19 Oct 2026 in

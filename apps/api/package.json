@@ -16,6 +16,7 @@
     "@v01/brand": "workspace:*",
     "@v01/channels": "workspace:*",
     "@v01/db": "workspace:*",
+    "@v01/integrations": "workspace:*",
     "@v01/shared": "workspace:*",
     "drizzle-orm": "0.45.4",
     "fastify": "5.12.7",

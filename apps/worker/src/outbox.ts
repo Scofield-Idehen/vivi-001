@@ -100,14 +100,17 @@ async function processGroup(
 
   const { property, mapping } = context;
   if (!property) return fail('Property not found.', true);
-  // During migration only properties switched to V-01 send anything (playbook, Section 13).
+  // During migration only properties switched to V-01 send anything (playbook, Section 13). Nothing
+  // went wrong, so these are not failures: they don't count on Sync health or Today.
   if (property.managedBy !== 'v01') {
-    return fail(
-      property.managedBy === 'guesty'
-        ? 'Skipped: this property is still managed by Guesty.'
-        : "Skipped: this property's listings are not connected to V-01 yet.",
-      false,
-    );
+    await finish(deps, orgId, ids, {
+      status: 'skipped',
+      error:
+        property.managedBy === 'guesty'
+          ? 'Skipped: this property is still managed by Guesty.'
+          : "Skipped: this property's listings are not connected to V-01 yet.",
+    });
+    return 'sent';
   }
   if (!mapping?.channexRoomTypeId || !mapping.channexRatePlanId) {
     return fail('This property is not mapped to the channel manager yet.', true);
@@ -259,7 +262,12 @@ async function finish(
   deps: WorkerDeps,
   orgId: string,
   ids: number[],
-  outcome: { status: 'pending' | 'failed'; delayMs?: number; error?: string; refundAttempt?: boolean },
+  outcome: {
+    status: 'pending' | 'failed' | 'skipped';
+    delayMs?: number;
+    error?: string;
+    refundAttempt?: boolean;
+  },
 ): Promise<void> {
   await deps.db.withOrg({ orgId }, (tx) =>
     tx

@@ -899,7 +899,7 @@ function seed(): DemoState {
         links: [],
         live: NO_ACTIVITY,
         calendar: { nights: [], stays: [], blocks: [] },
-        fields: [],
+        fields: standardFields(),
         fieldValues: {},
       },
       {
@@ -1032,7 +1032,7 @@ function seed(): DemoState {
           lastActivityMinutes: 5,
         },
         calendar: { nights: [], stays: [], blocks: [] },
-        fields: [],
+        fields: standardFields(),
         fieldValues: {},
       },
       {
@@ -1114,7 +1114,7 @@ function seed(): DemoState {
         links: [],
         live: { ...NO_ACTIVITY, lastActivityMinutes: 190 },
         calendar: { nights: [], stays: [], blocks: [] },
-        fields: [],
+        fields: standardFields(),
         fieldValues: {},
       },
     ],
@@ -1303,6 +1303,19 @@ function sweepCleaning(operator: DemoOperator): void {
   if (changed) save();
 }
 
+/** The standard custom fields every workspace starts with (migration 0024; Alpha, 19 Oct 2026). */
+function standardFields(): CustomField[] {
+  return (
+    [
+      ['Top lock code', 'secret'],
+      ['Bottom lock code', 'secret'],
+      ['Wi-Fi name', 'text'],
+      ['Wi-Fi password', 'secret'],
+      ['Check-in instructions', 'link'],
+    ] as const
+  ).map(([name, kind], position) => ({ id: crypto.randomUUID(), name, kind, position }));
+}
+
 let state: DemoState | null = null;
 
 function load(): DemoState {
@@ -1317,6 +1330,10 @@ function load(): DemoState {
           layOutSamples(parsed);
           state = parsed;
           save();
+        }
+        // A workspace saved before the standard fields existed starts with them, as the database does.
+        for (const operator of parsed.operators) {
+          if (operator.fields.length === 0) operator.fields = standardFields();
         }
         state = parsed;
         return parsed;

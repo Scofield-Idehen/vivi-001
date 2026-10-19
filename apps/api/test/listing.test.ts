@@ -536,6 +536,8 @@ describe('custom fields', () => {
   let note: string;
 
   beforeAll(async () => {
+    // Every workspace starts with the standard fields (migration 0024); these tests define their own.
+    await ownerRows('delete from app.custom_fields');
     const [acct] = await ownerRows<{ id: string }>(
       `insert into app.app_users (id, email) values (gen_random_uuid(), 'books@example.test') returning id`,
     );

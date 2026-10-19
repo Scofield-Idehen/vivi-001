@@ -202,6 +202,14 @@ export class WorkerDatabase extends Database {
     return rows;
   }
 
+  /** One operator by its slug, for the worker's hand-run tools; null when there is none. */
+  async findOrganisation(slug: string): Promise<{ id: string; name: string; slug: string } | null> {
+    const { rows } = await this.pool.query('select id, name, slug from app.sys_organisation_by_slug($1)', [
+      slug,
+    ]);
+    return rows[0] ?? null;
+  }
+
   /**
    * Records a worker start and says how long V-01 was away: the gap since the previous run's last
    * heartbeat, or null when this is the first run ever. The caller decides whether that gap needs
@@ -221,6 +229,35 @@ export class WorkerDatabase extends Database {
       [now, previousSeen, gapSeconds],
     );
     return { runId: Number(rows[0]?.id), gapSeconds };
+  }
+
+  /** A kept access token for an outside service (Guesty), or null. */
+  async loadToken(
+    provider: string,
+    clientId: string,
+  ): Promise<{ accessToken: string; expiresAt: string } | null> {
+    const { rows } = await this.pool.query<{ access_token: string; expires_at: Date }>(
+      'select access_token, expires_at from app.integration_tokens where provider = $1 and client_id = $2',
+      [provider, clientId],
+    );
+    const row = rows[0];
+    return row ? { accessToken: row.access_token, expiresAt: row.expires_at.toISOString() } : null;
+  }
+
+  async saveToken(
+    provider: string,
+    clientId: string,
+    token: { accessToken: string; expiresAt: string },
+    remainingToday: number | null,
+  ): Promise<void> {
+    await this.pool.query(
+      `insert into app.integration_tokens (provider, client_id, access_token, expires_at, remaining_today)
+       values ($1, $2, $3, $4, $5)
+       on conflict (provider, client_id) do update
+         set access_token = excluded.access_token, expires_at = excluded.expires_at,
+             remaining_today = excluded.remaining_today, created_at = now()`,
+      [provider, clientId, token.accessToken, token.expiresAt, remainingToday],
+    );
   }
 
   async heartbeat(runId: number, now: Date = new Date()): Promise<void> {

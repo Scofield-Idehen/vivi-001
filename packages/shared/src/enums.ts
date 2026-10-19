@@ -126,7 +126,8 @@ export type PriceOwner = (typeof PRICE_OWNERS)[number];
 export const OUTBOX_KINDS = ['availability', 'restrictions'] as const;
 export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 
-export const OUTBOX_STATUSES = ['pending', 'sending', 'sent', 'failed'] as const;
+/** `skipped`: nothing to send, because the property is not run by V-01 (still on Guesty, or not moved over). */
+export const OUTBOX_STATUSES = ['pending', 'sending', 'sent', 'failed', 'skipped'] as const;
 export type OutboxStatus = (typeof OUTBOX_STATUSES)[number];
 
 /**

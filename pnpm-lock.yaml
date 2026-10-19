@@ -41,6 +41,9 @@ importers:
       '@v01/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@v01/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@v01/shared':
         specifier: workspace:*
         version: link:../../packages/shared
