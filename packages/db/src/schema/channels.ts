@@ -35,7 +35,15 @@ export const channelAccounts = app.table(
     label: text('label').notNull(),
     loginHolder: text('login_holder'),
     twoFactorHolder: text('two_factor_holder'),
-    status: channelAccountStatus('status').notNull().default('pending'),
+    /**
+     * `disconnected` until an admin asks to connect it, `pending` while Channex waits for the
+     * account's owner (or Booking.com) to authorise, `connected` once Channex says it is active,
+     * `error` when Channex refused.
+     */
+    status: channelAccountStatus('status').notNull().default('disconnected'),
+    /** The channel's own id for the account: Booking.com's hotel id (typed), Airbnb's host id (read back). */
+    externalAccountId: text('external_account_id'),
+    lastError: text('last_error'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -67,6 +75,9 @@ export const channelListings = app.table(
     status: listingStatus('status').notNull().default('live'),
     liveFrom: date('live_from', { mode: 'string' }),
     closedAt: timestamp('closed_at', { withTimezone: true, mode: 'string' }),
+    /** The last thing that went wrong linking or unlinking, for the page. */
+    lastError: text('last_error'),
+    requestedBy: uuid('requested_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -127,12 +138,43 @@ export const channexChannels = app.table(
       .notNull()
       .references(() => channelAccounts.id, { onDelete: 'restrict' }),
     channexChannelId: text('channex_channel_id').notNull(),
+    /** Airbnb and Vrbo: the link the account's owner opens to authorise Channex. Null for Booking.com. */
+    connectUrl: text('connect_url'),
+    /** Channex's word: the connection is authorised and active. */
+    active: boolean('active').notNull().default(false),
+    lastCheckedAt: timestamp('last_checked_at', { withTimezone: true, mode: 'string' }),
     createdAt: createdAt(),
   },
   (t) => [
     index('channex_channels_org_idx').on(t.organisationId),
     unique('channex_channels_account_key').on(t.channelAccountId),
     unique('channex_channels_channex_key').on(t.channexChannelId),
+  ],
+);
+
+/**
+ * The listings Channex sees on a connected account, cached so the property page can offer them
+ * without the API ever talking to Channex. The worker refreshes them after a connection and hourly.
+ */
+export const channelAccountListings = app.table(
+  'channel_account_listings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    channelAccountId: uuid('channel_account_id')
+      .notNull()
+      .references(() => channelAccounts.id, { onDelete: 'cascade' }),
+    externalListingId: text('external_listing_id').notNull(),
+    title: text('title'),
+    /** Where the listing lives on the channel's site, when the channel gives one. */
+    url: text('url'),
+    seenAt: timestamp('seen_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('channel_account_listings_org_idx').on(t.organisationId),
+    unique('channel_account_listings_key').on(t.channelAccountId, t.externalListingId),
   ],
 );
 

@@ -118,6 +118,54 @@ export interface ChannelProvider {
    * V-01 is down: a night is never sold twice in the gap. Says whether it was already on.
    */
   ensureAutoClose(externalPropertyId: string): Promise<{ wasOn: boolean }>;
+  /**
+   * Makes the connection for one channel account in the channel manager, holding the operator's
+   * properties. Airbnb and Vrbo answer with a link the account's owner opens to authorise it;
+   * Booking.com needs the hotel id and is authorised on Booking.com's side.
+   */
+  createChannel(setup: ChannelSetup): Promise<ChannelRef>;
+  /** Whether the connection is authorised and active, and the channel's own id for the account. */
+  getChannelState(channelId: string): Promise<ChannelState>;
+  /** The listings the channel manager sees on the connected account. */
+  listChannelListings(channelId: string): Promise<ChannelListingRef[]>;
+  /**
+   * Replaces the connection's mappings: which rate plan feeds which listing. The whole set is sent
+   * each time, as the channel manager takes it. An empty set unmaps everything.
+   */
+  setChannelMappings(channelId: string, mappings: ChannelMapping[]): Promise<void>;
+  /** Turns the connection on; needs at least one mapping. */
+  activateChannel(channelId: string): Promise<void>;
+}
+
+export interface ChannelSetup {
+  channel: 'airbnb' | 'booking_com' | 'vrbo';
+  title: string;
+  groupId: string;
+  /** The channel manager's ids of the properties the connection may carry. */
+  externalPropertyIds: string[];
+  /** Booking.com's hotel id. */
+  hotelId?: string;
+}
+
+export interface ChannelRef {
+  channelId: string;
+  connectUrl: string | null;
+}
+
+export interface ChannelState {
+  active: boolean;
+  externalAccountId: string | null;
+}
+
+export interface ChannelListingRef {
+  externalListingId: string;
+  title: string | null;
+  url: string | null;
+}
+
+export interface ChannelMapping {
+  ratePlanId: string;
+  externalListingId: string;
 }
 
 export type ChannelErrorKind = 'rate_limited' | 'server' | 'auth' | 'validation' | 'network';

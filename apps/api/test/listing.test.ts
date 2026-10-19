@@ -628,18 +628,20 @@ describe('custom fields', () => {
   it('keeps secrets encrypted in the database and shows them only to roles that may see them', async () => {
     const { status, body } = await call('PUT', `/v1/properties/${cottage}/fields`, {
       as: operations,
-      body: { values: { [code]: '1357#' } },
+      body: { values: { [code]: 'zq1357#' } },
     });
     expect(status).toBe(200);
-    expect(body.fields).toContainEqual(expect.objectContaining({ id: code, value: '1357#', hidden: false }));
+    expect(body.fields).toContainEqual(
+      expect.objectContaining({ id: code, value: 'zq1357#', hidden: false }),
+    );
 
     // Operations and admins see it; accounts see that there is one, and nothing else.
     expect(await fieldsOf(cottage, operations)).toContainEqual(
-      expect.objectContaining({ id: code, value: '1357#' }),
+      expect.objectContaining({ id: code, value: 'zq1357#' }),
     );
     const books = await fieldsOf(cottage, accounts);
     expect(books).toContainEqual(expect.objectContaining({ id: code, value: null, hidden: true }));
-    expect(JSON.stringify(books)).not.toContain('1357');
+    expect(JSON.stringify(books)).not.toContain('zq1357');
 
     // The table and the audit log hold sealed bytes, never the code.
     const [stored] = await ownerRows<{ value: string | null; secret: Buffer | null }>(
@@ -647,14 +649,14 @@ describe('custom fields', () => {
       [cottage, code],
     );
     expect(stored?.value).toBeNull();
-    expect(stored?.secret?.toString('utf8')).not.toContain('1357');
+    expect(stored?.secret?.toString('utf8')).not.toContain('zq1357');
     const audit = await ownerRows<{ after: Record<string, unknown> }>(
       `select after from app.audit_log where entity_type = 'property_field_values' and entity_id = (
          select id from app.property_field_values where property_id = $1 and field_id = $2)`,
       [cottage, code],
     );
     expect(audit.length).toBeGreaterThan(0);
-    expect(JSON.stringify(audit)).not.toContain('1357');
+    expect(JSON.stringify(audit)).not.toContain('zq1357');
 
     // Accounts can't set one either.
     const { status: refused } = await call('PUT', `/v1/properties/${cottage}/fields`, {
@@ -681,7 +683,7 @@ describe('custom fields', () => {
       expect(body.error.code).toBe('secrets_unavailable');
       // What is already stored stays hidden rather than unreadable noise.
       expect(await fieldsOf(cottage, asA())).toContainEqual(
-        expect.objectContaining({ id: code, value: '1357#' }),
+        expect.objectContaining({ id: code, value: 'zq1357#' }),
       );
       const { body: seen } = await call('GET', `/v1/properties/${cottage}`, { as: asA(), on: bare });
       expect(seen.fields).toContainEqual(expect.objectContaining({ id: code, value: null, hidden: true }));
@@ -725,5 +727,199 @@ describe('custom fields', () => {
       body: { values: { [link]: 'https://b.example.test' } },
     });
     expect(setStatus).toBe(404);
+  });
+});
+
+describe('channel accounts and listing links', () => {
+  let cottage: string;
+  let airbnbA: string;
+  let bookingA: string;
+  let operations: Who;
+
+  beforeAll(async () => {
+    const { body } = await call('POST', '/v1/properties', {
+      as: asA(),
+      body: { name: 'Link Cottage', countryCode: 'GB', maxGuests: 4 },
+    });
+    cottage = body.id;
+    const [ops] = await ownerRows<{ id: string }>(
+      `insert into app.app_users (id, email) values (gen_random_uuid(), 'ops-links@example.test') returning id`,
+    );
+    await ownerRows(
+      `insert into app.memberships (organisation_id, user_id, role) values ($1, $2, 'operations')`,
+      [a.orgId, ops?.id],
+    );
+    operations = { userId: ops?.id as string, email: 'ops-links@example.test', orgId: a.orgId };
+  });
+
+  it('lets an admin add accounts, each named once', async () => {
+    const made = await call('POST', '/v1/channel-accounts', {
+      as: asA(),
+      body: { channel: 'airbnb', label: 'Airbnb A', loginHolder: 'Alpha' },
+    });
+    expect(made.status).toBe(201);
+    expect(made.body).toMatchObject({
+      channel: 'airbnb',
+      label: 'Airbnb A',
+      status: 'disconnected',
+      loginHolder: 'Alpha',
+      connection: null,
+      listingsSeen: 0,
+      listingsLinked: 0,
+    });
+    airbnbA = made.body.id;
+    const booking = await call('POST', '/v1/channel-accounts', {
+      as: asA(),
+      body: { channel: 'booking_com', label: 'Booking.com A' },
+    });
+    bookingA = booking.body.id;
+    const again = await call('POST', '/v1/channel-accounts', {
+      as: asA(),
+      body: { channel: 'airbnb', label: 'Airbnb A' },
+    });
+    expect(again.status).toBe(409);
+    expect(
+      (
+        await call('POST', '/v1/channel-accounts', {
+          as: operations,
+          body: { channel: 'vrbo', label: 'Vrbo' },
+        })
+      ).status,
+    ).toBe(403);
+    const list = await call('GET', '/v1/channel-accounts', { as: operations });
+    expect((list.body.accounts as { label: string }[]).map((x) => x.label)).toEqual(
+      expect.arrayContaining(['Airbnb A', 'Booking.com A']),
+    );
+  });
+
+  it('asks the worker to connect, once a property is in Channex, and Booking.com with its hotel id', async () => {
+    await ownerRows(
+      `insert into app.channex_mappings (organisation_id, property_id, channex_property_id, channex_room_type_id, channex_rate_plan_id)
+       values ($1, $2, 'cx-link', 'cx-link-room', 'cx-link-rate')`,
+      [a.orgId, cottage],
+    );
+    const asked = await call('POST', `/v1/channel-accounts/${airbnbA}/connect`, { as: asA(), body: {} });
+    expect(asked.status).toBe(200);
+    expect(asked.body).toMatchObject({
+      status: 'pending',
+      connection: { channexChannelId: null, active: false },
+    });
+
+    const noHotel = await call('POST', `/v1/channel-accounts/${bookingA}/connect`, { as: asA(), body: {} });
+    expect(noHotel.status).toBe(422);
+    const withHotel = await call('POST', `/v1/channel-accounts/${bookingA}/connect`, {
+      as: asA(),
+      body: { hotelId: '7654321' },
+    });
+    expect(withHotel.body).toMatchObject({ status: 'pending', connection: { externalAccountId: '7654321' } });
+  });
+
+  it('shows the connection and the listings the worker cached, and links one to a property', async () => {
+    // The worker made the connection and the owner authorised it.
+    await ownerRows(
+      `insert into app.channex_channels (organisation_id, channel_account_id, channex_channel_id, connect_url, active)
+       values ($1, $2, 'cx-chan-airbnb-a', 'https://connect.example.test/airbnb-a', true)`,
+      [a.orgId, airbnbA],
+    );
+    await ownerRows(
+      `update app.channel_accounts set status = 'connected', external_account_id = 'host-1' where id = $1`,
+      [airbnbA],
+    );
+    await ownerRows(
+      `insert into app.channel_account_listings (organisation_id, channel_account_id, external_listing_id, title)
+       values ($1, $2, '55512345', 'Link Cottage · garden'), ($1, $2, '55598765', 'Somewhere else')`,
+      [a.orgId, airbnbA],
+    );
+    const listings = await call('GET', `/v1/channel-accounts/${airbnbA}/listings`, { as: operations });
+    expect(listings.body.listings).toEqual([
+      expect.objectContaining({
+        externalListingId: '55512345',
+        title: 'Link Cottage · garden',
+        url: 'https://www.airbnb.com/rooms/55512345',
+        linkedPropertyId: null,
+      }),
+      expect.objectContaining({ externalListingId: '55598765', linkedPropertyId: null }),
+    ]);
+
+    const linked = await call('POST', `/v1/properties/${cottage}/links`, {
+      as: operations,
+      body: { channelAccountId: airbnbA, externalListingId: '55512345' },
+    });
+    expect(linked.status, JSON.stringify(linked.body)).toBe(201);
+    expect(linked.body.links).toEqual([
+      expect.objectContaining({
+        channel: 'airbnb',
+        account: 'Airbnb A',
+        externalListingId: '55512345',
+        title: 'Link Cottage · garden',
+        status: 'linking',
+        requestedBy: 'ops-links@example.test',
+      }),
+    ]);
+    const detail = await call('GET', `/v1/properties/${cottage}`, { as: asA() });
+    expect(detail.body.links).toHaveLength(1);
+    const after = await call('GET', `/v1/channel-accounts/${airbnbA}/listings`, { as: asA() });
+    expect(after.body.listings[0]).toMatchObject({
+      linkedPropertyId: cottage,
+      linkedPropertyName: 'Link Cottage',
+    });
+    expect((await call('GET', '/v1/channel-accounts', { as: asA() })).body.accounts[0]).toMatchObject({
+      label: 'Airbnb A',
+      listingsSeen: 2,
+      listingsLinked: 1,
+    });
+  });
+
+  it('refuses a listing that is taken, a second live listing on the same channel, and an unconnected account', async () => {
+    const { body: other } = await call('POST', '/v1/properties', {
+      as: asA(),
+      body: { name: 'Other Cottage', countryCode: 'GB', maxGuests: 2 },
+    });
+    await ownerRows(
+      `insert into app.channex_mappings (organisation_id, property_id, channex_property_id, channex_room_type_id, channex_rate_plan_id)
+       values ($1, $2, 'cx-other', 'cx-other-room', 'cx-other-rate')`,
+      [a.orgId, other.id],
+    );
+    const taken = await call('POST', `/v1/properties/${other.id}/links`, {
+      as: asA(),
+      body: { channelAccountId: airbnbA, externalListingId: '55512345' },
+    });
+    expect(taken.status).toBe(409);
+    expect(taken.body.error.code).toBe('listing_taken');
+    const second = await call('POST', `/v1/properties/${cottage}/links`, {
+      as: asA(),
+      body: { channelAccountId: airbnbA, externalListingId: '55598765' },
+    });
+    expect(second.status).toBe(409);
+    expect(second.body.error.code).toBe('channel_taken');
+    const pending = await call('POST', `/v1/properties/${cottage}/links`, {
+      as: asA(),
+      body: { channelAccountId: bookingA, externalListingId: '1' },
+    });
+    expect(pending.status).toBe(409);
+    expect(pending.body.error.code).toBe('account_not_connected');
+  });
+
+  it('unlinks by marking the link closing for the worker', async () => {
+    const links = (await call('GET', `/v1/properties/${cottage}/links`, { as: asA() })).body.links as {
+      id: string;
+    }[];
+    const gone = await call('DELETE', `/v1/properties/${cottage}/links/${links[0]?.id}`, { as: operations });
+    expect(gone.status).toBe(200);
+    expect(gone.body.links).toEqual([expect.objectContaining({ status: 'closing' })]);
+    const twice = await call('DELETE', `/v1/properties/${cottage}/links/${links[0]?.id}`, { as: operations });
+    expect(twice.status).toBe(404);
+  });
+
+  it('shows the workspace its own sync picture', async () => {
+    const { status, body } = await call('GET', '/v1/channels/sync', { as: operations });
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ outboxWaiting: expect.any(Number), outboxFailed: expect.any(Number) });
+    expect(Array.isArray(body.recent)).toBe(true);
+  });
+
+  it("keeps one operator's accounts out of another's workspace", async () => {
+    expect((await call('GET', '/v1/channel-accounts', { as: asB() })).body.accounts).toEqual([]);
+    expect((await call('GET', `/v1/channel-accounts/${airbnbA}/listings`, { as: asB() })).status).toBe(404);
   });
 });

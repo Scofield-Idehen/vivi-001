@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PropertyLinkSchema } from './channels.ts';
 import { ChannexStateSchema } from './channex.ts';
 import { isIsoDate } from './dates.ts';
 import {
@@ -192,6 +193,8 @@ export const PropertyDetailSchema = PropertySchema.extend({
   listings: z.array(PropertyListingSchema),
   /** The workspace's custom fields with this property's values, in order. */
   fields: z.array(PropertyFieldSchema),
+  /** Its listing links on each channel: linking, live or closing. */
+  links: z.array(PropertyLinkSchema),
   updatedAt: z.string(),
 });
 export type PropertyDetail = z.infer<typeof PropertyDetailSchema>;

@@ -82,15 +82,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
     label: 'Portfolio',
     items: [
       { path: 'properties', label: 'Properties', icon: IconHome, built: true },
-      {
-        path: 'channels',
-        label: 'Channels & sync',
-        icon: IconArrowsExchange,
-        built: false,
-        design: 'D1',
-        phase: 'Phase 1',
-        summary: 'Channel accounts, listing mapping, sync health and the nightly cross-check.',
-      },
+      { path: 'channels', label: 'Channels & sync', icon: IconArrowsExchange, built: true },
       {
         path: 'reviews',
         label: 'Reviews',

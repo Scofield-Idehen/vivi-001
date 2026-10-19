@@ -1,8 +1,13 @@
 import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  AccountListingList,
   Calendar,
   CalendarChange,
   CalendarChangeResult,
+  ChannelAccount,
+  ChannelAccountConnect,
+  ChannelAccountCreate,
+  ChannelAccountList,
   ChannexState,
   CleaningState,
   CleaningUpdate,
@@ -20,6 +25,8 @@ import type {
   PropertyDetail,
   PropertyField,
   PropertyFieldsUpdate,
+  PropertyLinkCreate,
+  PropertyLinkList,
   PropertyList,
   PropertyUpdate,
   Reservation,
@@ -32,6 +39,7 @@ import type {
   SupportGrantList,
   SupportVisitList,
   Workspace,
+  WorkspaceSync,
 } from '@v01/shared';
 import { config } from './config.ts';
 import { demoAddPhoto, demoFetch } from './demo.ts';
@@ -572,5 +580,99 @@ export function useSetFields(orgId: string | null, id: string) {
         current ? { ...current, fields } : current,
       );
     },
+  });
+}
+
+/** The workspace's channel accounts, with their Channex connections. Polled while any is pending. */
+export function useChannelAccounts(orgId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['channel-accounts', orgId],
+    enabled: Boolean(token && orgId),
+    queryFn: () => apiFetch<ChannelAccountList>('/v1/channel-accounts', { token: token as string, orgId }),
+    refetchInterval: (query) =>
+      query.state.data?.accounts.some((a) => a.status === 'pending') ? 5000 : false,
+  });
+}
+
+function useAccountChange<Input>(
+  orgId: string | null,
+  send: (token: string, input: Input) => Promise<unknown>,
+) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Input) => send(token as string, input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['channel-accounts', orgId] });
+    },
+  });
+}
+
+export const useAddChannelAccount = (orgId: string | null) =>
+  useAccountChange<ChannelAccountCreate>(orgId, (token, body) =>
+    apiFetch<ChannelAccount>('/v1/channel-accounts', { token, orgId, method: 'POST', body }),
+  );
+
+export const useConnectChannelAccount = (orgId: string | null) =>
+  useAccountChange<{ id: string } & ChannelAccountConnect>(orgId, (token, { id, ...body }) =>
+    apiFetch<ChannelAccount>(`/v1/channel-accounts/${id}/connect`, { token, orgId, method: 'POST', body }),
+  );
+
+/** The listings Channex sees on one account, and which property each is linked to. */
+export function useAccountListings(orgId: string | null, accountId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['account-listings', orgId, accountId],
+    enabled: Boolean(token && orgId && accountId),
+    queryFn: () =>
+      apiFetch<AccountListingList>(`/v1/channel-accounts/${accountId}/listings`, {
+        token: token as string,
+        orgId,
+      }),
+  });
+}
+
+/** Linking and unlinking answer with the property's links, which replace the cached ones. */
+function useLinkChange<Input>(
+  orgId: string | null,
+  propertyId: string,
+  send: (token: string, input: Input) => Promise<PropertyLinkList>,
+) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Input) => send(token as string, input),
+    onSuccess: async ({ links }) => {
+      queryClient.setQueryData<PropertyDetail>(['property', orgId, propertyId], (current) =>
+        current ? { ...current, links } : current,
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['channel-accounts', orgId] }),
+        queryClient.invalidateQueries({ queryKey: ['account-listings', orgId] }),
+        queryClient.invalidateQueries({ queryKey: ['properties', orgId] }),
+      ]);
+    },
+  });
+}
+
+export const useLinkListing = (orgId: string | null, propertyId: string) =>
+  useLinkChange<PropertyLinkCreate>(orgId, propertyId, (token, body) =>
+    apiFetch(`/v1/properties/${propertyId}/links`, { token, orgId, method: 'POST', body }),
+  );
+
+export const useUnlinkListing = (orgId: string | null, propertyId: string) =>
+  useLinkChange<string>(orgId, propertyId, (token, linkId) =>
+    apiFetch(`/v1/properties/${propertyId}/links/${linkId}`, { token, orgId, method: 'DELETE' }),
+  );
+
+/** The workspace's own sync picture, refreshed every 30 seconds while the page is open. */
+export function useWorkspaceSync(orgId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['workspace-sync', orgId],
+    enabled: Boolean(token && orgId),
+    queryFn: () => apiFetch<WorkspaceSync>('/v1/channels/sync', { token: token as string, orgId }),
+    refetchInterval: 30_000,
   });
 }

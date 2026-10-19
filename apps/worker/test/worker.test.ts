@@ -16,6 +16,7 @@ import { markDirtyAfterCheckOut } from '../src/cleaning.ts';
 import { silentLogger, type WorkerDeps } from '../src/deps.ts';
 import { enqueueFullSync, FULL_SYNC_DAYS } from '../src/full-sync.ts';
 import { startJobs } from '../src/jobs.ts';
+import { syncChannelLinks } from '../src/links.ts';
 import { backoffMs, processOutbox } from '../src/outbox.ts';
 import { beginRun, checkAllAutoClose, recover } from '../src/safety.ts';
 import { connectProperties } from '../src/setup.ts';
@@ -832,6 +833,7 @@ describe('scheduled jobs', () => {
         'nightly-cross-check': async () => 0,
         'cleaning-after-check-out': async () => 0,
         'daily-safety-check': async () => 0,
+        'hourly-listing-refresh': async () => 0,
       },
     });
     const schedules = await boss.getSchedules();
@@ -840,6 +842,7 @@ describe('scheduled jobs', () => {
       'booking-feed-sweep',
       'cleaning-after-check-out',
       'daily-safety-check',
+      'hourly-listing-refresh',
       'nightly-cross-check',
       'nightly-full-sync',
     ]);
@@ -965,5 +968,216 @@ describe('the safety net for downtime', () => {
     ]);
     const next = await beginRun({ ...deps, now: () => new Date() });
     expect(next.recovering).toBe(false);
+  });
+});
+
+describe('channel accounts and listing links', () => {
+  const accountOf = async (id: string) => {
+    const [row] = await owner<{
+      status: string;
+      external_account_id: string | null;
+      last_error: string | null;
+    }>('select status, external_account_id, last_error from app.channel_accounts where id = $1', [id]);
+    return row;
+  };
+  const connectionOf = async (id: string) => {
+    const [row] = await owner<{ channex_channel_id: string; connect_url: string | null; active: boolean }>(
+      'select channex_channel_id, connect_url, active from app.channex_channels where channel_account_id = $1',
+      [id],
+    );
+    return row;
+  };
+  const linkOf = async (propertyId: string, accountId: string) => {
+    const [row] = await owner<{ status: string; live_from: string | null; last_error: string | null }>(
+      `select status, live_from::text, last_error from app.channel_listings
+        where property_id = $1 and channel_account_id = $2 order by created_at desc limit 1`,
+      [propertyId, accountId],
+    );
+    return row;
+  };
+  let airbnbA: string;
+  let bookingA: string;
+  /** A property added in V-01 and never connected to Channex. */
+  let unmapped: string;
+
+  /** The stand-in forgets between tests; this one knows both connections as Channex still holds them. */
+  async function providerKnowing(active: Partial<Record<'airbnb' | 'booking', boolean>> = {}) {
+    const fresh = new FakeChannelProvider();
+    for (const [key, accountId, channel] of [
+      ['airbnb', airbnbA, 'airbnb'],
+      ['booking', bookingA, 'booking_com'],
+    ] as const) {
+      const connection = await connectionOf(accountId);
+      if (!connection) continue;
+      fresh.channels.set(connection.channex_channel_id, {
+        setup: { channel, title: key, groupId: 'g', externalPropertyIds: ['cx-hvl'] },
+        active: active[key] ?? connection.active,
+        mappings: [],
+        listings: [],
+      });
+    }
+    return fresh;
+  }
+
+  beforeAll(async () => {
+    // The operator's group exists from an earlier connection; make sure.
+    await owner(
+      `insert into app.channex_groups (organisation_id, channex_group_id) values ($1, 'fake-group-links')
+       on conflict (organisation_id) do nothing`,
+      [op.orgId],
+    );
+    const rows = await owner<{ id: string }>(
+      `insert into app.channel_accounts (organisation_id, channel, label, status, external_account_id)
+       values ($1, 'airbnb', 'Airbnb A', 'pending', null), ($1, 'booking_com', 'Booking.com A', 'pending', '1234567')
+       returning id`,
+      [op.orgId],
+    );
+    airbnbA = rows[0]!.id;
+    bookingA = rows[1]!.id;
+    const [plain] = await owner<{ id: string }>(
+      `insert into app.properties (organisation_id, name, country_code, max_guests, managed_by)
+       values ($1, 'Unmapped Barn', 'GB', 2, 'none') returning id`,
+      [op.orgId],
+    );
+    unmapped = plain!.id;
+  });
+
+  it('makes the connection in Channex and keeps the authorisation link for the owner', async () => {
+    const stats = await syncChannelLinks(deps);
+    expect(stats).toMatchObject({ connected: 2, activated: 0 });
+    const airbnb = await connectionOf(airbnbA);
+    expect(airbnb).toMatchObject({ active: false });
+    expect(airbnb?.connect_url).toMatch(/^https:\/\/connect\.example\.test\//);
+    expect((await connectionOf(bookingA))?.connect_url).toBeNull();
+    expect(provider.channels.get(airbnb!.channex_channel_id)?.setup).toMatchObject({
+      channel: 'airbnb',
+      title: 'Airbnb A',
+      groupId: expect.any(String),
+    });
+    expect(provider.channels.get(airbnb!.channex_channel_id)?.setup.externalPropertyIds).toContain('cx-hvl');
+    expect(provider.channels.get((await connectionOf(bookingA))!.channex_channel_id)?.setup.hotelId).toBe(
+      '1234567',
+    );
+    // Still waiting for the owner.
+    expect(await accountOf(airbnbA)).toMatchObject({ status: 'pending', last_error: null });
+  });
+
+  it('notices when the owner has authorised, and caches the listings Channex sees', async () => {
+    const { channex_channel_id } = (await connectionOf(airbnbA))!;
+    const fresh = await providerKnowing();
+    fresh.authorise(channex_channel_id, [
+      { externalListingId: '55512345', title: 'Harbour View Lodge · sea views', url: null },
+      { externalListingId: '55598765', title: 'Mill Street Flat', url: null },
+    ]);
+    const stats = await syncChannelLinks({ ...deps, provider: fresh });
+    expect(stats).toMatchObject({ activated: 1, refreshed: 1 });
+    expect(await accountOf(airbnbA)).toMatchObject({
+      status: 'connected',
+      external_account_id: `host-${channex_channel_id}`,
+    });
+    const cached = await owner<{ external_listing_id: string; title: string; url: string }>(
+      'select external_listing_id, title, url from app.channel_account_listings where channel_account_id = $1 order by 1',
+      [airbnbA],
+    );
+    expect(cached).toEqual([
+      {
+        external_listing_id: '55512345',
+        title: 'Harbour View Lodge · sea views',
+        url: 'https://www.airbnb.com/rooms/55512345',
+      },
+      {
+        external_listing_id: '55598765',
+        title: 'Mill Street Flat',
+        url: 'https://www.airbnb.com/rooms/55598765',
+      },
+    ]);
+  });
+
+  it('sends the account’s whole mapping set when a link is asked for, and turns the connection on', async () => {
+    const { channex_channel_id } = (await connectionOf(airbnbA))!;
+    const fresh = await providerKnowing();
+    await owner(
+      `insert into app.channel_listings (organisation_id, property_id, channel_account_id, channel, external_listing_id, status, requested_by)
+       values ($1, $2, $3, 'airbnb', '55512345', 'linking', $4)`,
+      [op.orgId, mapped, airbnbA, op.userId],
+    );
+    const stats = await syncChannelLinks({ ...deps, provider: fresh });
+    expect(stats).toMatchObject({ linked: 1, failed: 0 });
+    expect(fresh.channels.get(channex_channel_id)?.mappings).toEqual([
+      { ratePlanId: 'cx-hvl-rate', externalListingId: '55512345' },
+    ]);
+    expect(await linkOf(mapped, airbnbA)).toMatchObject({
+      status: 'live',
+      live_from: TODAY,
+      last_error: null,
+    });
+    const logged = await owner<{ kind: string; status: string }>(
+      `select kind, status from app.sync_log where property_id = $1 and kind = 'link' order by id desc limit 1`,
+      [mapped],
+    );
+    expect(logged).toEqual([{ kind: 'link', status: 'ok' }]);
+  });
+
+  it('refuses to link a property that is not in Channex, and says so on the link', async () => {
+    const { channex_channel_id } = (await connectionOf(airbnbA))!;
+    const fresh = await providerKnowing();
+    await owner(
+      `insert into app.channel_listings (organisation_id, property_id, channel_account_id, channel, external_listing_id, status)
+       values ($1, $2, $3, 'airbnb', '55598765', 'linking')`,
+      [op.orgId, unmapped, airbnbA],
+    );
+    const stats = await syncChannelLinks({ ...deps, provider: fresh });
+    expect(stats.failed).toBeGreaterThanOrEqual(1);
+    expect(await linkOf(unmapped, airbnbA)).toMatchObject({
+      status: 'linking',
+      last_error: 'Connect the property to Channex first.',
+    });
+    // The mapping set sent still carries the live link, and nothing for the unmapped property.
+    expect(fresh.channels.get(channex_channel_id)?.mappings).toEqual([
+      { ratePlanId: 'cx-hvl-rate', externalListingId: '55512345' },
+    ]);
+    await owner(`delete from app.channel_listings where property_id = $1`, [unmapped]);
+  });
+
+  it('unlinks by sending the set without it, then archives the link', async () => {
+    const { channex_channel_id } = (await connectionOf(airbnbA))!;
+    const fresh = await providerKnowing();
+    fresh.channels.get(channex_channel_id)!.mappings = [
+      { ratePlanId: 'cx-hvl-rate', externalListingId: '55512345' },
+    ];
+    await owner(
+      `update app.channel_listings set status = 'closing' where property_id = $1 and channel_account_id = $2`,
+      [mapped, airbnbA],
+    );
+    const stats = await syncChannelLinks({ ...deps, provider: fresh });
+    expect(stats).toMatchObject({ unlinked: 1 });
+    expect(fresh.channels.get(channex_channel_id)?.mappings).toEqual([]);
+    expect(await linkOf(mapped, airbnbA)).toMatchObject({ status: 'archived' });
+  });
+
+  it('keeps a link waiting, with the reason, while the account’s owner has not authorised', async () => {
+    const { channex_channel_id } = (await connectionOf(bookingA))!;
+    const fresh = new FakeChannelProvider();
+    fresh.channels.set(channex_channel_id, {
+      setup: {
+        channel: 'booking_com',
+        title: 'Booking.com A',
+        groupId: 'g',
+        externalPropertyIds: ['cx-hvl'],
+      },
+      active: false,
+      mappings: [],
+      listings: [],
+    });
+    await owner(
+      `insert into app.channel_listings (organisation_id, property_id, channel_account_id, channel, external_listing_id, status)
+       values ($1, $2, $3, 'booking_com', '987654', 'linking')`,
+      [op.orgId, mapped, bookingA],
+    );
+    await syncChannelLinks({ ...deps, provider: fresh });
+    expect(await linkOf(mapped, bookingA)).toMatchObject({
+      status: 'linking',
+      last_error: "Booking.com A isn't connected yet; the account's owner has to authorise it.",
+    });
   });
 });

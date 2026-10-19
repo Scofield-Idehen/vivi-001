@@ -9,6 +9,7 @@ import {
   type PropertyDetail,
   type PropertyUpdate,
 } from '@v01/shared';
+import { useCallback } from 'react';
 import { Link, useParams } from 'react-router';
 import { PageLoading } from '../../components/Spinner.tsx';
 import { Badge, EmptyState } from '../../components/ui.tsx';
@@ -188,6 +189,8 @@ export function PropertyPage() {
   const { id = '' } = useParams();
   const { orgId, entry } = useCurrentWorkspace();
   const property = useProperty(orgId, id);
+  const refetch = property.refetch;
+  const refresh = useCallback(() => void refetch(), [refetch]);
   const workspace = useWorkspace(orgId);
   const update = useUpdateProperty(orgId, id);
   const canEdit = can(entry.role, 'properties.write');
@@ -275,7 +278,8 @@ export function PropertyPage() {
             d={d}
             orgId={orgId}
             canManage={can(entry.role, 'channels.manage')}
-            refresh={() => void property.refetch()}
+            canEdit={canEdit}
+            refresh={refresh}
           />
           <SettingsSection d={d} orgId={orgId} canEdit={canEdit} />
         </div>

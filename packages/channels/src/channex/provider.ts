@@ -3,7 +3,12 @@ import {
   type BookingChannel,
   type BookingRevision,
   ChannelError,
+  type ChannelListingRef,
+  type ChannelMapping,
   type ChannelProvider,
+  type ChannelRef,
+  type ChannelSetup,
+  type ChannelState,
   type ExternalPropertyRef,
   type ListingSetup,
   type PushResult,
@@ -24,6 +29,38 @@ const AUTO_CLOSE_SETTINGS = {
   allow_availability_autoupdate_on_cancellation: true,
 } as const;
 const AUTO_CLOSE_KEYS = Object.keys(AUTO_CLOSE_SETTINGS) as (keyof typeof AUTO_CLOSE_SETTINGS)[];
+
+const CHANNEX_CHANNEL_NAMES: Record<ChannelSetup['channel'], string> = {
+  airbnb: 'AirBNB',
+  booking_com: 'BookingCom',
+  vrbo: 'VRBO',
+};
+
+function attributesOf(response: unknown): Record<string, unknown> {
+  const data = (response as { data?: { attributes?: unknown } } | null)?.data;
+  const attributes = data?.attributes;
+  return attributes && typeof attributes === 'object' ? (attributes as Record<string, unknown>) : {};
+}
+
+/** Channex names the authorisation link differently per channel; take whichever is there. */
+function connectUrlIn(source: unknown): string | null {
+  if (!source || typeof source !== 'object') return null;
+  const record = source as Record<string, unknown>;
+  const settings = (record.settings && typeof record.settings === 'object' ? record.settings : {}) as Record<
+    string,
+    unknown
+  >;
+  for (const value of [
+    record.connection_link,
+    record.auth_url,
+    record.url,
+    settings.connection_link,
+    settings.auth_url,
+  ]) {
+    if (typeof value === 'string' && value.startsWith('http')) return value;
+  }
+  return null;
+}
 
 function settingsOf(response: unknown): Record<string, unknown> {
   const data = (response as { data?: { attributes?: { settings?: unknown } } } | null)?.data;
@@ -194,6 +231,82 @@ export class ChannexProvider implements ChannelProvider {
       await this.client.request('PUT', `/properties/${id}`, { property: { settings: AUTO_CLOSE_SETTINGS } });
     }
     return { wasOn };
+  }
+
+  /**
+   * Channex's names for the channels, and what each needs. Airbnb and Vrbo hand back a link the
+   * account's owner opens to authorise; Booking.com takes the hotel id and is approved on
+   * Booking.com's side. The connection starts inactive; activation follows the first mapping.
+   */
+  async createChannel(setup: ChannelSetup): Promise<ChannelRef> {
+    const channel = CHANNEX_CHANNEL_NAMES[setup.channel];
+    const settings = setup.channel === 'booking_com' && setup.hotelId ? { hotel_id: setup.hotelId } : {};
+    const created = await this.client.request('POST', '/channels', {
+      channel: {
+        channel,
+        title: setup.title.slice(0, 255),
+        group_id: setup.groupId,
+        properties: setup.externalPropertyIds,
+        settings,
+      },
+    });
+    const channelId = createdId(created, 'channel');
+    const attributes = attributesOf(created);
+    const fromCreate = connectUrlIn(attributes);
+    if (fromCreate || setup.channel === 'booking_com') return { channelId, connectUrl: fromCreate };
+    // Airbnb and Vrbo: the authorisation link comes from the connection itself.
+    const link = await this.client.request(
+      'GET',
+      `/channels/${encodeURIComponent(channelId)}/action/connection_link`,
+    );
+    return { channelId, connectUrl: connectUrlIn(attributesOf(link)) ?? connectUrlIn(link.data) };
+  }
+
+  async getChannelState(channelId: string): Promise<ChannelState> {
+    const current = await this.client.request('GET', `/channels/${encodeURIComponent(channelId)}`);
+    const attributes = attributesOf(current);
+    const settings = (attributes.settings ?? {}) as Record<string, unknown>;
+    const external = [settings.host_id, settings.hotel_id, settings.account_id].find(
+      (v) => typeof v === 'string' && v,
+    ) as string | undefined;
+    return { active: attributes.is_active === true, externalAccountId: external ?? null };
+  }
+
+  async listChannelListings(channelId: string): Promise<ChannelListingRef[]> {
+    const response = await this.client.request(
+      'GET',
+      `/channels/${encodeURIComponent(channelId)}/action/all_listings`,
+    );
+    const raw = Array.isArray(response.data) ? response.data : [];
+    return raw.flatMap((item) => {
+      const row = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+      const attrs = (row.attributes && typeof row.attributes === 'object' ? row.attributes : row) as Record<
+        string,
+        unknown
+      >;
+      const id = [row.id, attrs.id, attrs.listing_id].find(
+        (v) => typeof v === 'string' || typeof v === 'number',
+      );
+      if (id === undefined) return [];
+      const title = [attrs.title, attrs.name].find((v) => typeof v === 'string') as string | undefined;
+      const url = [attrs.url, attrs.listing_url].find((v) => typeof v === 'string') as string | undefined;
+      return [{ externalListingId: String(id), title: title ?? null, url: url ?? null }];
+    });
+  }
+
+  async setChannelMappings(channelId: string, mappings: ChannelMapping[]): Promise<void> {
+    await this.client.request('PUT', `/channels/${encodeURIComponent(channelId)}`, {
+      channel: {
+        rate_plans: mappings.map((m) => ({
+          rate_plan_id: m.ratePlanId,
+          settings: { listing_id: m.externalListingId },
+        })),
+      },
+    });
+  }
+
+  async activateChannel(channelId: string): Promise<void> {
+    await this.client.request('POST', `/channels/${encodeURIComponent(channelId)}/activate`);
   }
 
   async createGroup(title: string): Promise<string> {

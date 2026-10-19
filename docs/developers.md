@@ -150,11 +150,12 @@ Not set up yet. These are the steps for when the staging and production accounts
 ## Next (Phase 1)
 
 - Channex staging account in Vivistays' name for now; set `CHANNEL_PROVIDER=channex` and the staging key.
-- Mapping screens (step 7): channel accounts and listing links, List on channels on the property page.
-  Property sync (step 3) and the downtime safety net (step 6) are built; prices and stay rules out
-  (step 4) and booking import (step 5) are built and tested against the stand-in. They run against
-  Channex once a property is mapped and moved over.
-- The Channels & sync screen from design phase D1 (the Calendar and Reservations are built).
+- Steps 3 to 7 are built and tested against the stand-in channel manager (property sync, prices and
+  stay rules out, booking import, the downtime safety net, channel accounts and listing links with the
+  Channels & sync screen). The Channex adapter's channel endpoints (`/channels`, `connection_link`,
+  `all_listings`, `rate_plans` mappings, `activate`) follow docs.channex.io and are to be confirmed on
+  staging before certification.
+- Airbnb specifics (step 8): requests and enquiries, fees and booking rules through Channex.
 - Nightly cross-check.
 
 Design sign-off: Alpha and Alessio, at every design gate.

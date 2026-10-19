@@ -13,6 +13,9 @@ import {
   type CalendarStay,
   CHANNEL_LABELS,
   type Channel,
+  type ChannelAccount,
+  ChannelAccountConnectSchema,
+  ChannelAccountCreateSchema,
   type ChannexState,
   type CleaningState,
   CleaningUpdateSchema,
@@ -31,6 +34,7 @@ import {
   FIELDS_MAX,
   formatMoney,
   isWebAddress,
+  listingUrl,
   type Me,
   type MemberRole,
   nightRules,
@@ -44,6 +48,8 @@ import {
   type PropertyDetail,
   type PropertyField,
   PropertyFieldsUpdateSchema,
+  type PropertyLink,
+  PropertyLinkCreateSchema,
   type PropertyList,
   PropertySchema,
   type PropertyType,
@@ -98,6 +104,30 @@ interface DemoTeamMember {
 }
 
 /** Sample figures for the console, kept as "minutes ago" so they always look current. */
+/** A channel account as the demo keeps it: connected ones carry the listings Channex would see. */
+interface DemoAccount {
+  id: string;
+  channel: Channel;
+  label: string;
+  status: 'disconnected' | 'pending' | 'connected' | 'error';
+  loginHolder: string | null;
+  externalAccountId: string | null;
+  /** The stand-in worker turns a pending account on a few seconds after it was asked. */
+  requestedAt: string | null;
+  connectUrl: string | null;
+  listings: { externalListingId: string; title: string }[];
+}
+
+interface DemoLink {
+  id: string;
+  propertyId: string;
+  accountId: string;
+  externalListingId: string;
+  status: 'linking' | 'live' | 'closing' | 'archived';
+  liveFrom: string | null;
+  requestedAt: string;
+}
+
 interface DemoLive {
   outboxWaiting: number;
   outboxFailed: number;
@@ -120,7 +150,9 @@ interface DemoOperator {
   properties: PropertyDetail[];
   createdAt: string;
   team: DemoTeamMember[];
-  channelAccounts: { channel: Channel; connected: boolean }[];
+  channelAccounts: DemoAccount[];
+  /** Listing links, as the API keeps them; archived ones stay for the history. */
+  links: DemoLink[];
   live: DemoLive;
   calendar: DemoCalendar;
   /** Each property's cleaning, by property id. Missing: clean, never marked. */
@@ -178,7 +210,7 @@ interface DemoSyncError {
 
 interface DemoState {
   /** Raised whenever the shape changes, so a browser holding older sample data starts fresh. */
-  version: 9;
+  version: 10;
   /** The day the sample bookings were laid out from. They are laid out afresh each week. */
   calendarFrom: string;
   operators: DemoOperator[];
@@ -250,6 +282,7 @@ function listingDefaults(): Omit<PropertyDetail, keyof Property | 'updatedAt'> {
     cleaning: { status: 'clean', changedAt: null, changedBy: null },
     listings: [],
     fields: [],
+    links: [],
   };
 }
 
@@ -312,6 +345,26 @@ function channexOf(detail: PropertyDetail): ChannexState {
     };
   }
   return current;
+}
+
+function account(
+  channel: Channel,
+  label: string,
+  status: DemoAccount['status'],
+  loginHolder: string | null,
+  externalAccountId: string | null,
+): DemoAccount {
+  return {
+    id: crypto.randomUUID(),
+    channel,
+    label,
+    status,
+    loginHolder,
+    externalAccountId,
+    requestedAt: null,
+    connectUrl: null,
+    listings: [],
+  };
 }
 
 function sampleProperty(p: {
@@ -795,7 +848,7 @@ function operatorWorkspace(
 function seed(): DemoState {
   const pastVisit = Date.now() - (2 * 24 * 60 + 190) * MINUTE;
   const state: DemoState = {
-    version: 9,
+    version: 10,
     calendarFrom: demoToday(),
     operators: [
       {
@@ -815,6 +868,7 @@ function seed(): DemoState {
           },
         ],
         channelAccounts: [],
+        links: [],
         live: NO_ACTIVITY,
         calendar: { nights: [], stays: [], blocks: [] },
         fields: [],
@@ -930,11 +984,12 @@ function seed(): DemoState {
           },
         ],
         channelAccounts: [
-          { channel: 'airbnb', connected: true },
-          { channel: 'airbnb', connected: true },
-          { channel: 'booking_com', connected: true },
-          { channel: 'vrbo', connected: false },
+          account('airbnb', 'Airbnb A', 'connected', 'Demo user', '48201177'),
+          account('airbnb', 'Airbnb B', 'connected', 'Demo user', '48209912'),
+          account('booking_com', 'Booking.com A', 'connected', null, '7731204'),
+          account('vrbo', 'Vrbo', 'disconnected', null, null),
         ],
+        links: [],
         live: {
           outboxWaiting: 2,
           outboxFailed: 1,
@@ -1025,9 +1080,10 @@ function seed(): DemoState {
           },
         ],
         channelAccounts: [
-          { channel: 'airbnb', connected: false },
-          { channel: 'booking_com', connected: false },
+          account('airbnb', 'Airbnb', 'disconnected', null, null),
+          account('booking_com', 'Booking.com', 'disconnected', null, null),
         ],
+        links: [],
         live: { ...NO_ACTIVITY, lastActivityMinutes: 190 },
         calendar: { nights: [], stays: [], blocks: [] },
         fields: [],
@@ -1067,7 +1123,56 @@ function seed(): DemoState {
   };
   layOutSamples(state);
   seedFields(state);
+  seedLinks(state);
   return state;
+}
+
+/**
+ * What Channex would see on each connected account: a listing per property (two on Airbnb A, the
+ * rest on Airbnb B), with the properties V-01 runs linked and live, and the ones still on Guesty
+ * seen but not linked. Invented ids throughout.
+ */
+function seedLinks(s: DemoState): void {
+  for (const operator of s.operators) {
+    const connected = operator.channelAccounts.filter((a) => a.status === 'connected');
+    if (!connected.length) continue;
+    const airbnbs = connected.filter((a) => a.channel === 'airbnb');
+    const booking = connected.find((a) => a.channel === 'booking_com');
+    operator.properties.forEach((p, index) => {
+      const code = (p.internalCode ?? 'L').toLowerCase();
+      const seed = 5_550_000 + index * 1_117;
+      const airbnb = airbnbs[index % Math.max(1, airbnbs.length)];
+      if (airbnb) {
+        airbnb.listings.push({ externalListingId: String(seed), title: p.title ?? p.name });
+        if (p.managedBy === 'v01')
+          operator.links.push({
+            id: crypto.randomUUID(),
+            propertyId: p.id,
+            accountId: airbnb.id,
+            externalListingId: String(seed),
+            status: 'live',
+            liveFrom: '2026-10-15',
+            requestedAt: '2026-10-15T09:00:00.000Z',
+          });
+      }
+      if (booking) {
+        booking.listings.push({
+          externalListingId: `${seed + 1}`,
+          title: `${p.name} (${code.toUpperCase()})`,
+        });
+        if (p.managedBy === 'v01' && index % 2 === 0)
+          operator.links.push({
+            id: crypto.randomUUID(),
+            propertyId: p.id,
+            accountId: booking.id,
+            externalListingId: `${seed + 1}`,
+            status: 'live',
+            liveFrom: '2026-10-15',
+            requestedAt: '2026-10-15T09:00:00.000Z',
+          });
+      }
+    });
+  }
 }
 
 /**
@@ -1178,7 +1283,7 @@ function load(): DemoState {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved) as DemoState;
-      if (parsed.version === 9) {
+      if (parsed.version === 10) {
         // A week on, the sample bookings would all be in the past: lay them out again from today.
         if (parsed.calendarFrom <= addDays(demoToday(), -7)) {
           layOutSamples(parsed);
@@ -1266,7 +1371,7 @@ function lastActivity(o: DemoOperator): string | null {
 
 function toConsoleOperator(o: DemoOperator): ConsoleOperator {
   const id = o.workspace.organisation.id;
-  const connected = o.channelAccounts.filter((a) => a.connected);
+  const connected = o.channelAccounts.filter((a) => a.status === 'connected');
   return {
     id,
     name: o.workspace.organisation.name,
@@ -1420,19 +1525,98 @@ function findProperty(operator: DemoOperator, id: string): PropertyDetail {
  * V-01 runs or that are still on Guesty (step 7 will link real ones).
  */
 function listingsOf(operator: DemoOperator, detail: PropertyDetail): PropertyDetail['listings'] {
-  if (detail.managedBy === 'none') return [];
-  const counts: Partial<Record<Channel, number>> = {};
-  return operator.channelAccounts
-    .filter((a) => a.connected)
-    .map((a) => {
-      counts[a.channel] = (counts[a.channel] ?? 0) + 1;
-      const letter = String.fromCharCode(64 + (counts[a.channel] ?? 1));
-      return {
-        channel: a.channel,
-        account: `${CHANNEL_LABELS[a.channel]} ${letter}`,
-        externalListingId: `${detail.internalCode ?? 'L'}-${a.channel}-${letter}`.toLowerCase(),
-      };
+  return operator.links
+    .filter((l) => l.propertyId === detail.id && l.status === 'live')
+    .flatMap((l) => {
+      const account = operator.channelAccounts.find((a) => a.id === l.accountId);
+      return account
+        ? [{ channel: account.channel, account: account.label, externalListingId: l.externalListingId }]
+        : [];
     });
+}
+
+/** The stand-in worker: links asked for a few seconds ago are done; pending accounts come on. */
+function settleLinks(operator: DemoOperator): void {
+  const now = Date.now();
+  let changed = false;
+  for (const link of operator.links) {
+    if (now - Date.parse(link.requestedAt) < 3000) continue;
+    if (link.status === 'linking') {
+      link.status = 'live';
+      link.liveFrom = demoToday();
+      changed = true;
+    } else if (link.status === 'closing') {
+      link.status = 'archived';
+      changed = true;
+    }
+  }
+  for (const a of operator.channelAccounts) {
+    if (a.status === 'pending' && a.requestedAt && now - Date.parse(a.requestedAt) > 6000) {
+      a.status = 'connected';
+      a.externalAccountId = a.externalAccountId ?? String(48_000_000 + Math.floor(Math.random() * 999_999));
+      a.listings = operator.properties.map((p, i) => ({
+        externalListingId: String(5_560_000 + i * 913 + operator.channelAccounts.indexOf(a)),
+        title: p.title ?? p.name,
+      }));
+      changed = true;
+    }
+  }
+  if (changed) save();
+}
+
+function toLink(operator: DemoOperator, l: DemoLink): PropertyLink {
+  const account = operator.channelAccounts.find((a) => a.id === l.accountId);
+  const listing = account?.listings.find((x) => x.externalListingId === l.externalListingId);
+  return {
+    id: l.id,
+    channel: account?.channel ?? 'airbnb',
+    channelAccountId: l.accountId,
+    account: account?.label ?? 'Account',
+    externalListingId: l.externalListingId,
+    title: listing?.title ?? null,
+    url: listingUrl(account?.channel ?? 'airbnb', l.externalListingId),
+    status: l.status,
+    liveFrom: l.liveFrom,
+    lastError: null,
+    requestedBy: 'Demo user',
+  };
+}
+
+function linksOf(operator: DemoOperator, propertyId: string): PropertyLink[] {
+  settleLinks(operator);
+  return operator.links
+    .filter((l) => l.propertyId === propertyId && l.status !== 'archived')
+    .map((l) => toLink(operator, l));
+}
+
+function toAccount(operator: DemoOperator, a: DemoAccount): ChannelAccount {
+  const asked = a.status !== 'disconnected';
+  return {
+    id: a.id,
+    channel: a.channel,
+    label: a.label,
+    status: a.status,
+    loginHolder: a.loginHolder,
+    twoFactorHolder: null,
+    connection: asked
+      ? {
+          channexChannelId:
+            a.status === 'pending' && a.requestedAt && Date.now() - Date.parse(a.requestedAt) < 2000
+              ? null
+              : `cx-${a.id.slice(0, 8)}`,
+          connectUrl: a.connectUrl,
+          active: a.status === 'connected',
+          externalAccountId: a.externalAccountId,
+          lastCheckedAt: a.status === 'connected' ? new Date(Date.now() - 4 * 60_000).toISOString() : null,
+          lastError: a.status === 'error' ? 'Channex refused the connection: the hotel id is unknown.' : null,
+        }
+      : null,
+    listingsSeen: a.listings.length,
+    listingsLinked: operator.links.filter(
+      (l) => l.accountId === a.id && (l.status === 'live' || l.status === 'linking'),
+    ).length,
+    createdAt: operator.createdAt,
+  };
 }
 
 /** Every field with this property's value; secrets only for roles that may see them. */
@@ -1469,6 +1653,7 @@ async function resolved(
   const cleaning = operator?.cleaning?.[detail.id] ?? { status: 'clean', changedAt: null, changedBy: null };
   const listings = operator ? listingsOf(operator, detail) : [];
   const fields = operator ? fieldsOf(operator, detail.id, role) : [];
+  const links = operator ? linksOf(operator, detail.id) : [];
   return {
     ...detail,
     photos,
@@ -1476,6 +1661,7 @@ async function resolved(
     cleaning,
     listings,
     fields,
+    links,
     coverPhotoUrl: photos[0]?.url ?? null,
     photoCount: photos.length,
   };
@@ -1903,6 +2089,8 @@ function changeDemoReservation(operator: DemoOperator, id: string, body: unknown
 const PROPERTY_PATH =
   /^\/v1\/properties\/([0-9a-f-]{36})(\/rooms|\/amenities|\/photos\/order|\/archive|\/fields)?$/;
 const FIELD_PATH = /^\/v1\/custom-fields(?:\/([0-9a-f-]{36}))?$/;
+const ACCOUNT_PATH = /^\/v1\/channel-accounts(?:\/([0-9a-f-]{36})(\/connect|\/listings)?)?$/;
+const LINK_PATH = /^\/v1\/properties\/([0-9a-f-]{36})\/links(?:\/([0-9a-f-]{36}))?$/;
 const PHOTO_PATH = /^\/v1\/properties\/([0-9a-f-]{36})\/photos\/([0-9a-f-]{36})$/;
 
 export async function demoFetch<T>(
@@ -2178,6 +2366,192 @@ export async function demoFetch<T>(
     const { operator } = access(options.orgId, 'reservations.read');
     const query = Object.fromEntries(new URLSearchParams(path.split('?')[1] ?? ''));
     return demoReservations(operator, query) as T;
+  }
+
+  if (method === 'GET' && path === '/v1/channels/sync') {
+    const { operator } = access(options.orgId, 'channels.read');
+    return {
+      outboxWaiting: operator.live.outboxWaiting,
+      outboxFailed: operator.live.outboxFailed,
+      oldestWaitingAt: agoOrNull(operator.live.oldestWaitingMinutes),
+      lastSentAt: agoOrNull(operator.live.lastSentMinutes),
+      lastBookingAt: agoOrNull(operator.live.lastWebhookMinutes),
+      recent: operator.links
+        .filter((l) => l.status === 'live')
+        .slice(0, 6)
+        .map((l, i) => ({
+          id: i + 1,
+          at: l.requestedAt,
+          propertyName: operator.properties.find((p) => p.id === l.propertyId)?.name ?? null,
+          direction: 'out',
+          kind: 'link',
+          status: 'ok',
+          message: operator.channelAccounts.find((a) => a.id === l.accountId)?.label ?? null,
+        })),
+    } as T;
+  }
+
+  const accountMatch = ACCOUNT_PATH.exec(path);
+  if (accountMatch) {
+    const [, accountId, part] = accountMatch;
+    if (method === 'GET' && !accountId) {
+      const { operator } = access(options.orgId, 'channels.read');
+      settleLinks(operator);
+      return { accounts: operator.channelAccounts.map((a) => toAccount(operator, a)) } as T;
+    }
+    if (method === 'POST' && !accountId) {
+      const { operator } = access(options.orgId, 'channels.manage');
+      const parsed = ChannelAccountCreateSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      if (operator.channelAccounts.some((a) => a.label.toLowerCase() === parsed.data.label.toLowerCase()))
+        throw new ApiError(
+          409,
+          'account_exists',
+          `There is already an account called "${parsed.data.label}".`,
+        );
+      const made = account(
+        parsed.data.channel,
+        parsed.data.label,
+        'disconnected',
+        parsed.data.loginHolder ?? null,
+        null,
+      );
+      operator.channelAccounts.push(made);
+      save();
+      return toAccount(operator, made) as T;
+    }
+    if (method === 'GET' && part === '/listings') {
+      const { operator } = access(options.orgId, 'channels.read');
+      const a = operator.channelAccounts.find((x) => x.id === accountId);
+      if (!a)
+        throw new ApiError(
+          404,
+          'account_not_found',
+          'That channel account does not exist in this workspace.',
+        );
+      settleLinks(operator);
+      return {
+        listings: a.listings.map((l) => {
+          const link = operator.links.find(
+            (x) =>
+              x.accountId === a.id &&
+              x.externalListingId === l.externalListingId &&
+              (x.status === 'live' || x.status === 'linking'),
+          );
+          const property = link ? operator.properties.find((p) => p.id === link.propertyId) : undefined;
+          return {
+            externalListingId: l.externalListingId,
+            title: l.title,
+            url: listingUrl(a.channel, l.externalListingId),
+            linkedPropertyId: property?.id ?? null,
+            linkedPropertyName: property?.name ?? null,
+            seenAt: new Date(Date.now() - 25 * 60_000).toISOString(),
+          };
+        }),
+      } as T;
+    }
+    if (method === 'POST' && part === '/connect') {
+      const { operator } = access(options.orgId, 'channels.manage');
+      const a = operator.channelAccounts.find((x) => x.id === accountId);
+      if (!a)
+        throw new ApiError(
+          404,
+          'account_not_found',
+          'That channel account does not exist in this workspace.',
+        );
+      const parsed = ChannelAccountConnectSchema.safeParse(options.body ?? {});
+      if (!parsed.success) invalid(parsed.error.issues);
+      if (a.status === 'connected')
+        throw new ApiError(409, 'already_connected', `${a.label} is already connected.`);
+      if (a.channel === 'booking_com' && !parsed.data.hotelId && !a.externalAccountId)
+        throw new ApiError(422, 'hotel_id_required', "Booking.com needs the account's hotel id to connect.");
+      if (!operator.properties.some((p) => p.channex.status === 'connected'))
+        throw new ApiError(409, 'no_properties_connected', 'Connect at least one property to Channex first.');
+      a.status = 'pending';
+      a.requestedAt = new Date().toISOString();
+      if (parsed.data.hotelId) a.externalAccountId = parsed.data.hotelId;
+      a.connectUrl =
+        a.channel === 'booking_com'
+          ? null
+          : `https://connect.channex.example/${a.channel}/${a.id.slice(0, 8)}`;
+      save();
+      return toAccount(operator, a) as T;
+    }
+  }
+
+  const linkMatch = LINK_PATH.exec(path);
+  if (linkMatch?.[1]) {
+    const [, propertyId, linkId] = linkMatch;
+    if (method === 'GET') {
+      const { operator } = access(options.orgId, 'channels.read');
+      return { links: linksOf(operator, propertyId) } as T;
+    }
+    const { operator } = access(options.orgId, 'properties.write');
+    const property = findProperty(operator, propertyId);
+    if (method === 'POST' && !linkId) {
+      const parsed = PropertyLinkCreateSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      const a = operator.channelAccounts.find((x) => x.id === parsed.data.channelAccountId);
+      if (!a)
+        throw new ApiError(
+          404,
+          'account_not_found',
+          'That channel account does not exist in this workspace.',
+        );
+      if (a.status !== 'connected')
+        throw new ApiError(409, 'account_not_connected', `${a.label} isn't connected yet.`);
+      if (property.channex.status !== 'connected')
+        throw new ApiError(409, 'property_not_connected', 'Connect the property to Channex first.');
+      if (
+        operator.links.some(
+          (l) =>
+            l.propertyId === property.id &&
+            l.status !== 'archived' &&
+            operator.channelAccounts.find((x) => x.id === l.accountId)?.channel === a.channel,
+        )
+      )
+        throw new ApiError(
+          409,
+          'channel_taken',
+          `This property already has a ${CHANNEL_LABELS[a.channel]} listing linked. Unlink it first.`,
+        );
+      const taken = operator.links.find(
+        (l) =>
+          l.accountId === a.id &&
+          l.externalListingId === parsed.data.externalListingId &&
+          l.status !== 'archived',
+      );
+      if (taken) {
+        const other = operator.properties.find((p) => p.id === taken.propertyId);
+        throw new ApiError(
+          409,
+          'listing_taken',
+          `That listing is already linked to ${other?.name ?? 'another property'}.`,
+        );
+      }
+      operator.links.push({
+        id: crypto.randomUUID(),
+        propertyId: property.id,
+        accountId: a.id,
+        externalListingId: parsed.data.externalListingId,
+        status: 'linking',
+        liveFrom: null,
+        requestedAt: new Date().toISOString(),
+      });
+      save();
+      return { links: linksOf(operator, property.id) } as T;
+    }
+    if (method === 'DELETE' && linkId) {
+      const link = operator.links.find(
+        (l) =>
+          l.id === linkId && l.propertyId === property.id && (l.status === 'live' || l.status === 'linking'),
+      );
+      if (!link) throw new ApiError(404, 'link_not_found', 'That link does not exist, or is already gone.');
+      link.status = 'closing';
+      link.requestedAt = new Date().toISOString();
+      save();
+      return { links: linksOf(operator, property.id) } as T;
+    }
   }
 
   const fieldMatch = FIELD_PATH.exec(path);

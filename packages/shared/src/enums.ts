@@ -49,7 +49,11 @@ export const RESERVATION_STATUSES = ['inquiry', 'request', 'confirmed', 'cancell
 export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
 
 /** `live` takes new bookings; `closing` honours existing stays during an account move; `archived` is history. */
-export const LISTING_STATUSES = ['live', 'closing', 'archived'] as const;
+/**
+ * A listing link's life: `linking` while the worker maps it in Channex, `live` once it takes
+ * bookings through V-01, `closing` while the worker unmaps it, `archived` after.
+ */
+export const LISTING_STATUSES = ['linking', 'live', 'closing', 'archived'] as const;
 export type ListingStatus = (typeof LISTING_STATUSES)[number];
 
 export const CHANNEL_ACCOUNT_STATUSES = ['pending', 'connected', 'error', 'disconnected'] as const;

@@ -9,6 +9,7 @@ import { config } from './lib/config.ts';
 import { PENDING_MODULES } from './lib/modules.ts';
 import { signOut, useSession } from './lib/session.tsx';
 import { WorkspaceProvider, workspaceEntries } from './lib/workspace.tsx';
+import { ChannelsPage } from './pages/ChannelsPage.tsx';
 import { CalendarPage } from './pages/calendar/CalendarPage.tsx';
 import { ConsoleOperatorDetail } from './pages/console/OperatorDetail.tsx';
 import { ConsoleOperators } from './pages/console/Operators.tsx';
@@ -130,6 +131,7 @@ const routes = [
             children: [{ path: 'new', element: <NewPropertyPanel /> }],
           },
           { path: 'properties/:id', element: <PropertyPage /> },
+          { path: 'channels', element: <ChannelsPage /> },
           { path: 'workspace', element: <WorkspacePage /> },
           { path: 'about', element: <About /> },
           ...PENDING_MODULES.map((module) => ({

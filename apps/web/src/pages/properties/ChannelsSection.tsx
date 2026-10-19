@@ -5,6 +5,7 @@ import { Spinner } from '../../components/Spinner.tsx';
 import { Button, StatusDot } from '../../components/ui.tsx';
 import { ApiError, useConnectChannex } from '../../lib/api.ts';
 import { V01 } from '../../lib/format.ts';
+import { ChannelCards } from './ChannelCards.tsx';
 import { Section } from './Section.tsx';
 
 const WHEN = new Intl.DateTimeFormat('en-GB', {
@@ -122,12 +123,15 @@ export function ChannelsSection({
   d,
   orgId,
   canManage,
+  canEdit,
   refresh,
 }: {
   d: PropertyDetail;
   orgId: string;
   /** The role can connect channels: admins. */
   canManage: boolean;
+  /** The role can link and unlink listings: admins and operations. */
+  canEdit: boolean;
   /** Loads the property again, to see what the worker has done. */
   refresh(): void;
 }) {
@@ -157,6 +161,7 @@ export function ChannelsSection({
         canManage={canManage}
         refresh={refresh}
       />
+      <ChannelCards d={d} orgId={orgId} canEdit={canEdit} refresh={refresh} />
       <p className="text-[14px]">{state}</p>
       <div className="mt-6 overflow-x-auto">
         <table className="w-full min-w-[560px] border-collapse text-left text-[13.5px]">

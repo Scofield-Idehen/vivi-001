@@ -19,6 +19,7 @@ export const PERMISSIONS = {
   // Lock codes, key-safe codes and Wi-Fi passwords: never accounts, never V-01 support.
   'secrets.read': ['admin', 'operations', 'guest_comms'],
   'fields.manage': ['admin'],
+  'channels.read': ['admin', 'operations', 'guest_comms', 'accounts', 'v01_support'],
   'channels.manage': ['admin'],
   'workspace.read': ['admin', 'operations', 'guest_comms', 'accounts', 'field', 'v01_support'],
   'workspace.manage': ['admin'],

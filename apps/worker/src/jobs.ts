@@ -12,6 +12,8 @@ export const SCHEDULES = {
   /** Off-peak for the first operator. Per-operator times can follow once there are several. */
   'nightly-full-sync': { cron: '30 2 * * *', tz: 'Europe/London' },
   'nightly-cross-check': { cron: '30 3 * * *', tz: 'Europe/London' },
+  /** What listings each connected account has, so the property page offers the current ones. */
+  'hourly-listing-refresh': { cron: '20 * * * *', tz: 'UTC' },
   /** Channex must still close booked nights by itself on every connected property. */
   'daily-safety-check': { cron: '15 4 * * *', tz: 'Europe/London' },
   /** Properties go dirty within a quarter of an hour of a guest's check-out time. */

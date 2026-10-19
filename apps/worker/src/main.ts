@@ -13,6 +13,7 @@ import type { WorkerDeps } from './deps.ts';
 import { loadEnv } from './env.ts';
 import { enqueueFullSync } from './full-sync.ts';
 import { startJobs } from './jobs.ts';
+import { syncChannelLinks } from './links.ts';
 import { processOutbox } from './outbox.ts';
 import { beginRun, checkAllAutoClose, recover } from './safety.ts';
 import { connectProperties } from './setup.ts';
@@ -77,6 +78,12 @@ const stops = [
     const stats = await connectProperties(deps);
     if (stats.claimed) log.info(stats, 'Properties connected');
   }),
+  every('links', env.OUTBOX_INTERVAL_MS, async () => {
+    if (holding) return;
+    const stats = await syncChannelLinks(deps);
+    if (stats.connected || stats.activated || stats.linked || stats.unlinked || stats.failed)
+      log.info(stats, 'Channel links synced');
+  }),
 ];
 
 if (holding) {
@@ -93,6 +100,7 @@ const boss = env.JOBS_DATABASE_URL
         'booking-feed-sweep': () => sweepBookingFeed(deps),
         'nightly-full-sync': async () => (holding ? { skipped: 'recovering' } : enqueueFullSync(deps)),
         'daily-safety-check': () => checkAllAutoClose(deps),
+        'hourly-listing-refresh': () => syncChannelLinks(deps, { refreshAll: true }),
         // Phase 1: compare every calendar with the channel manager for the next 90 days.
         'nightly-cross-check': async () => ({ skipped: 'cross-check is built in Phase 1' }),
         'cleaning-after-check-out': () => markDirtyAfterCheckOut(deps),

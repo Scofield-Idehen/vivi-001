@@ -1,12 +1,17 @@
-import type {
-  AvailabilityUpdate,
-  BookingRevision,
+import {
+  type AvailabilityUpdate,
+  type BookingRevision,
   ChannelError,
-  ChannelProvider,
-  ExternalPropertyRef,
-  ListingSetup,
-  PushResult,
-  RestrictionUpdate,
+  type ChannelListingRef,
+  type ChannelMapping,
+  type ChannelProvider,
+  type ChannelRef,
+  type ChannelSetup,
+  type ChannelState,
+  type ExternalPropertyRef,
+  type ListingSetup,
+  type PushResult,
+  type RestrictionUpdate,
 } from './provider.ts';
 
 /**
@@ -83,6 +88,58 @@ export class FakeChannelProvider implements ChannelProvider {
     const wasOn = this.autoClose.get(externalPropertyId) ?? true;
     this.autoClose.set(externalPropertyId, true);
     return { wasOn };
+  }
+
+  /** Connections the stand-in has made; tests authorise one by setting `active`. */
+  readonly channels = new Map<
+    string,
+    { setup: ChannelSetup; active: boolean; mappings: ChannelMapping[]; listings: ChannelListingRef[] }
+  >();
+
+  async createChannel(setup: ChannelSetup): Promise<ChannelRef> {
+    this.maybeFail();
+    const channelId = `fake-channel-${this.token}-${this.channels.size + 1}`;
+    this.channels.set(channelId, { setup, active: false, mappings: [], listings: [] });
+    return {
+      channelId,
+      connectUrl: setup.channel === 'booking_com' ? null : `https://connect.example.test/${channelId}`,
+    };
+  }
+
+  /** Stands in for the account's owner authorising, with the listings the channel then shows. */
+  authorise(channelId: string, listings: ChannelListingRef[]): void {
+    const channel = this.channels.get(channelId);
+    if (!channel) throw new Error(`No stand-in channel ${channelId}`);
+    channel.active = true;
+    channel.listings = listings;
+  }
+
+  async getChannelState(channelId: string): Promise<ChannelState> {
+    this.maybeFail();
+    const channel = this.channels.get(channelId);
+    if (!channel) throw new ChannelError('No such channel', 'validation', 404);
+    return { active: channel.active, externalAccountId: channel.active ? `host-${channelId}` : null };
+  }
+
+  async listChannelListings(channelId: string): Promise<ChannelListingRef[]> {
+    this.maybeFail();
+    return this.channels.get(channelId)?.listings ?? [];
+  }
+
+  async setChannelMappings(channelId: string, mappings: ChannelMapping[]): Promise<void> {
+    this.maybeFail();
+    const channel = this.channels.get(channelId);
+    if (!channel) throw new ChannelError('No such channel', 'validation', 404);
+    channel.mappings = [...mappings];
+  }
+
+  async activateChannel(channelId: string): Promise<void> {
+    this.maybeFail();
+    const channel = this.channels.get(channelId);
+    if (!channel) throw new ChannelError('No such channel', 'validation', 404);
+    if (channel.mappings.length === 0)
+      throw new ChannelError('A channel needs a mapping before activation', 'validation', 422);
+    channel.active = true;
   }
 
   async createGroup(title: string): Promise<string> {

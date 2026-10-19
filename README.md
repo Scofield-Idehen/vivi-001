@@ -65,6 +65,11 @@ access.
     encrypted, shown behind a Show button, and never shown to accounts or to V-01 support.
   - Connect a property to Channex from its page. The worker makes it there, in the company's own group,
     and the page shows when it's done. Nothing reaches a channel until its listings are linked (next).
+  - List on channels: Channels & sync lists the workspace's Airbnb, Booking.com and Vrbo accounts, connects
+    each through Channex (an authorisation link for Airbnb and Vrbo, a hotel id for Booking.com) and shows
+    the listings Channex sees on it. On a property's page each channel has a card: link a listing from a
+    connected account, open it on the channel's site, unlink it. The page shows what is waiting to go out
+    and what came in.
   - A safety net for V-01's own downtime: Channex closes booked nights by itself on every connected
     property (checked daily), and a worker that comes back after a gap saves every booking that
     arrived meanwhile before it sends a single price or availability out. Sync health in the console

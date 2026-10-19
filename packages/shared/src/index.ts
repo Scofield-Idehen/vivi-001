@@ -1,4 +1,5 @@
 export * from './calendar.ts';
+export * from './channels.ts';
 export * from './channex.ts';
 export * from './console.ts';
 export * from './dates.ts';

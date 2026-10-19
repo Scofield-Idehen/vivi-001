@@ -5,6 +5,26 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-19
 
+- **List on channels is built as channel accounts, listing links and a card per channel
+  (integration step 7).** An admin adds an account for each sign-in on a channel (Airbnb A and B,
+  Booking.com A and B, Vrbo) on the new Channels & sync page and asks to connect it; the worker makes
+  the connection in Channex inside the operator's group, holding its connected properties. Airbnb
+  and Vrbo hand back a link the account's owner opens to authorise Channex, kept on the page to copy
+  and send; Booking.com needs its hotel id and is approved on Booking.com's side. The worker looks
+  every few minutes until Channex says the connection is active, then caches the listings Channex
+  sees on it (`channel_account_listings`, migration 0021) and refreshes them hourly, so the API
+  never talks to Channex. On a property's page each channel has a card: a linked one names the
+  listing, opens it on the channel's site and can be unlinked; an unlinked one offers the connected
+  accounts' free listings. A link is `linking` until the worker has sent the account's whole mapping
+  set (rate plan to listing) to Channex and turned the connection on, then `live` with the date;
+  an unlink is `closing` until it is out. One live listing per property per channel; a listing links
+  to one property. Every step is in the sync log and on the page.
+- **Pausing a listing on a channel waits for Channex's answer.** Guesty's "temporarily unlist" is
+  not built: through Channex a listing's published state is a per-channel action V-01 can't yet
+  confirm, and unmapping alone would leave the listing live on the channel with stale availability,
+  which is a double-booking risk. Until Channex confirms the API, unlisting is done on the channel.
+  Added to the Channex questions.
+
 - **Rows are the click target, never an underlined word (Alpha, 19 Oct 2026: "underline is not a
   good UX design").** Every table row that leads somewhere (operators, sync health, the support
   log, properties, reservations) lights up under the mouse and opens on click; the name inside

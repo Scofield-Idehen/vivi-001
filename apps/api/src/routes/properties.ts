@@ -39,6 +39,7 @@ import { pgConstraint, pgErrorCode, type RequestScope, toIso } from '../context.
 import { HttpError } from '../errors.ts';
 import { newPhotoPath, type PhotoStore, photoPathBelongsTo } from '../photos.ts';
 import type { SecretBox } from '../secrets.ts';
+import { linksOf } from './channels.ts';
 import { channexStateOf } from './channex.ts';
 import { fieldsOf } from './fields.ts';
 
@@ -177,6 +178,7 @@ async function loadDetail(tx: Tx, id: string, viewer: Viewer): Promise<PropertyD
     cleaning: await cleaningOf(tx, row),
     listings: await listingsOf(tx, id),
     fields: await fieldsOf(tx, id, viewer.role, viewer.box),
+    links: await linksOf(tx, id),
     updatedAt: toIso(row.updatedAt),
   };
 }
