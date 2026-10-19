@@ -5,6 +5,27 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-19
 
+- **The "needs you" list, settled with Alpha on 19 Oct 2026.**
+  - Leaving Guesty is not decided yet, so the plan stays undated; the build continues regardless.
+  - Vivistays' data comes out of Guesty through the Guesty Open API, with a key that lives only in
+    `apps/worker/.env`. The import is built against the API, not CSV exports. The account map (which
+    properties sit on which Airbnb, Booking.com and Vrbo accounts) and the PriceLabs flags come from
+    the same export; the Vrbo support ticket waits until the map shows which properties need it.
+  - Supabase, Channex and Firebase accounts go in Vivistays' name for now and transfer to V-01 later.
+    The Channex key shared in chat is retired when the Vivistays account opens.
+  - Alpha signs off the Calendar, Reservations, Add a property and the soft white page alone for now;
+    Alessio reviews when he comes in.
+  - Team: just Alpha and this build until the Channex certification gate (week 7), then one developer.
+    The developer docs are written for that hire.
+  - PriceLabs is in use through Guesty, so V-01 needs its own PriceLabs connection before any
+    PriceLabs-priced property moves, or its prices stop updating the day it leaves Guesty. The request
+    for API access is drafted; the Channex questions (one account for several operators, uptime,
+    white-label contract) are drafted with it.
+  - Kept for later, all four: Expedia and other channels (through Channex, after the big three),
+    different prices per channel (a markup on the Calendar's one price), damage protection (needs a
+    provider decision first), and AI-suggested replies in the Phase 2 inbox, always sent by a person.
+    Phone apps are still undecided; the web app works on phones meanwhile.
+
 - **On the Calendar the whole box beside a property opens its page, not just its name (Alpha, 19 Oct
   2026: "I want the box, so it's easy; no one has to click").** The box lights up under the mouse;
   the cleaning switch inside it still only flips clean or dirty. The name stays a link for keyboards.
