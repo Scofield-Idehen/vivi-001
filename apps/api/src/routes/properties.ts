@@ -538,6 +538,13 @@ export function propertyRoutes(
         if (!(await deps.photos.exists(path))) {
           throw new HttpError(409, 'photo_not_uploaded', "The photo hasn't finished uploading. Try again.");
         }
+        if (!(await deps.photos.isPublic(path))) {
+          throw new HttpError(
+            409,
+            'photo_bucket_private',
+            `The photo arrived, but the "${deps.bucket}" bucket isn't public, so guests and channels couldn't see it. In Supabase Storage, edit the bucket and turn "Public bucket" on, then try again.`,
+          );
+        }
         const [last] = await tx
           .select({ next: sql<number>`coalesce(max(${propertyPhotos.position}) + 1, 0)::int` })
           .from(propertyPhotos)

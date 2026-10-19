@@ -13,6 +13,8 @@ export interface PhotoStore {
   ticket(path: string, contentType: string): Promise<PhotoUploadTicket>;
   /** True once a file has arrived at `path`. */
   exists(path: string): Promise<boolean>;
+  /** True when the file can be fetched without a key, as guests and channels will fetch it. */
+  isPublic(path: string): Promise<boolean>;
   publicUrl(path: string): string;
   remove(path: string): Promise<void>;
 }
@@ -82,7 +84,19 @@ export class SupabasePhotoStore implements PhotoStore {
     };
   }
 
+  /**
+   * Asks Storage itself, with the API's key, so the answer doesn't depend on the bucket being
+   * public yet. (It must be public for guests to see the photo; the page says so if it isn't.)
+   */
   async exists(path: string): Promise<boolean> {
+    const response = await this.request(`/object/info/authenticated/${this.options.bucket}/${path}`, {
+      method: 'GET',
+    });
+    return response.ok;
+  }
+
+  /** Whether the bucket serves files without a key, which listing photos need. */
+  async isPublic(path: string): Promise<boolean> {
     const doFetch = this.options.fetch ?? fetch;
     const response = await doFetch(this.publicUrl(path), { method: 'HEAD' });
     return response.ok;
@@ -115,6 +129,10 @@ export class MemoryPhotoStore implements PhotoStore {
     return this.files.has(path);
   }
 
+  async isPublic(path: string): Promise<boolean> {
+    return this.files.has(path);
+  }
+
   publicUrl(path: string): string {
     return `https://photos.test/${path}`;
   }
@@ -129,6 +147,7 @@ export const NO_PHOTO_STORE: PhotoStore = {
   ready: false,
   ticket: () => Promise.reject(new Error('Photo storage is not set up')),
   exists: async () => false,
+  isPublic: async () => false,
   publicUrl: (path) => path,
   remove: async () => {},
 };
