@@ -25,8 +25,14 @@ nothing new. Only then does it let anything out. The console's Sync health page 
 last heartbeat, whether it is recovering, and the last recovery (how long the gap was and how many
 booking changes were saved first); the alert channel gets one line too.
 
-Step 3, the cross-check, is still to build; until then run it by hand after a long outage:
-`pnpm channex:check` lists what Channex holds.
+Step 3, the cross-check, runs every night at 03:30 London (`nightly-cross-check`,
+`apps/worker/src/cross-check.ts`): the next 90 nights of every calendar V-01 runs against what
+Channex holds. Differing nights are queued again through the outbox, logged (`cross_check` in the
+sync log) and raised as a warning alert; the Today page lists them under Needs attention and the
+property page says when it was last checked. After a long outage, don't wait for the night: once
+the recovery has drained and the outbox is empty, run it by hand from `apps/worker` with
+`pnpm cross-check` (add `--days 500` to cover the whole horizon). A property whose outbox still has
+changes pending is skipped as "waiting", so run it again once they have gone.
 
 ## Channex closes booked nights itself
 

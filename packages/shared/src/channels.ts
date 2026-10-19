@@ -121,6 +121,17 @@ export const WorkspaceSyncSchema = z.object({
   oldestWaitingAt: Timestamp.nullable(),
   lastSentAt: Timestamp.nullable(),
   lastBookingAt: Timestamp.nullable(),
+  /** The nightly cross-check across the workspace's properties V-01 runs. */
+  crossCheck: z.object({
+    /** The most recent check of any property. */
+    lastCheckedAt: Timestamp.nullable(),
+    properties: z.number().int(),
+    matching: z.number().int(),
+    differing: z.number().int(),
+    /** Couldn't be checked last time Channex was asked. */
+    failed: z.number().int(),
+    unchecked: z.number().int(),
+  }),
   recent: z.array(
     z.object({
       id: z.number().int(),

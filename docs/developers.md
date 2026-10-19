@@ -129,9 +129,14 @@ makes a property called "V-01 test property" through the adapter, the way V-01 w
 it connects (one unit, one rate plan), then runs the round trip on it. Run again, it uses the same one.
 It never makes anything on live.
 
+`pnpm cross-check` (in `apps/worker`) runs the nightly cross-check now: every calendar V-01 runs
+against what Channex holds for the next 90 nights (`--days 500` for the whole horizon). Differing
+nights are sent again through the outbox and logged; the Today page lists them. Set `APP_URL` in the
+worker's `.env` so alerts link to the page that fixes them.
+
 ## Supabase and Render
 
-Staging: Supabase project `v01-staging` (ref `nznzkjsbdkzujkoieemo`, London), created 19 Oct 2026 in
+Staging: Supabase project `v01-staging` (ref `nznzkjsbdkzujkoieemo`, Ireland, eu-west-1), created 19 Oct 2026 in
 Vivistays' name. Production and the Firebase hosting are still to come. The steps:
 
 1. Create two Supabase projects, staging and production, in London (eu-west-2). Keep "Confirm email" on
@@ -158,6 +163,7 @@ Vivistays' name. Production and the Firebase hosting are still to come. The step
   staging before certification.
 - Airbnb requests and enquiries (accept, decline, pre-approve): waiting on Channex's answer about
   the API; fees, booking rules and pause/resume (step 8) are built.
-- Nightly cross-check.
+- Nightly cross-check: built; to confirm on staging that `GET /availability` and `GET /restrictions`
+  read back as the adapter expects (prices as decimals, `max_stay` 0 for no limit).
 
 Design sign-off: Alpha and Alessio, at every design gate.

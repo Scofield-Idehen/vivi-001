@@ -378,3 +378,114 @@ describe('changing a booking', () => {
     expect(guest.at(-1)).toMatchObject({ before: { phone: '+44 7700 900123' }, after: { phone: null } });
   });
 });
+
+describe('Today', () => {
+  let flat: string;
+
+  beforeAll(async () => {
+    flat = (
+      await call('POST', '/v1/properties', {
+        as: asA(),
+        body: { name: 'Mill Street Flat', countryCode: 'GB', maxGuests: 4, checkOutTime: '10:00' },
+      })
+    ).body.id;
+    await booking(a.orgId, flat, {
+      channel: 'airbnb',
+      reference: 'HMTODAY001',
+      status: 'confirmed',
+      from: 0,
+      to: 3,
+      guest: { name: 'Mia Arrives' },
+    });
+    await booking(a.orgId, flat, {
+      channel: 'direct',
+      reference: null,
+      status: 'confirmed',
+      from: -2,
+      to: 0,
+      guest: { name: 'Tom Leaves' },
+    });
+    await owner(
+      `update app.properties set cleaning_status = 'dirty', cleaning_changed_at = now() where id = $1`,
+      [flat],
+    );
+    // The channel manager side: one change Channex refused, and last night's check found drift.
+    await owner(
+      `insert into app.channex_mappings (organisation_id, property_id, channex_property_id, channex_room_type_id, channex_rate_plan_id,
+         cross_checked_at, cross_check_differences)
+       values ($1, $2, 'cx-lodge', 'cx-lodge-room', 'cx-lodge-rate', now(), 3)`,
+      [a.orgId, lodge],
+    );
+    await owner(`update app.properties set managed_by = 'v01' where id = $1`, [lodge]);
+    await owner(
+      `insert into app.ari_outbox (organisation_id, property_id, kind, date_from, date_to, status, last_error)
+       values ($1, $2, 'availability', $3, $3, 'failed', 'Channex said no')`,
+      [a.orgId, lodge, day(1)],
+    );
+    await owner(`delete from app.ari_outbox where status = 'pending'`);
+  });
+
+  it('shows arrivals, departures, who is staying and the cleans due', async () => {
+    const { status, body } = await call('GET', '/v1/today', { as: asA() });
+    expect(status).toBe(200);
+    expect(body.date).toBe(today);
+    expect(body.arrivals).toEqual([
+      expect.objectContaining({
+        propertyName: 'Mill Street Flat',
+        guestName: 'Mia Arrives',
+        channel: 'airbnb',
+        nights: 3,
+        guests: 3,
+        time: null,
+      }),
+    ]);
+    expect(body.departures).toEqual([
+      expect.objectContaining({ propertyName: 'Mill Street Flat', guestName: 'Tom Leaves', time: null }),
+    ]);
+    // Hannah Lee (until day 2) and Mia (arriving) are in tonight; Tom is leaving.
+    expect(body.staying).toBe(2);
+    expect(body.cleansDue).toEqual([expect.objectContaining({ propertyName: 'Mill Street Flat' })]);
+  });
+
+  it('puts what needs a person first: the clash, the refused change, then last night’s drift', async () => {
+    const { body } = await call('GET', '/v1/today', { as: asA() });
+    const ids = (body.attention as { id: string; severity: string; to: string }[]).map((i) => [
+      i.id,
+      i.severity,
+    ]);
+    expect(ids).toEqual([
+      [`conflict:${idsOf().overlap}`, 'urgent'],
+      ['outbox-failed', 'urgent'],
+      [`cross-check:${lodge}`, 'warning'],
+    ]);
+    expect(body.attention[0]).toMatchObject({
+      title: 'Two bookings overlap at Harbour View Lodge',
+      to: `/reservations/${idsOf().overlap}`,
+    });
+    expect(body.attention[1].title).toBe('1 change didn’t reach the channels');
+    expect(body.attention[2]).toMatchObject({
+      title: 'Channex didn’t match Harbour View Lodge',
+      to: `/properties/${lodge}`,
+    });
+    expect(body.workerSeenAt).toBeNull();
+  });
+
+  it('shows each role what it may see: no guest names for the field team, no channel problems for accounts', async () => {
+    const field = (await call('GET', '/v1/today', { as: as('field') })).body;
+    expect(field.arrivals[0].guestName).toBeNull();
+    expect(field.cleansDue).toEqual([]);
+    expect(field.attention).toEqual([]);
+    const accounts = (await call('GET', '/v1/today', { as: as('accounts') })).body;
+    expect(accounts.arrivals[0].guestName).toBe('Mia Arrives');
+    expect(accounts.attention.map((i: { id: string }) => i.id)).toEqual([
+      `conflict:${idsOf().overlap}`,
+      'outbox-failed',
+      `cross-check:${lodge}`,
+    ]);
+    const theirs = (await call('GET', '/v1/today', { as: asB() })).body;
+    expect(theirs.arrivals).toEqual([]);
+    expect(theirs.attention).toEqual([]);
+  });
+});
+
+const idsOf = () => ids;

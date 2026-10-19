@@ -68,6 +68,8 @@ import {
   type SupportGrantList,
   type SupportVisitList,
   selectedNights,
+  type Today,
+  type TodayStay,
   todayIn,
   type Workspace,
   type WorkspaceRole,
@@ -300,6 +302,9 @@ const NOT_CONNECTED: ChannexState = {
   attempts: 0,
   autoClose: null,
   autoCloseCheckedAt: null,
+  crossCheckedAt: null,
+  crossCheckDifferences: null,
+  crossCheckError: null,
 };
 
 /** A connection the stand-in worker finished: the sample properties V-01 runs were "connected" when added. */
@@ -315,15 +320,29 @@ function connectedSince(at: string): ChannexState {
     // The stand-in worker read it back the last time it "ran": early this morning.
     autoClose: true,
     autoCloseCheckedAt: checkedThisMorning(),
+    crossCheckedAt: checkedThisMorning(3, 30),
+    crossCheckDifferences: 0,
+    crossCheckError: null,
   };
 }
 
-/** The daily safety check runs at 04:15; the demo says it ran this morning. */
-function checkedThisMorning(): string {
+/** The daily safety check runs at 04:15 and the cross-check at 03:30; the demo says they ran this morning. */
+function checkedThisMorning(hour = 4, minute = 15): string {
   const at = new Date();
-  at.setHours(4, 15, 0, 0);
+  at.setHours(hour, minute, 0, 0);
   if (at.getTime() > Date.now()) at.setDate(at.getDate() - 1);
   return at.toISOString();
+}
+
+/** A state saved before the cross-check existed gets last night's check, like every connected property. */
+function withCrossCheck(state: ChannexState): ChannexState {
+  if (state.crossCheckedAt !== undefined) return state;
+  return {
+    ...state,
+    ...(state.status === 'connected'
+      ? { crossCheckedAt: checkedThisMorning(3, 30), crossCheckDifferences: 0, crossCheckError: null }
+      : { crossCheckedAt: null, crossCheckDifferences: null, crossCheckError: null }),
+  };
 }
 
 /**
@@ -331,7 +350,7 @@ function checkedThisMorning(): string {
  * before this existed get their state from who runs them.
  */
 function channexOf(detail: PropertyDetail): ChannexState {
-  const current = detail.channex as ChannexState | undefined;
+  const current = detail.channex ? withCrossCheck(detail.channex as ChannexState) : undefined;
   if (!current) return detail.managedBy === 'v01' ? connectedSince(detail.createdAt) : NOT_CONNECTED;
   if (
     current.status === 'connecting' &&
@@ -346,6 +365,10 @@ function channexOf(detail: PropertyDetail): ChannexState {
       attempts: 1,
       autoClose: true,
       autoCloseCheckedAt: new Date().toISOString(),
+      // Checked tonight for the first time.
+      crossCheckedAt: null,
+      crossCheckDifferences: null,
+      crossCheckError: null,
     };
   }
   return current;
@@ -752,7 +775,7 @@ const SAMPLE_CALENDARS: Record<string, SampleCalendar> = {
   },
 };
 
-function demoToday(): string {
+function demoTodayDate(): string {
   return todayIn('Europe/London');
 }
 
@@ -854,7 +877,7 @@ function seed(): DemoState {
   const pastVisit = Date.now() - (2 * 24 * 60 + 190) * MINUTE;
   const state: DemoState = {
     version: 10,
-    calendarFrom: demoToday(),
+    calendarFrom: demoTodayDate(),
     operators: [
       {
         role: 'admin',
@@ -1221,7 +1244,7 @@ function seedFields(s: DemoState): void {
 
 /** The invented operators' bookings, laid out from today, with every property cleaned yesterday. */
 function layOutSamples(s: DemoState): void {
-  s.calendarFrom = demoToday();
+  s.calendarFrom = demoTodayDate();
   for (const operator of s.operators) {
     const id = operator.workspace.organisation.id;
     if (!SAMPLE_CALENDARS[id]) continue;
@@ -1290,7 +1313,7 @@ function load(): DemoState {
       const parsed = JSON.parse(saved) as DemoState;
       if (parsed.version === 10) {
         // A week on, the sample bookings would all be in the past: lay them out again from today.
-        if (parsed.calendarFrom <= addDays(demoToday(), -7)) {
+        if (parsed.calendarFrom <= addDays(demoTodayDate(), -7)) {
           layOutSamples(parsed);
           state = parsed;
           save();
@@ -1548,7 +1571,7 @@ function settleLinks(operator: DemoOperator): void {
     if (now - Date.parse(link.requestedAt) < 3000) continue;
     if (link.status === 'linking') {
       link.status = 'live';
-      link.liveFrom = demoToday();
+      link.liveFrom = demoTodayDate();
       changed = true;
     } else if (link.status === 'closing') {
       link.status = 'archived';
@@ -2080,6 +2103,154 @@ function demoReservations(operator: DemoOperator, query: Record<string, string>)
   };
 }
 
+/** The nightly cross-check across the properties V-01 runs, from each property's state. */
+function demoCrossCheck(operator: DemoOperator): WorkspaceSyncCrossCheck {
+  const live = operator.properties
+    .filter((p) => p.managedBy === 'v01')
+    .map((p) => channexOf(p))
+    .filter((c) => c.status === 'connected');
+  const checked = live.filter((c) => c.crossCheckedAt !== null);
+  return {
+    lastCheckedAt:
+      checked
+        .map((c) => c.crossCheckedAt as string)
+        .sort()
+        .at(-1) ?? null,
+    properties: live.length,
+    matching: live.filter((c) => c.crossCheckDifferences === 0).length,
+    differing: live.filter((c) => (c.crossCheckDifferences ?? 0) > 0).length,
+    failed: live.filter((c) => c.crossCheckError !== null).length,
+    unchecked: live.length - checked.length,
+  };
+}
+
+type WorkspaceSyncCrossCheck = {
+  lastCheckedAt: string | null;
+  properties: number;
+  matching: number;
+  differing: number;
+  failed: number;
+  unchecked: number;
+};
+
+const SHORT_DAY = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
+const shortDay = (date: string) => SHORT_DAY.format(new Date(`${date}T12:00:00Z`));
+
+/** GET /v1/today: arrivals, departures, cleans due and what needs a person, from the demo's own state. */
+function demoToday(operator: DemoOperator, role: WorkspaceRole): Today {
+  const today = todayIn(operator.workspace.settings.timeZone);
+  const seesGuests = can(role, 'reservations.read');
+  const seesChannels = can(role, 'channels.read');
+  const seesProperties = can(role, 'properties.read');
+  const nameOf = (propertyId: string) => operator.properties.find((p) => p.id === propertyId)?.name ?? '';
+  const nights = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
+  const stay = (x: DemoStay, time: string | null): TodayStay => ({
+    reservationId: x.id,
+    propertyId: x.propertyId,
+    propertyName: nameOf(x.propertyId),
+    guestName: seesGuests ? x.guestName : null,
+    channel: x.channel,
+    checkIn: x.checkIn,
+    checkOut: x.checkOut,
+    nights: nights(x.checkIn, x.checkOut),
+    time: time ? time.slice(0, 5) : null,
+    guests: x.adults + x.children,
+  });
+  const confirmed = operator.calendar.stays.filter((x) => x.status === 'confirmed');
+  const byName = (a: TodayStay, b: TodayStay) => a.propertyName.localeCompare(b.propertyName);
+  const arrivals = confirmed
+    .filter((x) => x.checkIn === today)
+    .map((x) => stay(x, x.checkInTime))
+    .sort(byName);
+  const departures = confirmed
+    .filter((x) => x.checkOut === today)
+    .map((x) => stay(x, x.checkOutTime))
+    .sort(byName);
+  const staying = confirmed.filter((x) => x.checkIn <= today && x.checkOut > today).length;
+
+  const cleansDue = seesProperties
+    ? Object.entries(operator.cleaning ?? {})
+        .filter(([, c]) => c.status === 'dirty')
+        .map(([propertyId, c]) => ({ propertyId, propertyName: nameOf(propertyId), since: c.changedAt }))
+        .sort((a, b) => a.propertyName.localeCompare(b.propertyName))
+    : [];
+
+  const attention: Today['attention'] = [];
+  if (seesGuests) {
+    for (const x of operator.calendar.stays.filter((x) => x.status === 'conflict' && x.checkOut >= today)) {
+      attention.push({
+        id: `conflict:${x.id}`,
+        severity: 'urgent',
+        title: `Two bookings overlap at ${nameOf(x.propertyId)}`,
+        detail: `A ${CHANNEL_LABELS[x.channel]} booking for ${shortDay(x.checkIn)} to ${shortDay(x.checkOut)} clashes with another stay. One guest has to be moved or refunded.`,
+        to: `/reservations/${x.id}`,
+      });
+    }
+  }
+  if (seesChannels) {
+    if (operator.live.outboxFailed > 0) {
+      const n = operator.live.outboxFailed;
+      attention.push({
+        id: 'outbox-failed',
+        severity: 'urgent',
+        title: `${n} ${n === 1 ? 'change' : 'changes'} didn’t reach the channels`,
+        detail: 'Channex refused them. The calendar on the channels may be out of date until they go.',
+        to: '/channels',
+      });
+    }
+    for (const p of operator.properties.filter((p) => p.managedBy === 'v01')) {
+      const c = channexOf(p);
+      if (c.crossCheckError) {
+        attention.push({
+          id: `cross-check-failed:${p.id}`,
+          severity: 'warning',
+          title: `Couldn’t check ${p.name} against Channex`,
+          detail: `${c.crossCheckError} The worker tries again tonight.`,
+          to: `/properties/${p.id}`,
+        });
+      } else if ((c.crossCheckDifferences ?? 0) > 0) {
+        const n = c.crossCheckDifferences as number;
+        attention.push({
+          id: `cross-check:${p.id}`,
+          severity: 'warning',
+          title: `Channex didn’t match ${p.name}`,
+          detail: `${n} ${n === 1 ? 'night' : 'nights'} differed in last night’s check and ${n === 1 ? 'was' : 'were'} sent again. If it happens again tomorrow, someone is changing things in Channex or on the channel.`,
+          to: `/properties/${p.id}`,
+        });
+      }
+    }
+    for (const a of operator.channelAccounts.filter((a) => a.status === 'error' || a.status === 'pending')) {
+      attention.push(
+        a.status === 'error'
+          ? {
+              id: `account:${a.id}`,
+              severity: 'urgent',
+              title: `${a.label} isn’t connected`,
+              detail: `Channex lost the connection to the ${CHANNEL_LABELS[a.channel]} account.`,
+              to: '/channels',
+            }
+          : {
+              id: `account:${a.id}`,
+              severity: 'warning',
+              title: `${a.label} is waiting to be authorised`,
+              detail: `The account’s owner has to open the ${CHANNEL_LABELS[a.channel]} link on Channels & sync.`,
+              to: '/channels',
+            },
+      );
+    }
+  }
+  attention.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'urgent' ? -1 : 1));
+  return {
+    date: today,
+    arrivals,
+    departures,
+    staying,
+    cleansDue,
+    attention,
+    workerSeenAt: new Date(Date.now() - 20_000).toISOString(),
+  };
+}
+
 function findStay(operator: DemoOperator, id: string): DemoStay {
   const stay = operator.calendar.stays.find((x) => x.id === id);
   if (!stay) {
@@ -2394,6 +2565,11 @@ export async function demoFetch<T>(
     return demoReservations(operator, query) as T;
   }
 
+  if (method === 'GET' && path === '/v1/today') {
+    const { operator, role } = access(options.orgId, 'workspace.read');
+    return demoToday(operator, role) as T;
+  }
+
   if (method === 'GET' && path === '/v1/channels/sync') {
     const { operator } = access(options.orgId, 'channels.read');
     return {
@@ -2402,6 +2578,7 @@ export async function demoFetch<T>(
       oldestWaitingAt: agoOrNull(operator.live.oldestWaitingMinutes),
       lastSentAt: agoOrNull(operator.live.lastSentMinutes),
       lastBookingAt: agoOrNull(operator.live.lastWebhookMinutes),
+      crossCheck: demoCrossCheck(operator),
       recent: operator.links
         .filter((l) => l.status === 'live')
         .slice(0, 6)

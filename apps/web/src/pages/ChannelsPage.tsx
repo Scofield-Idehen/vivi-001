@@ -5,6 +5,7 @@ import {
   can,
   LINKABLE_CHANNELS,
   type LinkableChannel,
+  type WorkspaceSync,
 } from '@v01/shared';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -326,7 +327,7 @@ export function ChannelsPage() {
           <Notice tone="urgent">{explain(sync.error)}</Notice>
         ) : (
           <>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-2xl bg-paper px-4 py-3.5">
                 <p className="text-[12.5px] text-slate">Waiting to go out</p>
                 <p className="mt-1 font-serif text-[26px] leading-none text-ink tnum">
@@ -358,6 +359,7 @@ export function ChannelsPage() {
                 </p>
                 <p className="mt-1.5 text-[12.5px] text-mist">from any channel</p>
               </div>
+              <CrossCheckTile check={sync.data.crossCheck} now={now} />
             </div>
             {sync.data.recent.length ? (
               <ul className="mt-6 divide-y divide-hairline border-y border-hairline text-[13.5px]">
@@ -366,7 +368,13 @@ export function ChannelsPage() {
                     <span className="text-mist">{dateTime(r.at)}</span>
                     <span className="min-w-0">
                       <StatusDot
-                        status={r.status === 'error' ? 'urgent' : r.status === 'fixed' ? 'pending' : 'done'}
+                        status={
+                          r.status === 'error'
+                            ? 'urgent'
+                            : r.status === 'fixed' || r.status === 'differences'
+                              ? 'pending'
+                              : 'done'
+                        }
                       >
                         <span className="text-ink">{WHAT[r.kind] ?? r.kind}</span>
                         {r.propertyName ? <span className="text-slate"> · {r.propertyName}</span> : null}
@@ -386,6 +394,32 @@ export function ChannelsPage() {
   );
 }
 
+/**
+ * The nightly cross-check: every property V-01 runs, compared with what Channex holds for the next
+ * 90 nights. All matching is the quiet, expected state; a difference was sent again and is worth a look.
+ */
+function CrossCheckTile({ check, now }: { check: WorkspaceSync['crossCheck']; now: number }) {
+  const checked = check.properties - check.unchecked;
+  const trouble = check.differing + check.failed;
+  return (
+    <div className="rounded-2xl bg-paper px-4 py-3.5">
+      <p className="text-[12.5px] text-slate">Checked against Channex</p>
+      <p className={`mt-1 font-serif text-[26px] leading-none tnum ${trouble ? 'text-urgent' : 'text-ink'}`}>
+        {check.properties === 0 ? '—' : trouble ? trouble : `${check.matching} of ${check.properties}`}
+      </p>
+      <p className="mt-1.5 text-[12.5px] text-mist">
+        {check.properties === 0
+          ? 'no property is live yet'
+          : checked === 0
+            ? 'not checked yet; the worker checks nightly'
+            : trouble
+              ? `${check.differing ? `${check.differing} differed and ${check.differing === 1 ? 'was' : 'were'} sent again` : ''}${check.differing && check.failed ? ', ' : ''}${check.failed ? `${check.failed} couldn’t be checked` : ''}`
+              : `all match · ${check.lastCheckedAt ? relativeTime(check.lastCheckedAt, now) : ''}`}
+      </p>
+    </div>
+  );
+}
+
 const WHAT: Record<string, string> = {
   availability: 'Availability sent',
   restrictions: 'Prices and stay rules sent',
@@ -393,5 +427,6 @@ const WHAT: Record<string, string> = {
   channel: 'Channel account',
   link: 'Listing link',
   safety: 'Safety check',
+  cross_check: 'Checked against Channex',
   booking: 'Booking in',
 };

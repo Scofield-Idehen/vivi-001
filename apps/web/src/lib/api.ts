@@ -39,6 +39,7 @@ import type {
   SupportGrant,
   SupportGrantList,
   SupportVisitList,
+  Today,
   Workspace,
   WorkspaceSync,
 } from '@v01/shared';
@@ -697,6 +698,17 @@ export const useUnlinkListing = (orgId: string | null, propertyId: string) =>
   );
 
 /** The workspace's own sync picture, refreshed every 30 seconds while the page is open. */
+/** The Today page: arrivals, departures, cleans due and what needs a person. Looks again every minute. */
+export function useToday(orgId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['today', orgId],
+    enabled: Boolean(token && orgId),
+    queryFn: () => apiFetch<Today>('/v1/today', { token: token as string, orgId }),
+    refetchInterval: 60_000,
+  });
+}
+
 export function useWorkspaceSync(orgId: string | null) {
   const token = useToken();
   return useQuery({

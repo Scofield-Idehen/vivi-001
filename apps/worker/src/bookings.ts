@@ -283,6 +283,7 @@ export async function importBookings(deps: WorkerDeps, orgId: string): Promise<I
           severity: 'urgent',
           title: `Double booking: ${saved.propertyName}`,
           detail: `${who} (${where}), ${revision.arrivalDate} to ${revision.departureDate}, overlaps a booking or block already on the calendar. It is saved as a conflict and holds no nights until someone sorts it out.`,
+          path: `/reservations/${saved.reservationId}`,
         });
       }
     } catch (error) {

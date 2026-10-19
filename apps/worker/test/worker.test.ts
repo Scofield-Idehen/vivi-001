@@ -13,6 +13,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { availabilityRanges } from '../src/availability.ts';
 import { importBookings, processWebhooks, sweepBookingFeed } from '../src/bookings.ts';
 import { markDirtyAfterCheckOut } from '../src/cleaning.ts';
+import {
+  CROSS_CHECK_DAYS,
+  compareNights,
+  crossCheckAll,
+  crossCheckProperty,
+  datesToRanges,
+} from '../src/cross-check.ts';
 import { silentLogger, type WorkerDeps } from '../src/deps.ts';
 import { enqueueFullSync, FULL_SYNC_DAYS } from '../src/full-sync.ts';
 import { startJobs } from '../src/jobs.ts';
@@ -968,6 +975,180 @@ describe('the safety net for downtime', () => {
     ]);
     const next = await beginRun({ ...deps, now: () => new Date() });
     expect(next.recovering).toBe(false);
+  });
+});
+
+describe('the nightly cross-check with Channex', () => {
+  let cottage: string;
+  let mappingId: string;
+  const horizonEnd = '2027-01-12'; // TODAY + 89 nights
+  const mappingOf = async () => {
+    const [row] = await owner<{ checked: boolean; differences: number | null; error: string | null }>(
+      `select cross_checked_at is not null as checked, cross_check_differences as differences, cross_check_error as error
+         from app.channex_mappings where id = $1`,
+      [mappingId],
+    );
+    return row;
+  };
+  const check = () =>
+    crossCheckProperty(deps, op.orgId, {
+      id: mappingId,
+      propertyId: cottage,
+      channexPropertyId: 'cx-chk',
+      channexRoomTypeId: 'cx-chk-room',
+      channexRatePlanId: 'cx-chk-rate',
+    });
+
+  beforeAll(async () => {
+    cottage = await addProperty('Check Cottage', 'v01', 'cx-chk');
+    await owner(
+      `update app.properties set base_price_minor = 12000, weekend_price_minor = 14000, min_nights = 2, max_nights = 21 where id = $1`,
+      [cottage],
+    );
+    await owner(
+      `insert into app.reservations (organisation_id, property_id, channel, status, check_in, check_out)
+       values ($1, $2, 'direct', 'confirmed', '2026-10-20', '2026-10-22')`,
+      [op.orgId, cottage],
+    );
+    const [m] = await owner<{ id: string }>('select id from app.channex_mappings where property_id = $1', [
+      cottage,
+    ]);
+    mappingId = m!.id;
+    await owner('delete from app.ari_outbox where status = $1', ['pending']);
+  });
+
+  it('compares the fields the channels get, and leaves prices alone when PriceLabs sets them', () => {
+    const ours = [
+      {
+        date: '2026-11-01',
+        available: 0,
+        rateMinor: 15000,
+        minStayArrival: 2,
+        maxStay: null,
+        closedToArrival: false,
+        closedToDeparture: false,
+      },
+      {
+        date: '2026-11-02',
+        available: 1,
+        rateMinor: null,
+        minStayArrival: 2,
+        maxStay: 14,
+        closedToArrival: false,
+        closedToDeparture: false,
+      },
+    ];
+    const theirs = [
+      {
+        date: '2026-11-01',
+        available: 1,
+        rate: '150.00',
+        minStayArrival: 3,
+        maxStay: null,
+        closedToArrival: false,
+        closedToDeparture: false,
+        stopSell: false,
+      },
+      {
+        date: '2026-11-02',
+        available: 1,
+        rate: '999.00',
+        minStayArrival: 2,
+        maxStay: 14,
+        closedToArrival: false,
+        closedToDeparture: null,
+        stopSell: false,
+      },
+    ];
+    expect(compareNights(ours, theirs, 'GBP')).toEqual([
+      { date: '2026-11-01', field: 'available', ours: 0, theirs: 1 },
+      { date: '2026-11-01', field: 'minStayArrival', ours: 2, theirs: 3 },
+      { date: '2026-11-02', field: 'closedToDeparture', ours: false, theirs: null },
+    ]);
+    expect(datesToRanges(['2026-11-03', '2026-11-01', '2026-11-02', '2026-11-05'])).toEqual([
+      { dateFrom: '2026-11-01', dateTo: '2026-11-03' },
+      { dateFrom: '2026-11-05', dateTo: '2026-11-05' },
+    ]);
+  });
+
+  /** A full sync into the stand-in, which keeps what it was sent, as Channex would. */
+  async function fill() {
+    await queue('availability', cottage, TODAY, horizonEnd);
+    await queue('restrictions', cottage, TODAY, horizonEnd);
+    expect(await processOutbox(deps)).toMatchObject({ sent: 2 });
+  }
+
+  it('finds everything matching once a full sync has reached Channex', async () => {
+    await fill();
+    expect(provider.nights.get('cx-chk')?.get('2026-10-20')).toMatchObject({ available: 0, rate: '120.00' });
+    expect(await check()).toEqual({ outcome: 'matching' });
+    expect(await mappingOf()).toEqual({ checked: true, differences: 0, error: null });
+    const [log] = await owner<{ status: string; detail: { nightsChecked: number } }>(
+      `select status, detail from app.sync_log where property_id = $1 and kind = 'cross_check' order by id desc limit 1`,
+      [cottage],
+    );
+    expect(log).toMatchObject({ status: 'ok', detail: { nightsChecked: CROSS_CHECK_DAYS } });
+    expect(alerts.sent).toEqual([]);
+  });
+
+  it('sends a night Channex has wrong again, and says so', async () => {
+    await fill();
+    // Someone opened a booked night in Channex, and changed a price by hand.
+    provider.setNight('cx-chk', '2026-10-21', { available: 1 });
+    provider.setNight('cx-chk', '2026-11-10', { rate: '99.00', minStayArrival: 5 });
+    provider.setNight('cx-chk', '2026-11-11', { rate: '99.00' });
+    expect(await check()).toEqual({ outcome: 'differing', nights: 3 });
+    expect(await mappingOf()).toEqual({ checked: true, differences: 3, error: null });
+    const queued = await owner<{ kind: string; date_from: string; date_to: string }>(
+      `select kind, date_from::text, date_to::text from app.ari_outbox where property_id = $1 and status = 'pending' order by kind`,
+      [cottage],
+    );
+    expect(queued).toEqual([
+      { kind: 'availability', date_from: '2026-10-21', date_to: '2026-10-21' },
+      { kind: 'restrictions', date_from: '2026-11-10', date_to: '2026-11-11' },
+    ]);
+    expect(alerts.sent).toEqual([
+      expect.objectContaining({
+        severity: 'warning',
+        title: "Channex didn't match V-01 for Check Cottage",
+        detail: expect.stringContaining(
+          '3 nights differed (price on 2, availability on 1, shortest stay on 1)',
+        ),
+      }),
+    ]);
+    const [log] = await owner<{ status: string; detail: { differences: unknown[] } }>(
+      `select status, detail from app.sync_log where property_id = $1 and kind = 'cross_check' order by id desc limit 1`,
+      [cottage],
+    );
+    expect(log?.status).toBe('differences');
+    expect(log?.detail.differences).toContainEqual({
+      date: '2026-10-21',
+      field: 'available',
+      ours: 0,
+      theirs: 1,
+    });
+
+    // Until the re-send has gone, the check waits; once it has, Channex matches again.
+    expect(await check()).toEqual({ outcome: 'waiting' });
+    expect(await processOutbox(deps)).toMatchObject({ sent: 2 });
+    expect(provider.nights.get('cx-chk')?.get('2026-10-21')?.available).toBe(0);
+    expect(provider.nights.get('cx-chk')?.get('2026-11-10')).toMatchObject({
+      rate: '120.00',
+      minStayArrival: 2,
+    });
+    expect(await check()).toEqual({ outcome: 'matching' });
+  });
+
+  it('records when Channex could not be asked, and the job keeps going', async () => {
+    await fill();
+    provider.failNextCallWith(new ChannelError('Channex is down', 'server', 503));
+    expect(await check()).toEqual({ outcome: 'failed' });
+    expect(await mappingOf()).toEqual({ checked: true, differences: null, error: 'Channex is down' });
+    expect(await check()).toEqual({ outcome: 'matching' });
+    expect((await mappingOf())?.error).toBeNull();
+    const stats = await crossCheckAll(deps);
+    expect(stats.checked).toBeGreaterThanOrEqual(1);
+    expect(stats.matching).toBeGreaterThanOrEqual(1);
   });
 });
 

@@ -143,6 +143,29 @@ export interface ChannelProvider {
   ): Promise<void>;
   /** Airbnb only: takes the listing off Airbnb (paused) or puts it back. */
   setListingPublished(channelId: string, externalListingId: string, published: boolean): Promise<void>;
+  /**
+   * Reads back what the channel manager holds for a property, night by night, across
+   * [dateFrom, dateTo]: the availability and the prices and stay rules it would send to the channels.
+   * The nightly cross-check compares this with V-01's own calendar and re-sends any night that differs.
+   */
+  fetchInventory(ref: ExternalPropertyRef, dateFrom: string, dateTo: string): Promise<ChannelNight[]>;
+}
+
+/**
+ * One night as the channel manager holds it. A part the channel manager has never been given is
+ * null, and is not compared. The rate is a decimal string in the property's currency, such as
+ * "200.00", exactly as read back; the caller knows the currency's minor units.
+ */
+export interface ChannelNight {
+  date: string;
+  available: number | null;
+  rate: string | null;
+  minStayArrival: number | null;
+  /** 0 from Channex means no longest stay; it is read back as null here. */
+  maxStay: number | null;
+  closedToArrival: boolean | null;
+  closedToDeparture: boolean | null;
+  stopSell: boolean | null;
 }
 
 /** A mapping as the channel manager keeps it, with its own id. */

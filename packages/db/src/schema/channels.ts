@@ -127,6 +127,14 @@ export const channexMappings = app.table(
      */
     autoClose: boolean('auto_close'),
     autoCloseCheckedAt: timestamp('auto_close_checked_at', { withTimezone: true, mode: 'string' }),
+    /**
+     * The nightly cross-check: when V-01's calendar was last compared with what Channex holds for the
+     * nights ahead, how many nights differed (null when the check could not be made), and why it
+     * couldn't. A night that differed is sent again straight away; the count is what the team sees.
+     */
+    crossCheckedAt: timestamp('cross_checked_at', { withTimezone: true, mode: 'string' }),
+    crossCheckDifferences: integer('cross_check_differences'),
+    crossCheckError: text('cross_check_error'),
     createdAt: createdAt(),
   },
   (t) => [

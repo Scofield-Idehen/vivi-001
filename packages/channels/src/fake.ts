@@ -6,6 +6,7 @@ import {
   type ChannelListingRef,
   type ChannelMapping,
   type ChannelMappingRef,
+  type ChannelNight,
   type ChannelProvider,
   type ChannelRef,
   type ChannelSetup,
@@ -48,13 +49,60 @@ export class FakeChannelProvider implements ChannelProvider {
   async pushAvailability(updates: AvailabilityUpdate[]): Promise<PushResult> {
     this.maybeFail();
     this.availabilityCalls.push(updates);
+    for (const u of updates) {
+      for (let date = u.dateFrom; date <= u.dateTo; date = nextDay(date)) {
+        this.setNight(u.ref.externalPropertyId, date, { available: u.available });
+      }
+    }
     return { taskId: `fake-task-${++this.taskCounter}`, warnings: [] };
   }
 
   async pushRestrictions(updates: RestrictionUpdate[]): Promise<PushResult> {
     this.maybeFail();
     this.restrictionCalls.push(updates);
+    for (const u of updates) {
+      const changes: Partial<ChannelNight> = {};
+      // The stand-in keeps prices as Channex reads them back: two decimals, as "150.00".
+      if (u.rateMinor !== undefined) changes.rate = (u.rateMinor / 100).toFixed(2);
+      if (u.minStayArrival !== undefined) changes.minStayArrival = u.minStayArrival;
+      if (u.maxStay !== undefined) changes.maxStay = u.maxStay;
+      if (u.closedToArrival !== undefined) changes.closedToArrival = u.closedToArrival;
+      if (u.closedToDeparture !== undefined) changes.closedToDeparture = u.closedToDeparture;
+      if (u.stopSell !== undefined) changes.stopSell = u.stopSell;
+      for (let date = u.dateFrom; date <= u.dateTo; date = nextDay(date)) {
+        this.setNight(u.ref.externalPropertyId, date, changes);
+      }
+    }
     return { taskId: `fake-task-${++this.taskCounter}`, warnings: [] };
+  }
+
+  /** What the stand-in holds per property and night, as sent to it; tests change a night to stand in for drift. */
+  readonly nights = new Map<string, Map<string, Partial<ChannelNight>>>();
+
+  setNight(externalPropertyId: string, date: string, changes: Partial<ChannelNight>): void {
+    const held = this.nights.get(externalPropertyId) ?? new Map<string, Partial<ChannelNight>>();
+    held.set(date, { ...held.get(date), ...changes });
+    this.nights.set(externalPropertyId, held);
+  }
+
+  async fetchInventory(ref: ExternalPropertyRef, dateFrom: string, dateTo: string): Promise<ChannelNight[]> {
+    this.maybeFail();
+    const held = this.nights.get(ref.externalPropertyId);
+    const nights: ChannelNight[] = [];
+    for (let date = dateFrom; date <= dateTo; date = nextDay(date)) {
+      nights.push({
+        date,
+        available: null,
+        rate: null,
+        minStayArrival: null,
+        maxStay: null,
+        closedToArrival: null,
+        closedToDeparture: null,
+        stopSell: null,
+        ...held?.get(date),
+      });
+    }
+    return nights;
   }
 
   async fetchBookingRevisionFeed(options?: { externalPropertyId?: string }): Promise<BookingRevision[]> {
@@ -181,6 +229,12 @@ export class FakeChannelProvider implements ChannelProvider {
     }
     return { ...(stored as Omit<BookingRevision, 'raw'>), raw };
   }
+}
+
+function nextDay(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
 }
 
 /** A revision as the stand-in sends it: its payload is the revision itself, as a real one's would be. */

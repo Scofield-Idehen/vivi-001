@@ -22,6 +22,9 @@ export async function channexStateOf(tx: Tx, propertyId: string): Promise<Channe
       createdAt: channexMappings.createdAt,
       autoClose: channexMappings.autoClose,
       autoCloseCheckedAt: channexMappings.autoCloseCheckedAt,
+      crossCheckedAt: channexMappings.crossCheckedAt,
+      crossCheckDifferences: channexMappings.crossCheckDifferences,
+      crossCheckError: channexMappings.crossCheckError,
     })
     .from(channexMappings)
     .where(eq(channexMappings.propertyId, propertyId));
@@ -46,6 +49,9 @@ export async function channexStateOf(tx: Tx, propertyId: string): Promise<Channe
     attempts: setup?.attempts ?? 0,
     autoClose: mapping?.autoClose ?? null,
     autoCloseCheckedAt: mapping?.autoCloseCheckedAt ? toIso(mapping.autoCloseCheckedAt) : null,
+    crossCheckedAt: mapping?.crossCheckedAt ? toIso(mapping.crossCheckedAt) : null,
+    crossCheckDifferences: mapping?.crossCheckDifferences ?? null,
+    crossCheckError: mapping?.crossCheckError ?? null,
   };
   if (mapping) return { ...base, status: 'connected', error: null };
   if (!setup) return { ...base, status: 'not_connected' };

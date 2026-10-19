@@ -9,7 +9,9 @@ export interface Alert {
   severity: AlertSeverity;
   title: string;
   detail?: string;
-  /** Where in the app to fix it, e.g. the property's Sync Health row. */
+  /** Where in the app to fix it, as a path such as /properties/…; the sink turns it into a link. */
+  path?: string;
+  /** A full link, when the path isn't enough. */
   link?: string;
 }
 
@@ -22,6 +24,34 @@ const ICON: Record<AlertSeverity, string> = {
   warning: ':large_orange_circle:',
   info: ':white_circle:',
 };
+
+/**
+ * Wraps a sink for the worker: adds the app's address to each alert's path, so the message opens in
+ * the right place, and never lets a failed alert fail the work it reports on. The sync log is the
+ * record; the alert is the nudge, and a Slack outage must not stop a cross-check or a booking.
+ */
+export class AppAlerts implements AlertSink {
+  constructor(
+    private readonly inner: AlertSink,
+    private readonly options: {
+      appUrl?: string | null;
+      onError?: (error: unknown, alert: Alert) => void;
+    } = {},
+  ) {}
+
+  async send(alert: Alert): Promise<void> {
+    const link =
+      alert.link ??
+      (alert.path && this.options.appUrl
+        ? `${this.options.appUrl.replace(/\/$/, '')}${alert.path}`
+        : undefined);
+    try {
+      await this.inner.send(link ? { ...alert, link } : alert);
+    } catch (error) {
+      this.options.onError?.(error, alert);
+    }
+  }
+}
 
 /** Posts to a Slack incoming webhook. */
 export class SlackWebhookSink implements AlertSink {

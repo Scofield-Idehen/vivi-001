@@ -170,6 +170,70 @@ describe('Channex adapter', () => {
     expect(open).toMatchObject({ min_stay_arrival: 1, max_stay: 14 });
   });
 
+  it('reads a property’s nights back, with prices as decimals and no longest stay as null', async () => {
+    const calls: string[] = [];
+    const impl = (async (url: string) => {
+      calls.push(url);
+      const body = url.includes('/availability')
+        ? { data: { 'cx-room': { '2026-11-01': 1, '2026-11-02': 0 } } }
+        : {
+            data: {
+              'cx-rate': {
+                '2026-11-01': {
+                  rate: '150.00',
+                  min_stay_arrival: 2,
+                  max_stay: 0,
+                  closed_to_arrival: false,
+                  closed_to_departure: false,
+                  stop_sell: false,
+                },
+                '2026-11-02': { rate: '190.00', min_stay_arrival: 3, max_stay: 14, closed_to_arrival: true },
+              },
+            },
+          };
+      return new Response(JSON.stringify(body), { status: 200 });
+    }) as unknown as typeof fetch;
+    const provider = new ChannexProvider({ baseUrl: 'https://x/api/v1', apiKey: 'key', fetch: impl });
+    const nights = await provider.fetchInventory(REF, '2026-11-01', '2026-11-03');
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toContain('filter%5Bproperty_id%5D=cx-prop');
+    expect(calls[0]).toContain('filter%5Bdate%5D%5Bgte%5D=2026-11-01');
+    expect(calls[1]).toContain('filter%5Brestrictions%5D=rate%2Cmin_stay_arrival%2Cmax_stay');
+    expect(nights).toEqual([
+      {
+        date: '2026-11-01',
+        available: 1,
+        rate: '150.00',
+        minStayArrival: 2,
+        maxStay: null,
+        closedToArrival: false,
+        closedToDeparture: false,
+        stopSell: false,
+      },
+      {
+        date: '2026-11-02',
+        available: 0,
+        rate: '190.00',
+        minStayArrival: 3,
+        maxStay: 14,
+        closedToArrival: true,
+        closedToDeparture: null,
+        stopSell: null,
+      },
+      // A night Channex has never been given: nothing to compare.
+      {
+        date: '2026-11-03',
+        available: null,
+        rate: null,
+        minStayArrival: null,
+        maxStay: null,
+        closedToArrival: null,
+        closedToDeparture: null,
+        stopSell: null,
+      },
+    ]);
+  });
+
   it('turns a 429 into a retryable rate-limit error', async () => {
     const { impl } = mockFetch(
       429,

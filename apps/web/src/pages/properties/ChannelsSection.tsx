@@ -62,6 +62,7 @@ function ChannelManager({
             Whether Channex closes booked nights itself hasn’t been checked yet; the worker looks daily.
           </StatusDot>
         )}
+        <CrossCheckLine state={state} />
       </span>
     ) : state.status === 'connecting' ? (
       <span className="inline-flex items-center gap-2">
@@ -100,6 +101,44 @@ function ChannelManager({
         </Button>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Last night's cross-check: V-01's calendar against what Channex holds for the next 90 nights. A
+ * difference was already sent again; it is shown so a pattern (someone editing in Channex) gets seen.
+ */
+function CrossCheckLine({ state }: { state: ChannexState }) {
+  if (state.crossCheckError) {
+    return (
+      <StatusDot status="urgent">
+        Couldn’t check the calendar against Channex {when(state.crossCheckedAt)}: {state.crossCheckError} The
+        worker tries again tonight.
+      </StatusDot>
+    );
+  }
+  if (state.crossCheckedAt === null || state.crossCheckDifferences === null) {
+    return (
+      <StatusDot status="pending">
+        The calendar hasn’t been checked against Channex yet; the worker compares the next 90 nights every
+        night.
+      </StatusDot>
+    );
+  }
+  if (state.crossCheckDifferences > 0) {
+    const n = state.crossCheckDifferences;
+    return (
+      <StatusDot status="pending">
+        Channex didn’t match {V01} on {n} {n === 1 ? 'night' : 'nights'} when checked{' '}
+        {when(state.crossCheckedAt)}; {n === 1 ? 'it was' : 'they were'} sent again. If this keeps happening,
+        someone is changing things in Channex or on a channel.
+      </StatusDot>
+    );
+  }
+  return (
+    <StatusDot status="done">
+      Calendar checked against Channex {when(state.crossCheckedAt)}: the next 90 nights match.
+    </StatusDot>
   );
 }
 

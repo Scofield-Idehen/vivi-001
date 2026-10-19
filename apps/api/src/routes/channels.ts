@@ -460,6 +460,18 @@ export function channelRoutes(app: FastifyInstance, deps: { scope: RequestScope 
       const [booking] = await tx
         .select({ at: sql<string | null>`max(${reservations.createdAt})` })
         .from(reservations);
+      const [checks] = await tx
+        .select({
+          lastCheckedAt: sql<string | null>`max(${channexMappings.crossCheckedAt})`,
+          properties: sql<number>`count(*)::int`,
+          matching: sql<number>`(count(*) filter (where ${channexMappings.crossCheckDifferences} = 0))::int`,
+          differing: sql<number>`(count(*) filter (where ${channexMappings.crossCheckDifferences} > 0))::int`,
+          failed: sql<number>`(count(*) filter (where ${channexMappings.crossCheckError} is not null))::int`,
+          unchecked: sql<number>`(count(*) filter (where ${channexMappings.crossCheckedAt} is null))::int`,
+        })
+        .from(channexMappings)
+        .innerJoin(properties, eq(properties.id, channexMappings.propertyId))
+        .where(and(eq(properties.managedBy, 'v01'), isNull(properties.archivedAt)));
       const recent = await tx
         .select({
           id: syncLog.id,
@@ -480,9 +492,21 @@ export function channelRoutes(app: FastifyInstance, deps: { scope: RequestScope 
         oldestWaitingAt: outbox?.oldestWaitingAt ? toIso(outbox.oldestWaitingAt) : null,
         lastSentAt: outbox?.lastSentAt ? toIso(outbox.lastSentAt) : null,
         lastBookingAt: booking?.at ? toIso(booking.at) : null,
+        crossCheck: {
+          lastCheckedAt: checks?.lastCheckedAt ? toIso(checks.lastCheckedAt) : null,
+          properties: checks?.properties ?? 0,
+          matching: checks?.matching ?? 0,
+          differing: checks?.differing ?? 0,
+          failed: checks?.failed ?? 0,
+          unchecked: checks?.unchecked ?? 0,
+        },
         recent: recent.map((r) => {
           const detail = (r.detail ?? {}) as Record<string, unknown>;
-          const message = [detail.error, detail.account, detail.listing]
+          const drift =
+            typeof detail.nightsDiffering === 'number' && detail.nightsDiffering > 0
+              ? `${detail.nightsDiffering} ${detail.nightsDiffering === 1 ? 'night' : 'nights'} differed, sent again`
+              : null;
+          const message = [detail.error, detail.account, detail.listing, drift]
             .filter((v): v is string => typeof v === 'string')
             .join(' · ');
           return {

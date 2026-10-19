@@ -5,6 +5,26 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-19
 
+- **Checks and alerts (integration step 6, built 19 Oct 2026).** Three parts. (1) The nightly
+  cross-check (`nightly-cross-check`, 03:30 London, an hour after the full sync): for every property
+  V-01 runs, the worker reads back what Channex holds for the next 90 nights (availability, and the
+  rate plan's price and stay rules) and compares it with V-01's own calendar, built the same way the
+  outbox builds a send. A night that differs is queued to go again through the outbox, the
+  difference is written to the sync log (`cross_check`, with the first 60 differences), the mapping
+  records when it was checked and how many nights differed, and a warning alert names the property.
+  A check waits when the property still has changes in the outbox, and records an error when Channex
+  can't be asked. Prices are compared only when V-01 sets them (not PriceLabs); `stop_sell` is read
+  but not compared, since V-01 never sends it. The property page shows "Calendar checked against
+  Channex … the next 90 nights match", and Sync health has a "Checked against Channex" tile.
+  (2) The Today page now leads with **Needs attention**: overlapping bookings, changes Channex refused,
+  last night's drift, Channex's auto-close turned off, accounts in error or waiting to be authorised,
+  listing-link and Airbnb-settings refusals, properties that couldn't be connected, and the worker
+  not reporting in for 10 minutes (`app.worker_last_seen()`, callable by the API). Each row is the
+  click target and opens where the problem is fixed. Under it: arrivals, departures, who is in
+  tonight and cleans due, by role (the field team sees no guest names; accounts see no channel
+  problems). (3) Alerts carry a path in the app; the worker's `AppAlerts` wrapper turns it into a
+  link with `APP_URL`, and a Slack failure is logged and never fails the work that raised it.
+
 - **First real connection from the app, 19 Oct 2026, 14:48.** On Alpha's laptop, against Supabase
   staging and the real Channex staging key: a property added in V-01 (photos in the public
   `property-photos` bucket) was created in Channex by the worker, in a Vivistays group, and the

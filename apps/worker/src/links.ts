@@ -136,6 +136,7 @@ async function connectPending(deps: WorkerDeps, orgId: string, stats: LinkStats)
           severity: 'warning',
           title: `Couldn't connect ${account.label} to Channex`,
           detail: message,
+          path: '/channels',
         });
       }
       stats.failed += 1;
@@ -404,6 +405,7 @@ async function syncLinks(deps: WorkerDeps, orgId: string, stats: LinkStats): Pro
           severity: 'warning',
           title: `Couldn't update the listing links on ${account.label}`,
           detail: message,
+          path: '/channels',
         });
       }
       if (!(error instanceof ChannelError)) throw error;

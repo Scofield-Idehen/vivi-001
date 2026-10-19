@@ -1,41 +1,15 @@
-import {
-  type ChannelProvider,
-  ChannexProvider,
-  createChannexRateLimiter,
-  FakeChannelProvider,
-} from '@v01/channels';
-import { WorkerDatabase } from '@v01/db';
-import { type AlertSink, LogSink, SlackWebhookSink } from '@v01/integrations';
-import { pino } from 'pino';
 import { processWebhooks, sweepBookingFeed } from './bookings.ts';
 import { markDirtyAfterCheckOut } from './cleaning.ts';
-import type { WorkerDeps } from './deps.ts';
-import { loadEnv } from './env.ts';
+import { crossCheckAll } from './cross-check.ts';
 import { enqueueFullSync } from './full-sync.ts';
 import { startJobs } from './jobs.ts';
 import { syncChannelLinks } from './links.ts';
+import { liveDeps } from './live-deps.ts';
 import { processOutbox } from './outbox.ts';
 import { beginRun, checkAllAutoClose, recover } from './safety.ts';
 import { connectProperties } from './setup.ts';
 
-const env = loadEnv();
-const log = pino({ level: env.LOG_LEVEL, base: { service: 'v01-worker' } });
-
-const provider: ChannelProvider =
-  env.CHANNEL_PROVIDER === 'channex' && env.CHANNEX_API_KEY
-    ? new ChannexProvider({ baseUrl: env.CHANNEX_BASE_URL, apiKey: env.CHANNEX_API_KEY })
-    : new FakeChannelProvider();
-const alerts: AlertSink = env.SLACK_ALERTS_WEBHOOK_URL
-  ? new SlackWebhookSink(env.SLACK_ALERTS_WEBHOOK_URL)
-  : new LogSink((message) => log.warn(message));
-
-const deps: WorkerDeps = {
-  db: new WorkerDatabase(env.DATABASE_URL, { applicationName: 'v01-worker', max: 5 }),
-  provider,
-  limiter: createChannexRateLimiter(),
-  alerts,
-  log,
-};
+const { env, deps, log } = liveDeps();
 
 /** Runs `task` every `intervalMs`, never overlapping itself, until stopped. */
 function every(name: string, intervalMs: number, task: () => Promise<unknown>): () => Promise<void> {
@@ -57,7 +31,7 @@ function every(name: string, intervalMs: number, task: () => Promise<unknown>): 
   };
 }
 
-log.info({ provider: provider.name }, 'Worker starting');
+log.info({ provider: deps.provider.name }, 'Worker starting');
 
 // Drain before push. While `holding` is true nothing goes out to the channel manager: the bookings
 // that arrived while V-01 was away are saved first (docs/runbooks/recovery.md, done by the worker).
@@ -101,8 +75,8 @@ const boss = env.JOBS_DATABASE_URL
         'nightly-full-sync': async () => (holding ? { skipped: 'recovering' } : enqueueFullSync(deps)),
         'daily-safety-check': () => checkAllAutoClose(deps),
         'hourly-listing-refresh': () => syncChannelLinks(deps, { refreshAll: true }),
-        // Phase 1: compare every calendar with the channel manager for the next 90 days.
-        'nightly-cross-check': async () => ({ skipped: 'cross-check is built in Phase 1' }),
+        // Every calendar against what Channex holds for the next 90 days; differing nights go again.
+        'nightly-cross-check': async () => (holding ? { skipped: 'recovering' } : crossCheckAll(deps)),
         'cleaning-after-check-out': () => markDirtyAfterCheckOut(deps),
       },
     })

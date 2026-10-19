@@ -53,6 +53,7 @@ export async function checkAutoClose(
         severity: 'warning',
         title: `Channex had stopped closing booked nights for ${mapping.propertyName}`,
         detail: 'The setting was off in Channex and has been turned back on. Check who changed it.',
+        path: `/properties/${mapping.propertyId}`,
       });
       return 'fixed';
     }

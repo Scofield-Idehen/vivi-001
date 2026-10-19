@@ -7,6 +7,7 @@ import {
   type ChannelListingRef,
   type ChannelMapping,
   type ChannelMappingRef,
+  type ChannelNight,
   type ChannelProvider,
   type ChannelRef,
   type ChannelSetup,
@@ -375,6 +376,42 @@ export class ChannexProvider implements ChannelProvider {
     );
   }
 
+  async fetchInventory(ref: ExternalPropertyRef, dateFrom: string, dateTo: string): Promise<ChannelNight[]> {
+    const range = {
+      'filter[property_id]': ref.externalPropertyId,
+      'filter[date][gte]': dateFrom,
+      'filter[date][lte]': dateTo,
+    };
+    // Channex returns { data: { roomTypeId: { date: units } } } and
+    // { data: { ratePlanId: { date: { rate: "200.00", min_stay_arrival: 2, ... } } } }.
+    const availability = await this.client.request<Record<string, Record<string, unknown>>>(
+      'GET',
+      `/availability?${new URLSearchParams(range)}`,
+    );
+    const restrictions = await this.client.request<Record<string, Record<string, Record<string, unknown>>>>(
+      'GET',
+      `/restrictions?${new URLSearchParams({ ...range, 'filter[restrictions]': READ_BACK_RESTRICTIONS })}`,
+    );
+    const units = availability.data?.[ref.externalRoomTypeId] ?? {};
+    const rules = restrictions.data?.[ref.externalRatePlanId] ?? {};
+    const nights: ChannelNight[] = [];
+    for (let date = dateFrom; date <= dateTo; date = nextDay(date)) {
+      const r = rules[date] ?? {};
+      const maxStay = numberOf(r.max_stay);
+      nights.push({
+        date,
+        available: numberOf(units[date]),
+        rate: decimalOf(r.rate),
+        minStayArrival: numberOf(r.min_stay_arrival),
+        maxStay: maxStay === 0 ? null : maxStay,
+        closedToArrival: booleanOf(r.closed_to_arrival),
+        closedToDeparture: booleanOf(r.closed_to_departure),
+        stopSell: booleanOf(r.stop_sell),
+      });
+    }
+    return nights;
+  }
+
   async activateChannel(channelId: string): Promise<void> {
     await this.client.request('POST', `/channels/${encodeURIComponent(channelId)}/activate`);
   }
@@ -480,6 +517,35 @@ function toRevision(resource: RevisionResource): BookingRevision {
     insertedAt: a.inserted_at ?? null,
     raw: resource,
   };
+}
+
+/** Channex wants the restrictions it should read back named; it answers with nothing otherwise. */
+const READ_BACK_RESTRICTIONS =
+  'rate,min_stay_arrival,max_stay,closed_to_arrival,closed_to_departure,stop_sell';
+
+function numberOf(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)))
+    return Number(value);
+  return null;
+}
+
+/** A price as Channex reads it back: a decimal string such as "200.00", or a number from older responses. */
+function decimalOf(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return value.trim();
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+function booleanOf(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null;
+}
+
+/** The day after an ISO date, in UTC: calendar arithmetic only, no time zones involved. */
+function nextDay(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
 }
 
 function toPushResult(envelope: ChannexEnvelope<unknown>): PushResult {

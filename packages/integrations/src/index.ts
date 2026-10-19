@@ -1,4 +1,11 @@
-export { type Alert, type AlertSeverity, type AlertSink, LogSink, SlackWebhookSink } from './alerts.ts';
+export {
+  type Alert,
+  type AlertSeverity,
+  type AlertSink,
+  AppAlerts,
+  LogSink,
+  SlackWebhookSink,
+} from './alerts.ts';
 
 /*
  * Planned adapters, each behind its own interface like the channel swap layer

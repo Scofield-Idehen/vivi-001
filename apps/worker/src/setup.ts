@@ -241,6 +241,7 @@ async function connectOne(
       severity: 'urgent',
       title: `Couldn't connect ${property.name} to the channel manager`,
       detail: `${message} Fix the cause, then ask again from the property's page.`,
+      path: `/properties/${property.id}`,
     });
     return 'failed';
   }

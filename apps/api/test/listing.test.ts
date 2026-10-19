@@ -421,6 +421,9 @@ describe('connecting to the channel manager', () => {
       attempts: 0,
       autoClose: null,
       autoCloseCheckedAt: null,
+      crossCheckedAt: null,
+      crossCheckDifferences: null,
+      crossCheckError: null,
     });
     const { status, body } = await connect(cabin);
     expect(status).toBe(200);

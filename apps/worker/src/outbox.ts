@@ -92,6 +92,7 @@ async function processGroup(
         severity: 'urgent',
         title: `Not sent to channels: ${context.property?.name ?? propertyId}`,
         detail: message,
+        path: '/channels',
       });
     }
     return 'failed' as const;
@@ -203,6 +204,7 @@ async function processGroup(
         severity: 'warning',
         title: `Channel manager accepted ${WHAT[kind]} with warnings: ${property.name}`,
         detail: result.warnings.join('; '),
+        path: '/channels',
       });
     }
     deps.log.info({ orgId, propertyId, kind, taskId: result.taskId, ...detail }, 'Sent to channels');

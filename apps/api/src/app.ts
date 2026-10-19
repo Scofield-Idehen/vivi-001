@@ -23,6 +23,7 @@ import { fieldRoutes } from './routes/fields.ts';
 import { meRoutes } from './routes/me.ts';
 import { propertyRoutes } from './routes/properties.ts';
 import { reservationRoutes } from './routes/reservations.ts';
+import { todayRoutes } from './routes/today.ts';
 import { webhookRoutes } from './routes/webhooks.ts';
 import { workspaceRoutes } from './routes/workspace.ts';
 import { SecretBox } from './secrets.ts';
@@ -123,6 +124,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   cleaningRoutes(app, { scope });
   channexRoutes(app, { scope });
   channelRoutes(app, { scope });
+  todayRoutes(app, { scope });
   consoleRoutes(app, { scope });
   await webhookRoutes(app, { db: deps.db, channexSecret: deps.env.CHANNEX_WEBHOOK_SECRET });
 
