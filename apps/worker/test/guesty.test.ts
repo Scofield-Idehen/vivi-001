@@ -374,6 +374,32 @@ describe('importing an account', () => {
     ]);
   });
 
+  it('adds any standard field that is missing, and leaves the team\u2019s own fields alone', async () => {
+    await owner(
+      "delete from app.custom_fields where organisation_id = $1 and name in ('Wi-Fi name', 'Wi-Fi password')",
+      [op.orgId],
+    );
+    await owner(
+      "insert into app.custom_fields (organisation_id, name, kind, position) values ($1, 'Parking', 'text', 9)",
+      [op.orgId],
+    );
+    const [added] = await owner<{ n: number }>('select app.standard_custom_fields($1) as n', [op.orgId]);
+    expect(added?.n).toBe(2);
+    const names = await owner<{ name: string }>(
+      'select name from app.custom_fields where organisation_id = $1 order by position, name',
+      [op.orgId],
+    );
+    expect(names.map((f) => f.name)).toEqual([
+      'Top lock code',
+      'Bottom lock code',
+      'Check-in instructions',
+      'Parking',
+      'Wi-Fi name',
+      'Wi-Fi password',
+    ]);
+    await owner("delete from app.custom_fields where organisation_id = $1 and name = 'Parking'", [op.orgId]);
+  });
+
   it('rehearses without keeping anything', async () => {
     const { client } = stubGuesty();
     const summary = await importFromGuesty(deps(), {
