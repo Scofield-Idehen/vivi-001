@@ -42,10 +42,26 @@ function ChannelManager({
 
   const line =
     state.status === 'connected' ? (
-      <StatusDot status="done">
-        Connected to Channex{state.finishedAt ? `, ${when(state.finishedAt)}` : ''}. Its Airbnb, Booking.com
-        and Vrbo listings can be linked to it next.
-      </StatusDot>
+      <span className="flex flex-col gap-1">
+        <StatusDot status="done">
+          Connected to Channex{state.finishedAt ? `, ${when(state.finishedAt)}` : ''}. Its Airbnb, Booking.com
+          and Vrbo listings can be linked to it next.
+        </StatusDot>
+        {state.autoClose === true ? (
+          <StatusDot status="done">
+            Channex closes a booked night by itself, so nothing is sold twice even while {V01} is catching up
+            or down. Checked {state.autoCloseCheckedAt ? when(state.autoCloseCheckedAt) : 'today'}.
+          </StatusDot>
+        ) : state.autoClose === false ? (
+          <StatusDot status="urgent">
+            Channex had stopped closing booked nights itself; the worker is turning it back on.
+          </StatusDot>
+        ) : (
+          <StatusDot status="pending">
+            Whether Channex closes booked nights itself hasn’t been checked yet; the worker looks daily.
+          </StatusDot>
+        )}
+      </span>
     ) : state.status === 'connecting' ? (
       <span className="inline-flex items-center gap-2">
         <Spinner size={16} />

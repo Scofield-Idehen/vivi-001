@@ -12,7 +12,12 @@ const PropertyParams = z.object({ id: z.uuid() });
 /** Where a property stands with Channex, from its mapping and its latest request. */
 export async function channexStateOf(tx: Tx, propertyId: string): Promise<ChannexState> {
   const [mapping] = await tx
-    .select({ channexPropertyId: channexMappings.channexPropertyId, createdAt: channexMappings.createdAt })
+    .select({
+      channexPropertyId: channexMappings.channexPropertyId,
+      createdAt: channexMappings.createdAt,
+      autoClose: channexMappings.autoClose,
+      autoCloseCheckedAt: channexMappings.autoCloseCheckedAt,
+    })
     .from(channexMappings)
     .where(eq(channexMappings.propertyId, propertyId));
   const [setup] = await tx
@@ -34,6 +39,8 @@ export async function channexStateOf(tx: Tx, propertyId: string): Promise<Channe
     finishedAt: setup?.finishedAt ? toIso(setup.finishedAt) : mapping ? toIso(mapping.createdAt) : null,
     error: setup?.lastError ?? null,
     attempts: setup?.attempts ?? 0,
+    autoClose: mapping?.autoClose ?? null,
+    autoCloseCheckedAt: mapping?.autoCloseCheckedAt ? toIso(mapping.autoCloseCheckedAt) : null,
   };
   if (mapping) return { ...base, status: 'connected', error: null };
   if (!setup) return { ...base, status: 'not_connected' };

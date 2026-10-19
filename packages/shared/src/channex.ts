@@ -27,5 +27,11 @@ export const ChannexStateSchema = z.object({
   /** The last thing that went wrong, while connecting or after giving up. */
   error: z.string().nullable(),
   attempts: z.number().int(),
+  /**
+   * Whether Channex closes a booked night by itself, as last checked by the worker: true, false
+   * (off in Channex, being turned back on), or null when not yet checked or not connected.
+   */
+  autoClose: z.boolean().nullable(),
+  autoCloseCheckedAt: z.string().nullable(),
 });
 export type ChannexState = z.infer<typeof ChannexStateSchema>;

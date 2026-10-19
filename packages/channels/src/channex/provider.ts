@@ -13,6 +13,24 @@ import {
 import { ChannexClient, type ChannexConfig, type ChannexEnvelope } from './client.ts';
 
 /** The id Channex gave something it just created. */
+/**
+ * Channex closes a night itself the moment a booking arrives, so it is never sold twice while V-01
+ * is catching up, or down (recovery runbook). These are checked again after every connection and
+ * daily, in case someone turned them off in Channex.
+ */
+const AUTO_CLOSE_SETTINGS = {
+  allow_availability_autoupdate_on_confirmation: true,
+  allow_availability_autoupdate_on_modification: true,
+  allow_availability_autoupdate_on_cancellation: true,
+} as const;
+const AUTO_CLOSE_KEYS = Object.keys(AUTO_CLOSE_SETTINGS) as (keyof typeof AUTO_CLOSE_SETTINGS)[];
+
+function settingsOf(response: unknown): Record<string, unknown> {
+  const data = (response as { data?: { attributes?: { settings?: unknown } } } | null)?.data;
+  const settings = data?.attributes?.settings;
+  return settings && typeof settings === 'object' ? (settings as Record<string, unknown>) : {};
+}
+
 function createdId(envelope: ChannexEnvelope<unknown>, what: string): string {
   const data = envelope.data;
   const id = data && typeof data === 'object' && 'id' in data ? data.id : undefined;
@@ -102,11 +120,7 @@ export class ChannexProvider implements ChannelProvider {
         ...(setup.address ? { address: setup.address } : {}),
         ...(setup.postcode ? { zip_code: setup.postcode } : {}),
         settings: {
-          // Channex closes a night itself the moment a booking arrives, so it is never sold twice
-          // while V-01 is catching up, or down (recovery runbook).
-          allow_availability_autoupdate_on_confirmation: true,
-          allow_availability_autoupdate_on_modification: true,
-          allow_availability_autoupdate_on_cancellation: true,
+          ...AUTO_CLOSE_SETTINGS,
           // V-01's minimum stay applies to the night a guest arrives.
           min_stay_type: 'arrival',
         },
@@ -169,6 +183,17 @@ export class ChannexProvider implements ChannelProvider {
       }
       throw error;
     }
+  }
+
+  async ensureAutoClose(externalPropertyId: string): Promise<{ wasOn: boolean }> {
+    const id = encodeURIComponent(externalPropertyId);
+    const current = await this.client.request('GET', `/properties/${id}`);
+    const settings = settingsOf(current);
+    const wasOn = AUTO_CLOSE_KEYS.every((key) => settings[key] === true);
+    if (!wasOn) {
+      await this.client.request('PUT', `/properties/${id}`, { property: { settings: AUTO_CLOSE_SETTINGS } });
+    }
+    return { wasOn };
   }
 
   async createGroup(title: string): Promise<string> {

@@ -261,6 +261,8 @@ const NOT_CONNECTED: ChannexState = {
   finishedAt: null,
   error: null,
   attempts: 0,
+  autoClose: null,
+  autoCloseCheckedAt: null,
 };
 
 /** A connection the stand-in worker finished: the sample properties V-01 runs were "connected" when added. */
@@ -273,7 +275,18 @@ function connectedSince(at: string): ChannexState {
     finishedAt: at,
     error: null,
     attempts: 1,
+    // The stand-in worker read it back the last time it "ran": early this morning.
+    autoClose: true,
+    autoCloseCheckedAt: checkedThisMorning(),
   };
+}
+
+/** The daily safety check runs at 04:15; the demo says it ran this morning. */
+function checkedThisMorning(): string {
+  const at = new Date();
+  at.setHours(4, 15, 0, 0);
+  if (at.getTime() > Date.now()) at.setDate(at.getDate() - 1);
+  return at.toISOString();
 }
 
 /**
@@ -294,6 +307,8 @@ function channexOf(detail: PropertyDetail): ChannexState {
       channexPropertyId: crypto.randomUUID(),
       finishedAt: new Date().toISOString(),
       attempts: 1,
+      autoClose: true,
+      autoCloseCheckedAt: new Date().toISOString(),
     };
   }
   return current;
@@ -1337,6 +1352,13 @@ function sync(): ConsoleSync {
     });
   }
   return {
+    worker: {
+      lastSeenAt: new Date(Date.now() - 20_000).toISOString(),
+      startedAt: checkedThisMorning(),
+      recovering: false,
+      // The stand-in worker came back once, after a 40-minute gap on 16 October, and drained 3 changes.
+      lastRecovery: { at: '2026-10-16T09:12:00.000Z', gapSeconds: 40 * 60, drained: 3 },
+    },
     rows,
     errors: [...s.errors]
       .sort((a, b) => a.minutesAgo - b.minutesAgo)

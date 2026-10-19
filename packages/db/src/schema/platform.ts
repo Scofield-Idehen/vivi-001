@@ -98,3 +98,26 @@ export const auditLog = app.table(
   },
   (t) => [index('audit_log_org_created_idx').on(t.organisationId, t.createdAt)],
 );
+
+/**
+ * One row per worker start. The heartbeat keeps `last_seen_at` fresh; a start that finds the
+ * previous row's heartbeat old knows V-01 was down, and drains the booking feed before any price
+ * or availability goes out (the recovery runbook, done by the worker itself). Not tied to an
+ * operator: the worker writes it, the console reads it through a function.
+ */
+export const workerRuns = app.table(
+  'worker_runs',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    startedAt: timestamp('started_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+    /** The previous run's last heartbeat, so the gap can be read back later. */
+    previousSeenAt: timestamp('previous_seen_at', { withTimezone: true, mode: 'string' }),
+    gapSeconds: integer('gap_seconds'),
+    /** 'none' when the gap was short; 'draining' while bookings are being saved; 'done' after. */
+    recovery: text('recovery').notNull().default('none'),
+    drainedRevisions: integer('drained_revisions').notNull().default(0),
+    recoveredAt: timestamp('recovered_at', { withTimezone: true, mode: 'string' }),
+  },
+  (t) => [index('worker_runs_started_idx').on(t.startedAt)],
+);

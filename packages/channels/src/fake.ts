@@ -75,6 +75,16 @@ export class FakeChannelProvider implements ChannelProvider {
     };
   }
 
+  /** Which stand-in properties close booked nights themselves; tests switch one off to see it fixed. */
+  readonly autoClose = new Map<string, boolean>();
+
+  async ensureAutoClose(externalPropertyId: string): Promise<{ wasOn: boolean }> {
+    this.maybeFail();
+    const wasOn = this.autoClose.get(externalPropertyId) ?? true;
+    this.autoClose.set(externalPropertyId, true);
+    return { wasOn };
+  }
+
   async createGroup(title: string): Promise<string> {
     this.maybeFail();
     this.groups.push(title);

@@ -133,7 +133,25 @@ export const ConsoleSyncErrorSchema = z.object({
 });
 export type ConsoleSyncError = z.infer<typeof ConsoleSyncErrorSchema>;
 
+/** The worker itself: when it was last seen, and the last time it came back after a gap. */
+export const ConsoleWorkerSchema = z.object({
+  /** Null until the worker has run once. */
+  lastSeenAt: Timestamp.nullable(),
+  startedAt: Timestamp.nullable(),
+  /** True while bookings that arrived during a gap are being saved, before anything is sent. */
+  recovering: z.boolean(),
+  lastRecovery: z
+    .object({
+      at: Timestamp,
+      gapSeconds: Count,
+      drained: Count,
+    })
+    .nullable(),
+});
+export type ConsoleWorker = z.infer<typeof ConsoleWorkerSchema>;
+
 export const ConsoleSyncSchema = z.object({
+  worker: ConsoleWorkerSchema,
   rows: z.array(ConsoleSyncRowSchema),
   errors: z.array(ConsoleSyncErrorSchema),
   generatedAt: Timestamp,

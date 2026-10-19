@@ -14,6 +14,7 @@ import { loadEnv } from './env.ts';
 import { enqueueFullSync } from './full-sync.ts';
 import { startJobs } from './jobs.ts';
 import { processOutbox } from './outbox.ts';
+import { beginRun, checkAllAutoClose, recover } from './safety.ts';
 import { connectProperties } from './setup.ts';
 
 const env = loadEnv();
@@ -57,17 +58,31 @@ function every(name: string, intervalMs: number, task: () => Promise<unknown>): 
 
 log.info({ provider: provider.name }, 'Worker starting');
 
+// Drain before push. While `holding` is true nothing goes out to the channel manager: the bookings
+// that arrived while V-01 was away are saved first (docs/runbooks/recovery.md, done by the worker).
+const run = await beginRun(deps);
+let holding = run.recovering;
+if (holding) log.warn({ gapSeconds: run.gapSeconds }, 'Back after a gap: draining bookings before sending');
+
 const stops = [
+  every('heartbeat', 30_000, () => deps.db.heartbeat(run.runId)),
   every('webhooks', env.WEBHOOK_INTERVAL_MS, () => processWebhooks(deps)),
   every('outbox', env.OUTBOX_INTERVAL_MS, async () => {
+    if (holding) return;
     const stats = await processOutbox(deps);
     if (stats.claimed) log.info(stats, 'Outbox processed');
   }),
   every('setup', env.OUTBOX_INTERVAL_MS, async () => {
+    if (holding) return;
     const stats = await connectProperties(deps);
     if (stats.claimed) log.info(stats, 'Properties connected');
   }),
 ];
+
+if (holding) {
+  await recover(deps, run);
+  holding = false;
+}
 
 if (!env.JOBS_DATABASE_URL) log.warn({}, 'JOBS_DATABASE_URL not set: scheduled jobs are off');
 const boss = env.JOBS_DATABASE_URL
@@ -76,7 +91,8 @@ const boss = env.JOBS_DATABASE_URL
       log,
       handlers: {
         'booking-feed-sweep': () => sweepBookingFeed(deps),
-        'nightly-full-sync': () => enqueueFullSync(deps),
+        'nightly-full-sync': async () => (holding ? { skipped: 'recovering' } : enqueueFullSync(deps)),
+        'daily-safety-check': () => checkAllAutoClose(deps),
         // Phase 1: compare every calendar with the channel manager for the next 90 days.
         'nightly-cross-check': async () => ({ skipped: 'cross-check is built in Phase 1' }),
         'cleaning-after-check-out': () => markDirtyAfterCheckOut(deps),

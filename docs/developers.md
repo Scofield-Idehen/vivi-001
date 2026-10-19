@@ -149,10 +149,11 @@ Not set up yet. These are the steps for when the staging and production accounts
 
 ## Next (Phase 1)
 
-- Channex staging account in V-01's name; set `CHANNEL_PROVIDER=channex` and the staging key.
-- Property sync into Channex (step 3), auto-availability settings (step 6) and mapping screens
-  (step 7). Prices and stay rules out (step 4) and booking import (step 5) are built and tested against
-  the stand-in; they run against Channex once a property is mapped and moved over.
+- Channex staging account in Vivistays' name for now; set `CHANNEL_PROVIDER=channex` and the staging key.
+- Mapping screens (step 7): channel accounts and listing links, List on channels on the property page.
+  Property sync (step 3) and the downtime safety net (step 6) are built; prices and stay rules out
+  (step 4) and booking import (step 5) are built and tested against the stand-in. They run against
+  Channex once a property is mapped and moved over.
 - The Channels & sync screen from design phase D1 (the Calendar and Reservations are built).
 - Nightly cross-check.
 

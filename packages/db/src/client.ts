@@ -201,4 +201,43 @@ export class WorkerDatabase extends Database {
     const { rows } = await this.pool.query('select id, name from app.sys_list_organisations()');
     return rows;
   }
+
+  /**
+   * Records a worker start and says how long V-01 was away: the gap since the previous run's last
+   * heartbeat, or null when this is the first run ever. The caller decides whether that gap needs
+   * a recovery (draining the booking feed before anything is sent).
+   */
+  async beginRun(now: Date = new Date()): Promise<{ runId: number; gapSeconds: number | null }> {
+    const { rows: previous } = await this.pool.query<{ last_seen_at: Date }>(
+      'select last_seen_at from app.worker_runs order by started_at desc limit 1',
+    );
+    const previousSeen = previous[0]?.last_seen_at ?? null;
+    const gapSeconds = previousSeen
+      ? Math.max(0, Math.round((now.getTime() - previousSeen.getTime()) / 1000))
+      : null;
+    const { rows } = await this.pool.query<{ id: number }>(
+      `insert into app.worker_runs (started_at, last_seen_at, previous_seen_at, gap_seconds)
+       values ($1, $1, $2, $3) returning id`,
+      [now, previousSeen, gapSeconds],
+    );
+    return { runId: Number(rows[0]?.id), gapSeconds };
+  }
+
+  async heartbeat(runId: number, now: Date = new Date()): Promise<void> {
+    await this.pool.query('update app.worker_runs set last_seen_at = $2 where id = $1', [runId, now]);
+  }
+
+  async setRecovery(
+    runId: number,
+    recovery: 'draining' | 'done',
+    drainedRevisions: number,
+    now: Date = new Date(),
+  ): Promise<void> {
+    await this.pool.query(
+      `update app.worker_runs
+          set recovery = $2, drained_revisions = $3, recovered_at = case when $2 = 'done' then $4 else recovered_at end
+        where id = $1`,
+      [runId, recovery, drainedRevisions, now],
+    );
+  }
 }

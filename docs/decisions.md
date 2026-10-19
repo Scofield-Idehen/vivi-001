@@ -5,6 +5,18 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-19
 
+- **The downtime safety net is the worker's job, not a runbook step (integration step 6).** Every
+  property is made in Channex with its availability auto-update settings on, so Channex closes a
+  booked night by itself the moment a booking arrives; the worker reads that back after every
+  connection and daily (migration 0020 adds `auto_close` and when it was checked to the mapping),
+  turns it back on if someone switched it off in Channex, and raises a warning naming the property.
+  The property page says so under Channels. On start-up the worker compares its last heartbeat
+  (`worker_runs`) with the clock; after a gap of ten minutes or more it holds every outgoing send,
+  saves the webhooks and the booking feed until a pass finds nothing new, and only then lets prices
+  and availability out, so a stale push can never reopen a night booked during the gap. The console's
+  Sync health shows the worker's heartbeat, a recovery in progress, and the last one. The runbook
+  keeps the cross-check as the one manual step until it is built.
+
 - **The "needs you" list, settled with Alpha on 19 Oct 2026.**
   - Leaving Guesty is not decided yet, so the plan stays undated; the build continues regardless.
   - Vivistays' data comes out of Guesty through the Guesty Open API, with a key that lives only in

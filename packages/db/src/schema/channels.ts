@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   date,
   foreignKey,
   index,
@@ -99,6 +100,13 @@ export const channexMappings = app.table(
     channexPropertyId: text('channex_property_id').notNull(),
     channexRoomTypeId: text('channex_room_type_id'),
     channexRatePlanId: text('channex_rate_plan_id'),
+    /**
+     * Whether Channex closes a booked night itself (its availability auto-update settings), as last
+     * checked. Null until the worker has looked. This is what keeps a night from being sold twice
+     * while V-01 is down or catching up.
+     */
+    autoClose: boolean('auto_close'),
+    autoCloseCheckedAt: timestamp('auto_close_checked_at', { withTimezone: true, mode: 'string' }),
     createdAt: createdAt(),
   },
   (t) => [

@@ -17,6 +17,7 @@ import { silentLogger, type WorkerDeps } from '../src/deps.ts';
 import { enqueueFullSync, FULL_SYNC_DAYS } from '../src/full-sync.ts';
 import { startJobs } from '../src/jobs.ts';
 import { backoffMs, processOutbox } from '../src/outbox.ts';
+import { beginRun, checkAllAutoClose, recover } from '../src/safety.ts';
 import { connectProperties } from '../src/setup.ts';
 
 class MemoryAlerts implements AlertSink {
@@ -830,6 +831,7 @@ describe('scheduled jobs', () => {
         'nightly-full-sync': async () => 0,
         'nightly-cross-check': async () => 0,
         'cleaning-after-check-out': async () => 0,
+        'daily-safety-check': async () => 0,
       },
     });
     const schedules = await boss.getSchedules();
@@ -837,8 +839,131 @@ describe('scheduled jobs', () => {
     expect(schedules.map((s) => s.name).sort()).toEqual([
       'booking-feed-sweep',
       'cleaning-after-check-out',
+      'daily-safety-check',
       'nightly-cross-check',
       'nightly-full-sync',
     ]);
+  });
+});
+
+describe('the safety net for downtime', () => {
+  const safetyOf = async (propertyId: string) => {
+    const [row] = await owner<{ auto_close: boolean | null; checked: boolean }>(
+      'select auto_close, auto_close_checked_at is not null as checked from app.channex_mappings where property_id = $1',
+      [propertyId],
+    );
+    return row;
+  };
+
+  it('reads back that Channex closes booked nights itself when a property is connected', async () => {
+    const [row] = await owner<{ id: string }>(
+      `insert into app.properties (organisation_id, name, country_code, max_guests, managed_by)
+       values ($1, 'Net Cottage', 'GB', 4, 'guesty') returning id`,
+      [op.orgId],
+    );
+    const cottage = row!.id;
+    await owner(
+      `insert into app.channex_setups (organisation_id, property_id, requested_by) values ($1, $2, $3)`,
+      [op.orgId, cottage, op.userId],
+    );
+    expect(await connectProperties(deps)).toMatchObject({ done: 1 });
+    expect(await safetyOf(cottage)).toEqual({ auto_close: true, checked: true });
+    expect(alerts.sent.filter((a) => a.title.includes('stopped closing'))).toEqual([]);
+  });
+
+  it('turns the setting back on when someone turned it off in Channex, and says so', async () => {
+    provider.autoClose.set('cx-hvl', false);
+    expect(await checkAllAutoClose(deps)).toMatchObject({ fixed: 1, failed: 0 });
+    expect(provider.autoClose.get('cx-hvl')).toBe(true);
+    expect(await safetyOf(mapped)).toEqual({ auto_close: true, checked: true });
+    expect(alerts.sent).toContainEqual(
+      expect.objectContaining({
+        severity: 'warning',
+        title: 'Channex had stopped closing booked nights for Harbour View Lodge',
+      }),
+    );
+    const logged = await owner<{ kind: string; status: string }>(
+      `select kind, status from app.sync_log where property_id = $1 and kind = 'safety' order by id desc limit 1`,
+      [mapped],
+    );
+    expect(logged).toEqual([{ kind: 'safety', status: 'fixed' }]);
+    // A second look finds it on, and says nothing.
+    alerts.sent.length = 0;
+    expect(await checkAllAutoClose(deps)).toMatchObject({ fixed: 0, failed: 0 });
+    expect(alerts.sent).toEqual([]);
+  });
+
+  it('records when Channex could not be asked, and keeps going', async () => {
+    provider.failNextCallWith(new ChannelError('Channex is down', 'server', 503));
+    const stats = await checkAllAutoClose(deps);
+    expect(stats.failed).toBe(1);
+    expect(stats.checked).toBeGreaterThan(1);
+    const [row] = await owner<{ status: string }>(
+      `select status from app.sync_log where kind = 'safety' order by id desc limit 1`,
+    );
+    expect(row).toEqual({ status: 'error' });
+  });
+
+  it('knows when it has been away, and drains the booking feed before anything is sent', async () => {
+    // A first run ever: no gap, no recovery.
+    const first = await beginRun(deps);
+    expect(first).toMatchObject({ gapSeconds: null, recovering: false });
+
+    // The worker was last seen 40 minutes ago.
+    await owner(`update app.worker_runs set last_seen_at = now() - interval '40 minutes' where id = $1`, [
+      first.runId,
+    ]);
+    const later = { ...deps, now: () => new Date() };
+    const run = await beginRun(later);
+    expect(run.gapSeconds).toBeGreaterThanOrEqual(39 * 60);
+    expect(run.recovering).toBe(true);
+    const [draining] = await owner<{ recovery: string }>(
+      'select recovery from app.worker_runs where id = $1',
+      [run.runId],
+    );
+    expect(draining).toEqual({ recovery: 'draining' });
+
+    // Two bookings arrived at Channex while V-01 was away.
+    provider.feed = [
+      revision({
+        id: 'gap-1',
+        bookingId: 'bk-gap-1',
+        otaReservationCode: 'HMGAP0001',
+        arrivalDate: '2027-02-01',
+        departureDate: '2027-02-04',
+      }),
+      revision({
+        id: 'gap-2',
+        bookingId: 'bk-gap-2',
+        otaReservationCode: 'HMGAP0002',
+        arrivalDate: '2027-02-10',
+        departureDate: '2027-02-12',
+      }),
+    ];
+    const stats = await recover(later, run);
+    expect(stats).toMatchObject({ drained: 2 });
+    expect(provider.acknowledged).toEqual(expect.arrayContaining(['gap-1', 'gap-2']));
+    expect(await stayFor('bk-gap-1')).toMatchObject({ status: 'confirmed', check_in: '2027-02-01' });
+    const [done] = await owner<{ recovery: string; drained_revisions: number; recovered: boolean }>(
+      'select recovery, drained_revisions, recovered_at is not null as recovered from app.worker_runs where id = $1',
+      [run.runId],
+    );
+    expect(done).toEqual({ recovery: 'done', drained_revisions: 2, recovered: true });
+    expect(alerts.sent).toContainEqual(
+      expect.objectContaining({
+        severity: 'info',
+        title: 'V-01 is back after 40 minutes away',
+        detail: '2 booking changes saved before anything was sent to the channels.',
+      }),
+    );
+  });
+
+  it('does not recover after a short gap', async () => {
+    const run = await beginRun(deps);
+    await owner(`update app.worker_runs set last_seen_at = now() - interval '2 minutes' where id = $1`, [
+      run.runId,
+    ]);
+    const next = await beginRun({ ...deps, now: () => new Date() });
+    expect(next.recovering).toBe(false);
   });
 });

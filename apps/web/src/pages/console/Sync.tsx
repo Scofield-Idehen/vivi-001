@@ -9,6 +9,16 @@ const SOURCE_LABELS = {
   webhook: 'Channel message',
 } as const;
 
+/** "40 minutes", "3 hours", "2 days": a gap, in the largest unit that fits. */
+function gapWords(seconds: number): string {
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 90) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 36) return `${hours} hour${hours === 1 ? '' : 's'}`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'}`;
+}
+
 function Count({ value, urgent }: { value: number; urgent?: boolean }) {
   if (value === 0) return <span className="text-mist">0</span>;
   return <span className={urgent ? 'font-medium text-urgent' : 'text-ink'}>{number(value)}</span>;
@@ -20,7 +30,8 @@ export function ConsoleSync() {
 
   if (sync.isPending) return <Loading>Loading sync health</Loading>;
   if (sync.error) return <LoadError error={sync.error} />;
-  const { rows, errors } = sync.data;
+  const { worker, rows, errors } = sync.data;
+  const seenAgoMs = worker.lastSeenAt ? now - Date.parse(worker.lastSeenAt) : null;
 
   return (
     <>
@@ -28,6 +39,37 @@ export function ConsoleSync() {
         title="Sync health"
         description="What is waiting to go out to the channels, and what has come in from them, for every operator. Refreshed every 30 seconds."
       />
+
+      <section aria-labelledby="the-worker" className="mb-10">
+        <SectionHeading id="the-worker">The worker</SectionHeading>
+        <div className="flex flex-col gap-2 rounded-xl bg-paper px-4 py-3.5 text-[14px]">
+          {worker.lastSeenAt === null ? (
+            <StatusDot status="neutral">The worker hasn’t run yet.</StatusDot>
+          ) : worker.recovering ? (
+            <StatusDot status="pending">
+              Back after a gap and saving the bookings that arrived meanwhile. Nothing goes out to the
+              channels until that is done.
+            </StatusDot>
+          ) : seenAgoMs !== null && seenAgoMs > 3 * 60_000 ? (
+            <StatusDot status="urgent">
+              Not seen for {relativeTime(worker.lastSeenAt, now)}. Channex keeps closing booked nights itself
+              meanwhile; when the worker is back it saves those bookings before sending anything.
+            </StatusDot>
+          ) : (
+            <StatusDot status="done">
+              Running, last seen {relativeTime(worker.lastSeenAt, now)}
+              {worker.startedAt ? `; started ${dateTime(worker.startedAt)}` : ''}.
+            </StatusDot>
+          )}
+          {worker.lastRecovery ? (
+            <p className="text-[13px] text-slate">
+              Last recovery {dateTime(worker.lastRecovery.at)}: back after{' '}
+              {gapWords(worker.lastRecovery.gapSeconds)}, {number(worker.lastRecovery.drained)} booking{' '}
+              {worker.lastRecovery.drained === 1 ? 'change' : 'changes'} saved before anything was sent.
+            </p>
+          ) : null}
+        </div>
+      </section>
 
       <section aria-labelledby="by-operator">
         <SectionHeading id="by-operator">By operator</SectionHeading>

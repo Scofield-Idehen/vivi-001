@@ -15,6 +15,27 @@ order in which we come back.
 A full sync from out-of-date data would reopen dates that Channex has already closed for new
 bookings. Draining first turns an outage into an inconvenience instead of a double booking.
 
+## The worker does steps 2 and 4 itself (from 19 October 2026)
+
+Every worker start is recorded in `app.worker_runs`, with a heartbeat every 30 seconds. A start that
+finds the previous heartbeat more than 10 minutes old (`RECOVERY_GAP_SECONDS` in
+`apps/worker/src/safety.ts`) holds the outbox, the property connections and the nightly full sync,
+processes the webhooks that arrived meanwhile, then sweeps the booking feed until a pass finds
+nothing new. Only then does it let anything out. The console's Sync health page shows the worker's
+last heartbeat, whether it is recovering, and the last recovery (how long the gap was and how many
+booking changes were saved first); the alert channel gets one line too.
+
+Step 3, the cross-check, is still to build; until then run it by hand after a long outage:
+`pnpm channex:check` lists what Channex holds.
+
+## Channex closes booked nights itself
+
+Every property is created in Channex with its availability auto-update settings on, so a booking
+closes its nights in Channex the moment it arrives, before V-01 has heard of it. The worker reads
+that back after every connection and every morning at 04:15 (`daily-safety-check`), turns it back on
+if someone turned it off in Channex, and raises a warning alert with the property's name. The
+property page's Channels section shows when it was last checked.
+
 ## Pausing the worker safely
 
 The worker stops cleanly on SIGTERM: loops finish their current batch, pg-boss stops, connections close.

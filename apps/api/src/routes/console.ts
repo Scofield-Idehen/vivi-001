@@ -165,7 +165,20 @@ export function consoleRoutes(app: FastifyInstance, deps: { scope: RequestScope 
     deps.scope.asStaff(req, 'console.read', async (tx) => {
       const health = await rows(tx, sql`select * from app.console_sync_health()`);
       const errors = await rows(tx, sql`select * from app.console_sync_errors(50)`);
+      const [w] = await rows(tx, sql`select * from app.console_worker_status()`);
       return {
+        worker: {
+          lastSeenAt: w ? isoOrNull(w.last_seen_at) : null,
+          startedAt: w ? isoOrNull(w.started_at) : null,
+          recovering: w?.recovery === 'draining',
+          lastRecovery: w?.last_recovery_at
+            ? {
+                at: iso(w.last_recovery_at),
+                gapSeconds: count(w.last_recovery_gap_seconds),
+                drained: count(w.last_recovery_drained),
+              }
+            : null,
+        },
         rows: health
           .map((r) => ({
             organisationId: textOrNull(r.organisation_id),

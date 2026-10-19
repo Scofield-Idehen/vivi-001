@@ -15,6 +15,7 @@ import { and, asc, eq, lt, or, sql } from 'drizzle-orm';
 import type { WorkerDeps } from './deps.ts';
 import { FULL_SYNC_DAYS } from './full-sync.ts';
 import { backoffMs } from './outbox.ts';
+import { checkAutoClose } from './safety.ts';
 
 const MAX_ATTEMPTS = 10;
 /** A request the worker took but never finished (it crashed) is taken again after this long. */
@@ -171,14 +172,17 @@ async function connectOne(
       groupId,
     });
 
-    await deps.db.withOrg({ orgId }, async (tx) => {
-      await tx.insert(channexMappings).values({
-        organisationId: orgId,
-        propertyId,
-        channexPropertyId: ref.externalPropertyId,
-        channexRoomTypeId: ref.externalRoomTypeId,
-        channexRatePlanId: ref.externalRatePlanId,
-      });
+    const [mapping] = await deps.db.withOrg({ orgId }, async (tx) => {
+      const inserted = await tx
+        .insert(channexMappings)
+        .values({
+          organisationId: orgId,
+          propertyId,
+          channexPropertyId: ref.externalPropertyId,
+          channexRoomTypeId: ref.externalRoomTypeId,
+          channexRatePlanId: ref.externalRatePlanId,
+        })
+        .returning({ id: channexMappings.id });
       await tx.insert(syncLog).values({
         organisationId: orgId,
         propertyId,
@@ -200,7 +204,18 @@ async function connectOne(
           })),
         );
       }
+      return inserted;
     });
+    // The safety net: read back that Channex will close booked nights itself. A failure here is
+    // not a failed connection; the daily check tries again.
+    if (mapping) {
+      await checkAutoClose(deps, orgId, {
+        id: mapping.id,
+        propertyId,
+        channexPropertyId: ref.externalPropertyId,
+        propertyName: property.name,
+      });
+    }
     await settle({ status: 'done' });
     deps.log.info({ orgId, propertyId, ...ref }, 'Property connected to the channel manager');
     return 'done';

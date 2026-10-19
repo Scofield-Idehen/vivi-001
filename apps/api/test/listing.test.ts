@@ -419,6 +419,8 @@ describe('connecting to the channel manager', () => {
       finishedAt: null,
       error: null,
       attempts: 0,
+      autoClose: null,
+      autoCloseCheckedAt: null,
     });
     const { status, body } = await connect(cabin);
     expect(status).toBe(200);
@@ -551,19 +553,17 @@ describe('custom fields', () => {
   });
 
   it('lets an admin define fields for the workspace, in order', async () => {
-    const made = await Promise.all(
-      (
-        [
-          ['Check-in instructions', 'link'],
-          ['Lock code', 'secret'],
-          ['Note for the team', 'long_text'],
-        ] as const
-      ).map(async ([name, kind]) => {
-        const { status, body } = await call('POST', '/v1/custom-fields', { as: asA(), body: { name, kind } });
-        expect(status).toBe(201);
-        return body;
-      }),
-    );
+    // One after another, as a person would: positions follow the order of adding.
+    const made: Record<string, unknown>[] = [];
+    for (const [name, kind] of [
+      ['Check-in instructions', 'link'],
+      ['Lock code', 'secret'],
+      ['Note for the team', 'long_text'],
+    ] as const) {
+      const { status, body } = await call('POST', '/v1/custom-fields', { as: asA(), body: { name, kind } });
+      expect(status).toBe(201);
+      made.push(body);
+    }
     [link, code, note] = made.map((f) => f.id as string) as [string, string, string];
     const { body } = await call('GET', '/v1/custom-fields', { as: accounts });
     expect((body.fields as { name: string }[]).map((f) => f.name)).toEqual([

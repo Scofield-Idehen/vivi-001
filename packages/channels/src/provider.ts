@@ -112,6 +112,12 @@ export interface ChannelProvider {
   createListing(setup: ListingSetup): Promise<ExternalPropertyRef>;
   /** Makes a group to hold one operator's properties, and returns its id. */
   createGroup(title: string): Promise<string>;
+  /**
+   * Makes sure the channel manager closes a booked night by itself (Channex's availability
+   * auto-update settings), turning it on if someone turned it off. This is the safety net while
+   * V-01 is down: a night is never sold twice in the gap. Says whether it was already on.
+   */
+  ensureAutoClose(externalPropertyId: string): Promise<{ wasOn: boolean }>;
 }
 
 export type ChannelErrorKind = 'rate_limited' | 'server' | 'auth' | 'validation' | 'network';
