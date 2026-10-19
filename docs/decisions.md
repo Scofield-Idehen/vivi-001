@@ -5,6 +5,16 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-19
 
+- **Connect all to Channex, in one press (Alpha, 19 Oct 2026: "I thought we were adding all
+  properties at once").** The Properties page gains a Channex column (In Channex, Connecting, Not
+  yet, Couldn't connect) and, for admins, a Connect all button that queues every property not yet
+  in Channex; the worker does them one by one and the list watches them turn green. The move from
+  Guesty is: import everything through Guesty's API, Connect all, link each property to its
+  existing listing (which keeps its reviews, photos and ranking, because the listing itself is
+  untouched), then move over. Reviews inside V-01 wait for Phase 2 (Alpha).
+- **The import takes active Guesty listings as live properties and inactive ones as archived**
+  (default, Alpha to confirm), so nothing is lost and the Calendar stays clean.
+
 - **Airbnb specifics go through Channex's Airbnb API (integration step 8).** Once a property's Airbnb
   listing is live, the worker sends the property's own fees and booking rules to the listing:
   nightly and weekend price, guests included and the extra-guest fee, cleaning fee and security

@@ -1,9 +1,9 @@
 import { IconChevronRight, IconHome } from '@tabler/icons-react';
 import { can, formatMoney, MANAGED_BY_LABELS, PROPERTY_TYPE_LABELS, type Property } from '@v01/shared';
 import { Link, Outlet, useNavigate } from 'react-router';
-import { PageLoading } from '../components/Spinner.tsx';
-import { Badge, Button, EmptyState, Notice, PageHeader } from '../components/ui.tsx';
-import { ApiError, useProperties, useWorkspace } from '../lib/api.ts';
+import { PageLoading, Spinner } from '../components/Spinner.tsx';
+import { Badge, Button, EmptyState, Notice, PageHeader, StatusDot } from '../components/ui.tsx';
+import { ApiError, useConnectAllChannex, useProperties, useWorkspace } from '../lib/api.ts';
 import { useCurrentWorkspace } from '../lib/workspace.tsx';
 import { PROPERTY_TYPE_ICONS } from './properties/icons.ts';
 
@@ -47,10 +47,31 @@ export function Properties() {
   const locale = workspace.data?.settings.locale ?? 'en-GB';
 
   const properties = list.data?.properties ?? [];
+  const canManage = can(entry.role, 'channels.manage');
+  const connectAll = useConnectAllChannex(orgId);
+  const toConnect = properties.filter(
+    (p) => p.channexStatus === 'not_connected' || p.channexStatus === 'failed',
+  ).length;
+  const connecting = properties.filter((p) => p.channexStatus === 'connecting').length;
   const addButton = canAdd ? (
-    <Button variant="primary" onClick={() => navigate('/properties/new')}>
-      Add property
-    </Button>
+    <span className="flex items-center gap-3">
+      {canManage && toConnect > 0 ? (
+        <Button
+          disabled={connectAll.isPending}
+          onClick={() => connectAll.mutate()}
+          title="Puts every property that isn't in Channex yet there. Nothing is sent to any channel."
+        >
+          Connect all to Channex ({toConnect})
+        </Button>
+      ) : connecting > 0 ? (
+        <span className="inline-flex items-center gap-2 text-[13.5px] text-slate">
+          <Spinner size={14} /> Connecting {connecting} to Channex
+        </span>
+      ) : null}
+      <Button variant="primary" onClick={() => navigate('/properties/new')}>
+        Add property
+      </Button>
+    </span>
   ) : undefined;
 
   return (
@@ -122,8 +143,11 @@ export function Properties() {
                 <th scope="col" className="py-2.5 pr-4 font-normal">
                   Price limits
                 </th>
-                <th scope="col" className="py-2.5 font-normal">
+                <th scope="col" className="py-2.5 pr-4 font-normal">
                   Sync
+                </th>
+                <th scope="col" className="py-2.5 font-normal">
+                  Channex
                 </th>
               </tr>
             </thead>
@@ -154,8 +178,21 @@ export function Properties() {
                   <td className="tnum py-2 pr-10 text-right">{p.maxGuests}</td>
                   <td className="tnum py-2 pr-10 text-right">{p.bedrooms ?? ''}</td>
                   <td className="tnum py-2 pr-4 text-slate">{priceLimits(p, currency, locale)}</td>
-                  <td className="py-2">
+                  <td className="py-2 pr-4">
                     <Badge>{MANAGED_BY_LABELS[p.managedBy]}</Badge>
+                  </td>
+                  <td className="py-2 text-[13px]">
+                    {p.channexStatus === 'connected' ? (
+                      <StatusDot status="done">In Channex</StatusDot>
+                    ) : p.channexStatus === 'connecting' ? (
+                      <span className="inline-flex items-center gap-1.5 text-slate">
+                        <Spinner size={13} /> Connecting
+                      </span>
+                    ) : p.channexStatus === 'failed' ? (
+                      <StatusDot status="urgent">Couldn’t connect</StatusDot>
+                    ) : (
+                      <StatusDot status="neutral">Not yet</StatusDot>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -976,3 +976,29 @@ describe('Airbnb pause and resume', () => {
     expect(other.body.error.code).toBe('not_on_this_channel');
   });
 });
+
+describe('connect all to Channex', () => {
+  it('queues every property not yet in Channex, and reports the rest', async () => {
+    const before = (await call('GET', '/v1/properties', { as: asA() })).body.properties as {
+      channexStatus: string;
+    }[];
+    const notYet = before.filter(
+      (p) => p.channexStatus === 'not_connected' || p.channexStatus === 'failed',
+    ).length;
+    const connected = before.filter((p) => p.channexStatus === 'connected').length;
+    expect(notYet).toBeGreaterThan(0);
+    const { status, body } = await call('POST', '/v1/channex/connect-all', { as: asA() });
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ queued: notYet, alreadyConnected: connected });
+    const after = (await call('GET', '/v1/properties', { as: asA() })).body.properties as {
+      channexStatus: string;
+    }[];
+    expect(after.filter((p) => p.channexStatus === 'connecting').length).toBeGreaterThanOrEqual(notYet);
+    const again = await call('POST', '/v1/channex/connect-all', { as: asA() });
+    expect(again.body).toMatchObject({ queued: 0 });
+    expect((await call('POST', '/v1/channex/connect-all', { as: asB() })).body).toMatchObject({
+      queued: 0,
+      alreadyConnected: 0,
+    });
+  });
+});

@@ -414,6 +414,7 @@ function sampleProperty(p: {
     maxPriceMinor: p.prices ? p.prices[1] : null,
     coverPhotoUrl: null,
     photoCount: p.photos?.length ?? 0,
+    channexStatus: p.managedBy === 'v01' ? 'connected' : 'not_connected',
     tags: p.tags ?? [],
     createdAt,
     ...listingDefaults(),
@@ -1681,6 +1682,7 @@ async function resolved(
     ...detail,
     photos,
     channex,
+    channexStatus: channex.status,
     cleaning,
     listings,
     fields,
@@ -2208,6 +2210,7 @@ export async function demoFetch<T>(
       maxPriceMinor: input.maxPriceMinor ?? null,
       coverPhotoUrl: null,
       photoCount: 0,
+      channexStatus: 'not_connected',
       tags: [],
       createdAt: now,
       ...listingDefaults(),
@@ -2651,6 +2654,27 @@ export async function demoFetch<T>(
       save();
       return { deleted: true } as T;
     }
+  }
+
+  if (method === 'POST' && path === '/v1/channex/connect-all') {
+    const { operator } = access(options.orgId, 'channels.manage');
+    const result = { queued: 0, alreadyConnected: 0, alreadyConnecting: 0 };
+    for (const property of operator.properties) {
+      const state = channexOf(property);
+      if (state.status === 'connected') result.alreadyConnected += 1;
+      else if (state.status === 'connecting') result.alreadyConnecting += 1;
+      else {
+        property.channex = {
+          ...NOT_CONNECTED,
+          status: 'connecting',
+          requestedBy: 'Demo user',
+          requestedAt: new Date().toISOString(),
+        };
+        result.queued += 1;
+      }
+    }
+    save();
+    return result as T;
   }
 
   const channexMatch = CHANNEX_PATH.exec(path);

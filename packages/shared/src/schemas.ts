@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { PropertyLinkSchema } from './channels.ts';
-import { ChannexStateSchema } from './channex.ts';
+import { CHANNEX_STATES, ChannexStateSchema } from './channex.ts';
 import { isIsoDate } from './dates.ts';
 import {
   CHANNELS,
@@ -103,6 +103,8 @@ export const PropertySchema = z.object({
   /** The first photo, shown on the property list. */
   coverPhotoUrl: z.string().nullable(),
   photoCount: z.number().int(),
+  /** Where the property stands with Channex, for the list; the detail carries the whole state. */
+  channexStatus: z.enum(CHANNEX_STATES),
   /** The team's own labels, for finding and grouping properties. Guests never see them. */
   tags: z.array(z.string()),
   createdAt: z.string(),

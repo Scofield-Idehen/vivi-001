@@ -11,6 +11,7 @@ import type {
   ChannexState,
   CleaningState,
   CleaningUpdate,
+  ConnectAllResult,
   ConsoleOperatorDetail,
   ConsoleOperatorList,
   ConsoleOverview,
@@ -110,6 +111,26 @@ export function useProperties(orgId: string | null) {
     queryKey: ['properties', orgId],
     enabled: Boolean(token && orgId),
     queryFn: () => apiFetch<PropertyList>('/v1/properties', { token: token as string, orgId }),
+    // While the worker is connecting properties to Channex, the list watches them turn green.
+    refetchInterval: (query) =>
+      query.state.data?.properties.some((p) => p.channexStatus === 'connecting') ? 4000 : false,
+  });
+}
+
+/** Connect all: every property not yet in Channex, queued for the worker in one go. */
+export function useConnectAllChannex(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<ConnectAllResult>('/v1/channex/connect-all', {
+        token: token as string,
+        orgId,
+        method: 'POST',
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['properties', orgId] });
+    },
   });
 }
 

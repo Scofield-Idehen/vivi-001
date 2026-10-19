@@ -40,7 +40,7 @@ import { HttpError } from '../errors.ts';
 import { newPhotoPath, type PhotoStore, photoPathBelongsTo } from '../photos.ts';
 import type { SecretBox } from '../secrets.ts';
 import { linksOf } from './channels.ts';
-import { channexStateOf } from './channex.ts';
+import { channexStateOf, channexStatusesOf } from './channex.ts';
 import { fieldsOf } from './fields.ts';
 
 type PropertyRow = typeof properties.$inferSelect;
@@ -55,7 +55,11 @@ function propertyType(value: string | null): PropertyType | null {
 
 const clock = (value: string | null): string | null => (value ? value.slice(0, 5) : null);
 
-function toProperty(row: PropertyRow, photos: { cover: string | null; count: number }): Property {
+function toProperty(
+  row: PropertyRow,
+  photos: { cover: string | null; count: number },
+  channexStatus: Property['channexStatus'] = 'not_connected',
+): Property {
   return {
     id: row.id,
     name: row.name,
@@ -79,6 +83,7 @@ function toProperty(row: PropertyRow, photos: { cover: string | null; count: num
     maxPriceMinor: row.maxPriceMinor,
     coverPhotoUrl: photos.cover,
     photoCount: photos.count,
+    channexStatus,
     tags: row.tags,
     createdAt: toIso(row.createdAt),
   };
@@ -302,10 +307,15 @@ export function propertyRoutes(
             .groupBy(propertyPhotos.propertyId)
         : [];
       const byProperty = new Map(covers.map((c) => [c.propertyId, c]));
+      const states = await channexStatusesOf(tx, ids);
       return {
         properties: rows.map((row) => {
           const photos = byProperty.get(row.id);
-          return toProperty(row, { cover: photos?.cover ?? null, count: photos?.count ?? 0 });
+          return toProperty(
+            row,
+            { cover: photos?.cover ?? null, count: photos?.count ?? 0 },
+            states.get(row.id) ?? 'not_connected',
+          );
         }),
       };
     }),

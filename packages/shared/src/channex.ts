@@ -35,3 +35,11 @@ export const ChannexStateSchema = z.object({
   autoCloseCheckedAt: z.string().nullable(),
 });
 export type ChannexState = z.infer<typeof ChannexStateSchema>;
+
+/** What "Connect all" queued: how many were asked for, and how many were already in hand. */
+export const ConnectAllResultSchema = z.object({
+  queued: z.number().int(),
+  alreadyConnected: z.number().int(),
+  alreadyConnecting: z.number().int(),
+});
+export type ConnectAllResult = z.infer<typeof ConnectAllResultSchema>;
