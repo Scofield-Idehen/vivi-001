@@ -1,5 +1,5 @@
 import { processWebhooks, sweepBookingFeed } from './bookings.ts';
-import { markDirtyAfterCheckOut } from './cleaning.ts';
+import { makeCheckOutCleans, markDirtyAfterCheckOut } from './cleaning.ts';
 import { crossCheckAll } from './cross-check.ts';
 import { enqueueFullSync } from './full-sync.ts';
 import { startJobs } from './jobs.ts';
@@ -77,7 +77,10 @@ const boss = env.JOBS_DATABASE_URL
         'hourly-listing-refresh': () => syncChannelLinks(deps, { refreshAll: true }),
         // Every calendar against what Channex holds for the next 90 days; differing nights go again.
         'nightly-cross-check': async () => (holding ? { skipped: 'recovering' } : crossCheckAll(deps)),
-        'cleaning-after-check-out': () => markDirtyAfterCheckOut(deps),
+        'cleaning-after-check-out': async () => ({
+          dirty: await markDirtyAfterCheckOut(deps),
+          cleans: await makeCheckOutCleans(deps),
+        }),
       },
     })
   : null;

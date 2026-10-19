@@ -30,6 +30,7 @@ import {
   CustomFieldUpdateSchema,
   can,
   countBeds,
+  DamageReportSchema,
   eachNight,
   FIELDS_MAX,
   formatMoney,
@@ -68,6 +69,14 @@ import {
   type SupportGrantList,
   type SupportVisitList,
   selectedNights,
+  type Task,
+  TaskCreateSchema,
+  type TaskList,
+  TaskListQuerySchema,
+  type TaskTemplate,
+  TaskTemplateUpdateSchema,
+  TaskUpdateSchema,
+  type TeamList,
   type Today,
   type TodayStay,
   todayIn,
@@ -163,6 +172,9 @@ interface DemoOperator {
   calendar: DemoCalendar;
   /** Each property's cleaning, by property id. Missing: clean, never marked. */
   cleaning?: Record<string, CleaningState>;
+  /** Tasks for the field team, and what each kind starts with. Missing in older saved states. */
+  tasks?: Task[];
+  taskTemplates?: TaskTemplate[];
   /** The workspace's custom fields, in order. */
   fields: CustomField[];
   /** Values by property id, then field id. Secrets sit here as typed: the demo has no database. */
@@ -216,7 +228,7 @@ interface DemoSyncError {
 
 interface DemoState {
   /** Raised whenever the shape changes, so a browser holding older sample data starts fresh. */
-  version: 11;
+  version: 12;
   /** The day the sample bookings were laid out from. They are laid out afresh each week. */
   calendarFrom: string;
   operators: DemoOperator[];
@@ -289,6 +301,7 @@ function listingDefaults(): Omit<PropertyDetail, keyof Property | 'updatedAt'> {
     listings: [],
     fields: [],
     links: [],
+    cleaner: null,
   };
 }
 
@@ -876,7 +889,7 @@ function operatorWorkspace(
 function seed(): DemoState {
   const pastVisit = Date.now() - (2 * 24 * 60 + 190) * MINUTE;
   const state: DemoState = {
-    version: 11,
+    version: 12,
     calendarFrom: demoTodayDate(),
     operators: [
       {
@@ -1155,6 +1168,273 @@ function seed(): DemoState {
   return state;
 }
 
+// Tasks: cleans, maintenance and inspections for the field team ----------------------------------
+
+/** A stable id for a team member, from their email: the demo has no user table. */
+function memberId(email: string): string {
+  if (email === DEMO_USER.email) return DEMO_USER.id;
+  let h = 0x811c9dc5;
+  for (const ch of email) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  const hex = (n: number) => (h = Math.imul(h ^ n, 0x01000193) >>> 0).toString(16).padStart(8, '0');
+  const a = hex(1);
+  const b = hex(2);
+  const c = hex(3);
+  const d = hex(4);
+  return `${a}-${b.slice(0, 4)}-4${b.slice(5, 8)}-a${c.slice(1, 4)}-${c.slice(4)}${d.slice(0, 8)}`;
+}
+
+function memberName(operator: DemoOperator, userId: string | null): { id: string; name: string } | null {
+  if (!userId) return null;
+  const m = operator.team.find((x) => memberId(x.email) === userId);
+  return m ? { id: userId, name: m.fullName ?? m.email } : null;
+}
+
+function standardTemplates(): TaskTemplate[] {
+  return [
+    {
+      kind: 'cleaning',
+      title: 'Clean after check-out',
+      checklist: [
+        'Strip and remake every bed',
+        'Bathrooms: shower, basin, toilet, mirrors, fresh towels',
+        'Kitchen: surfaces, hob, oven, fridge, bins out, dishwasher empty',
+        'Floors throughout',
+        'Restock: toilet rolls, bin bags, tea and coffee, toiletries',
+        'Check for damage and anything left behind',
+        'Windows and doors locked, heating as set, lights off',
+      ],
+      automatic: true,
+    },
+    {
+      kind: 'maintenance',
+      title: 'Maintenance visit',
+      checklist: ['Note what was found', 'Note what was fixed or still needs doing'],
+      automatic: false,
+    },
+    {
+      kind: 'inspection',
+      title: 'Inspection',
+      checklist: ['Walk every room', 'Note anything worn, broken or missing'],
+      automatic: false,
+    },
+  ];
+}
+
+function templatesOf(operator: DemoOperator): TaskTemplate[] {
+  if (!operator.taskTemplates) operator.taskTemplates = standardTemplates();
+  return operator.taskTemplates;
+}
+
+/**
+ * The stand-in worker's check-out cleans: one per confirmed stay leaving within a week, due by the
+ * next guest's arrival, assigned to the field team member who usually cleans. The first time a
+ * sample workspace is opened it also gets yesterday's finished clean and one maintenance job, so
+ * the page has a history.
+ */
+function settleTasks(operator: DemoOperator): Task[] {
+  const first = !operator.tasks;
+  const tasks = (operator.tasks ??= []);
+  const templates = templatesOf(operator);
+  const clean = templates.find((t) => t.kind === 'cleaning');
+  const today = todayIn(operator.workspace.settings.timeZone);
+  const crew = operator.team.filter((m) => m.role === 'field' && m.status === 'active');
+  const cleanerFor = (propertyIndex: number) => {
+    const m = crew[propertyIndex % Math.max(1, crew.length)];
+    return m ? { id: memberId(m.email), name: m.fullName ?? m.email } : null;
+  };
+  const nameOf = (propertyId: string) => operator.properties.find((p) => p.id === propertyId)?.name ?? '';
+  let changed = false;
+  if (clean?.automatic) {
+    for (const stay of operator.calendar.stays) {
+      if (stay.status !== 'confirmed' || stay.checkOut < today || stay.checkOut > addDays(today, 7)) continue;
+      if (tasks.some((t) => t.reservationId === stay.id && t.source === 'check_out')) continue;
+      const property = operator.properties.find((p) => p.id === stay.propertyId);
+      if (!property) continue;
+      const next = operator.calendar.stays.find(
+        (x) => x.propertyId === stay.propertyId && x.status === 'confirmed' && x.checkIn === stay.checkOut,
+      );
+      const leaves = stay.checkOutTime ?? property.checkOutTime;
+      const arrives = next ? (next.checkInTime ?? property.checkInTime) : null;
+      const index = operator.properties.findIndex((p) => p.id === property.id);
+      tasks.push({
+        id: crypto.randomUUID(),
+        propertyId: property.id,
+        propertyName: property.name,
+        reservationId: stay.id,
+        kind: 'cleaning',
+        source: 'check_out',
+        title: clean.title,
+        notes: `Guest leaves at ${leaves}${arrives ? `. Next guest arrives at ${arrives}.` : '. Nobody arrives today.'}`,
+        status: 'open',
+        dueOn: stay.checkOut,
+        dueTime: arrives,
+        assignee: cleanerFor(index),
+        checklist: clean.checklist.map((text) => ({ text, done: false })),
+        photos: [],
+        guestLeavesAt: leaves,
+        nextArrivalAt: arrives,
+        doneBy: null,
+        doneAt: null,
+        createdAt: new Date().toISOString(),
+      });
+      changed = true;
+    }
+  }
+  if (first && operator.properties.length) {
+    const p0 = operator.properties[0] as PropertyDetail;
+    const p1 = operator.properties[1] ?? p0;
+    const who = cleanerFor(0);
+    const yesterday = addDays(today, -1);
+    tasks.push(
+      {
+        id: crypto.randomUUID(),
+        propertyId: p0.id,
+        propertyName: p0.name,
+        reservationId: null,
+        kind: 'cleaning',
+        source: 'check_out',
+        title: clean?.title ?? 'Clean after check-out',
+        notes: 'Guest leaves at 10:00. Next guest arrives at 16:00.',
+        status: 'done',
+        dueOn: yesterday,
+        dueTime: '16:00',
+        assignee: who,
+        checklist: (clean?.checklist ?? []).map((text) => ({ text, done: true })),
+        photos: [],
+        guestLeavesAt: null,
+        nextArrivalAt: null,
+        doneBy: who?.name ?? null,
+        doneAt: zonedInstant(yesterday, '14:40', operator.workspace.settings.timeZone).toISOString(),
+        createdAt: zonedInstant(
+          addDays(yesterday, -3),
+          '09:00',
+          operator.workspace.settings.timeZone,
+        ).toISOString(),
+      },
+      {
+        id: crypto.randomUUID(),
+        propertyId: p1.id,
+        propertyName: p1.name,
+        reservationId: null,
+        kind: 'maintenance',
+        source: 'report',
+        title: 'Damage reported',
+        notes:
+          'Shower screen cracked along the bottom edge; still holding but needs replacing before it goes.',
+        status: 'open',
+        dueOn: addDays(today, 2),
+        dueTime: null,
+        assignee: null,
+        checklist: (templates.find((t) => t.kind === 'maintenance')?.checklist ?? []).map((text) => ({
+          text,
+          done: false,
+        })),
+        photos: [],
+        guestLeavesAt: null,
+        nextArrivalAt: null,
+        doneBy: null,
+        doneAt: null,
+        createdAt: new Date(Date.now() - 50 * MINUTE).toISOString(),
+      },
+    );
+    changed = true;
+  }
+  // A stay that was cancelled takes its open clean with it.
+  for (const t of tasks) {
+    if (t.source !== 'check_out' || !t.reservationId || t.status === 'done' || t.status === 'cancelled')
+      continue;
+    const stay = operator.calendar.stays.find((x) => x.id === t.reservationId);
+    if (!stay || stay.status !== 'confirmed' || stay.checkOut !== t.dueOn) {
+      t.status = 'cancelled';
+      changed = true;
+    }
+    t.propertyName = nameOf(t.propertyId) || t.propertyName;
+  }
+  if (changed) save();
+  return tasks;
+}
+
+function demoTaskList(operator: DemoOperator, role: WorkspaceRole, query: Record<string, string>): TaskList {
+  const parsed = TaskListQuerySchema.safeParse(query);
+  if (!parsed.success) invalid(parsed.error.issues);
+  const q = parsed.data;
+  const today = todayIn(operator.workspace.settings.timeZone);
+  const all = settleTasks(operator);
+  const crewOnly = role === 'field' || q.mine === '1';
+  const open = (t: Task) => t.status === 'open' || t.status === 'in_progress';
+  const visible = all.filter((t) => !crewOnly || !t.assignee || t.assignee.id === DEMO_USER.id);
+  const inView = visible.filter((t) =>
+    q.view === 'today'
+      ? open(t) && t.dueOn <= today
+      : q.view === 'upcoming'
+        ? open(t) && t.dueOn > today && t.dueOn <= addDays(today, 14)
+        : q.view === 'open'
+          ? open(t)
+          : t.status === 'done' && t.dueOn >= addDays(today, -30),
+  );
+  const filtered = inView.filter(
+    (t) =>
+      (!q.propertyId || t.propertyId === q.propertyId) && (!q.assigneeId || t.assignee?.id === q.assigneeId),
+  );
+  filtered.sort(
+    (a, b) =>
+      (q.view === 'done' ? b.dueOn.localeCompare(a.dueOn) : a.dueOn.localeCompare(b.dueOn)) ||
+      (a.dueTime ?? '99').localeCompare(b.dueTime ?? '99') ||
+      a.propertyName.localeCompare(b.propertyName),
+  );
+  const openOnes = visible.filter(open);
+  return {
+    today,
+    tasks: filtered,
+    counts: {
+      today: openOnes.filter((t) => t.dueOn <= today).length,
+      upcoming: openOnes.filter((t) => t.dueOn > today && t.dueOn <= addDays(today, 14)).length,
+      open: openOnes.length,
+    },
+  };
+}
+
+function findTask(operator: DemoOperator, role: WorkspaceRole, id: string): Task {
+  const task = settleTasks(operator).find((t) => t.id === id);
+  if (!task || (role === 'field' && task.assignee && task.assignee.id !== DEMO_USER.id)) {
+    throw new ApiError(404, 'task_not_found', 'That task does not exist in this workspace.');
+  }
+  return task;
+}
+
+export async function demoAddTaskPhoto(
+  orgId: string | null,
+  taskId: string,
+  photo: { blob: Blob; width: number; height: number },
+): Promise<Task> {
+  const { operator, role } = access(orgId, 'tasks.write');
+  const task = findTask(operator, role, taskId);
+  if (task.photos.length >= 20)
+    throw new ApiError(409, 'too_many_photos', 'A task can have up to 20 photos.');
+  const id = crypto.randomUUID();
+  await putDemoPhoto(id, photo.blob);
+  task.photos.push({
+    id,
+    url: `demo-photo:${id}`,
+    width: photo.width,
+    height: photo.height,
+    takenBy: 'Demo user',
+    at: new Date().toISOString(),
+  });
+  save();
+  return resolvedTask(task);
+}
+
+/** A task with its photos' addresses resolved from this browser's storage. */
+async function resolvedTask(task: Task): Promise<Task> {
+  const photos: Task['photos'] = [];
+  for (const p of task.photos) {
+    const url = p.url.startsWith('demo-photo:') ? await demoPhotoUrl(p.url.slice(11)) : p.url;
+    if (url) photos.push({ ...p, url });
+  }
+  return { ...task, photos };
+}
+
 /**
  * What Channex would see on each connected account: a listing per property (two on Airbnb A, the
  * rest on Airbnb B), with the properties V-01 runs linked and live, and the ones still on Guesty
@@ -1337,9 +1617,13 @@ function load(): DemoState {
       if ((parsed.version as number) === 10) {
         // Version 11 brought the standard custom fields; the sample workspaces start again with them.
         seedFields(parsed);
-        parsed.version = 11;
+        (parsed as { version: number }).version = 11;
       }
-      if (parsed.version === 11) {
+      if ((parsed.version as number) === 11) {
+        // Version 12 brought tasks; the sample workspaces get their check-out cleans.
+        parsed.version = 12;
+      }
+      if (parsed.version === 12) {
         // A week on, the sample bookings would all be in the past: lay them out again from today.
         if (parsed.calendarFrom <= addDays(demoTodayDate(), -7)) {
           layOutSamples(parsed);
@@ -2485,6 +2769,13 @@ export async function demoFetch<T>(
       ) {
         throw new ApiError(409, 'code_in_use', `Another property already uses ${code}.`);
       }
+      if ('cleanerUserId' in changes) {
+        const cleaner = memberName(operator, changes.cleanerUserId as string | null);
+        if (changes.cleanerUserId && !cleaner)
+          throw new ApiError(400, 'not_a_member', 'The cleaner has to be a member of this workspace.');
+        delete changes.cleanerUserId;
+        changes.cleaner = cleaner;
+      }
       const next = { ...property, ...changes } as PropertyDetail;
       checkListing(next);
       Object.assign(property, changes, { updatedAt: new Date().toISOString() });
@@ -2591,6 +2882,177 @@ export async function demoFetch<T>(
     const { operator } = access(options.orgId, 'reservations.read');
     const query = Object.fromEntries(new URLSearchParams(path.split('?')[1] ?? ''));
     return demoReservations(operator, query) as T;
+  }
+
+  if (method === 'GET' && path === '/v1/team') {
+    const { operator, role } = access(options.orgId, 'workspace.read');
+    const hide = !can(role, 'members.manage') && role !== 'operations';
+    return {
+      members: operator.team
+        .filter((m) => m.status === 'active')
+        .map((m) => ({
+          id: memberId(m.email),
+          name: m.fullName ?? m.email,
+          email: hide ? '' : m.email,
+          role: m.role,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    } satisfies TeamList as T;
+  }
+
+  if (method === 'GET' && path === '/v1/task-templates') {
+    const { operator } = access(options.orgId, 'tasks.read');
+    return { templates: templatesOf(operator) } as T;
+  }
+
+  const templateMatch = /^\/v1\/task-templates\/(cleaning|maintenance|inspection)$/.exec(path);
+  if (method === 'PATCH' && templateMatch) {
+    const { operator } = access(options.orgId, 'tasks.manage');
+    const parsed = TaskTemplateUpdateSchema.safeParse(options.body);
+    if (!parsed.success) invalid(parsed.error.issues);
+    const tpl = templatesOf(operator).find((t) => t.kind === templateMatch[1]);
+    if (!tpl) throw new ApiError(404, 'template_not_found', 'That kind of task has no template here.');
+    if (parsed.data.title !== undefined) tpl.title = parsed.data.title;
+    if (parsed.data.checklist !== undefined) tpl.checklist = parsed.data.checklist;
+    if (parsed.data.automatic !== undefined) tpl.automatic = parsed.data.automatic;
+    save();
+    return tpl as T;
+  }
+
+  if (method === 'GET' && (path === '/v1/tasks' || path.startsWith('/v1/tasks?'))) {
+    const { operator, role } = access(options.orgId, 'tasks.read');
+    const query = Object.fromEntries(new URLSearchParams(path.split('?')[1] ?? ''));
+    const list = demoTaskList(operator, role, query);
+    return { ...list, tasks: await Promise.all(list.tasks.map(resolvedTask)) } as T;
+  }
+
+  if (method === 'POST' && path === '/v1/tasks') {
+    const { operator } = access(options.orgId, 'tasks.manage');
+    const parsed = TaskCreateSchema.safeParse(options.body);
+    if (!parsed.success) invalid(parsed.error.issues);
+    const b = parsed.data;
+    const property = findProperty(operator, b.propertyId);
+    const tpl = templatesOf(operator).find((t) => t.kind === b.kind);
+    const task: Task = {
+      id: crypto.randomUUID(),
+      propertyId: property.id,
+      propertyName: property.name,
+      reservationId: null,
+      kind: b.kind,
+      source: 'manual',
+      title: b.title ?? tpl?.title ?? 'Task',
+      notes: b.notes || null,
+      status: 'open',
+      dueOn: b.dueOn,
+      dueTime: b.dueTime ?? null,
+      assignee: memberName(operator, b.assigneeId ?? null),
+      checklist: (b.checklist ?? tpl?.checklist ?? []).map((text) => ({ text, done: false })),
+      photos: [],
+      guestLeavesAt: null,
+      nextArrivalAt: null,
+      doneBy: null,
+      doneAt: null,
+      createdAt: new Date().toISOString(),
+    };
+    settleTasks(operator).push(task);
+    save();
+    return task as T;
+  }
+
+  const taskMatch = /^\/v1\/tasks\/([0-9a-f-]{36})(?:\/(report|photos)(?:\/([0-9a-f-]{36}))?)?$/.exec(path);
+  if (taskMatch) {
+    const [, taskId, part, photoId] = taskMatch;
+    if (method === 'GET' && !part) {
+      const { operator, role } = access(options.orgId, 'tasks.read');
+      return (await resolvedTask(findTask(operator, role, taskId as string))) as T;
+    }
+    if (method === 'PATCH' && !part) {
+      const { operator, role } = access(options.orgId, 'tasks.write');
+      const task = findTask(operator, role, taskId as string);
+      const parsed = TaskUpdateSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      const b = parsed.data;
+      if (role === 'field') {
+        const extra = Object.keys(b).filter((k) => !['status', 'checklist', 'notes'].includes(k));
+        if (extra.length)
+          throw new ApiError(403, 'not_allowed', 'The field team can start, tick off and finish a task.');
+        if (b.status === 'cancelled')
+          throw new ApiError(403, 'not_allowed', 'Only the office cancels a task.');
+      }
+      const finishing = b.status === 'done' && task.status !== 'done';
+      if (b.title !== undefined) task.title = b.title;
+      if (b.notes !== undefined) task.notes = b.notes || null;
+      if (b.dueOn !== undefined) task.dueOn = b.dueOn;
+      if (b.dueTime !== undefined) task.dueTime = b.dueTime;
+      if (b.assigneeId !== undefined) task.assignee = memberName(operator, b.assigneeId);
+      if (b.checklist !== undefined) task.checklist = b.checklist;
+      if (b.status !== undefined) {
+        if (task.status === 'done' && b.status !== 'done') {
+          task.doneBy = null;
+          task.doneAt = null;
+        }
+        task.status = b.status;
+      }
+      if (finishing) {
+        task.doneBy = 'Demo user';
+        task.doneAt = new Date().toISOString();
+        task.checklist = task.checklist.map((c) => ({ ...c, done: true }));
+        if (task.kind === 'cleaning') {
+          operator.cleaning ??= {};
+          operator.cleaning[task.propertyId] = {
+            status: 'clean',
+            changedAt: task.doneAt,
+            changedBy: 'Demo user',
+          };
+        }
+      }
+      if (role === 'field' && !task.assignee && b.status && b.status !== 'open') {
+        task.assignee = { id: DEMO_USER.id, name: 'Demo user' };
+      }
+      save();
+      return (await resolvedTask(task)) as T;
+    }
+    if (method === 'POST' && part === 'report') {
+      const { operator, role } = access(options.orgId, 'tasks.write');
+      const from = findTask(operator, role, taskId as string);
+      const parsed = DamageReportSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      const tpl = templatesOf(operator).find((t) => t.kind === 'maintenance');
+      const task: Task = {
+        id: crypto.randomUUID(),
+        propertyId: from.propertyId,
+        propertyName: from.propertyName,
+        reservationId: null,
+        kind: 'maintenance',
+        source: 'report',
+        title: 'Damage reported',
+        notes: parsed.data.what,
+        status: 'open',
+        dueOn: from.dueOn,
+        dueTime: null,
+        assignee: null,
+        checklist: (tpl?.checklist ?? []).map((text) => ({ text, done: false })),
+        photos: [],
+        guestLeavesAt: null,
+        nextArrivalAt: null,
+        doneBy: null,
+        doneAt: null,
+        createdAt: new Date().toISOString(),
+      };
+      settleTasks(operator).push(task);
+      save();
+      return task as T;
+    }
+    if (method === 'DELETE' && part === 'photos' && photoId) {
+      const { operator, role } = access(options.orgId, 'tasks.write');
+      const task = findTask(operator, role, taskId as string);
+      const photo = task.photos.find((p) => p.id === photoId);
+      if (!photo) throw new ApiError(404, 'photo_not_found', 'That photo is not on this task.');
+      task.photos = task.photos.filter((p) => p.id !== photoId);
+      if (photo.url.startsWith('demo-photo:')) await deleteDemoPhoto(photo.url.slice(11));
+      save();
+      return (await resolvedTask(task)) as T;
+    }
   }
 
   if (method === 'GET' && path === '/v1/today') {

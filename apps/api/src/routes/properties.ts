@@ -2,6 +2,7 @@ import {
   appUsers,
   channelAccounts,
   channelListings,
+  memberships,
   properties,
   propertyAmenities,
   propertyPhotos,
@@ -176,6 +177,7 @@ async function loadDetail(tx: Tx, id: string, viewer: Viewer): Promise<PropertyD
     extraGuestFrom: row.extraGuestFrom,
     securityDepositMinor: row.securityDepositMinor,
     licenceNumber: row.licenceNumber,
+    cleaner: await cleanerOf(tx, row.cleanerUserId),
     rooms: rooms.map(toRoom),
     amenities: amenities.map((a) => a.code),
     photos: photos.map(toPhoto),
@@ -186,6 +188,15 @@ async function loadDetail(tx: Tx, id: string, viewer: Viewer): Promise<PropertyD
     links: await linksOf(tx, id),
     updatedAt: toIso(row.updatedAt),
   };
+}
+
+async function cleanerOf(tx: Tx, userId: string | null): Promise<PropertyDetail['cleaner']> {
+  if (!userId) return null;
+  const [who] = await tx
+    .select({ id: appUsers.id, name: sql<string>`coalesce(${appUsers.fullName}, ${appUsers.email})` })
+    .from(appUsers)
+    .where(eq(appUsers.id, userId));
+  return who ?? null;
 }
 
 async function cleaningOf(tx: Tx, row: typeof properties.$inferSelect): Promise<PropertyDetail['cleaning']> {
@@ -402,6 +413,16 @@ export function propertyRoutes(
         await findProperty(tx, req.params.id);
         const changes = cleaned(req.body);
         if (changes.name === null) throw new HttpError(400, 'invalid_request', 'A property needs a name.');
+        if (changes.cleanerUserId) {
+          const [member] = await tx
+            .select({ id: memberships.userId })
+            .from(memberships)
+            .where(
+              and(eq(memberships.organisationId, ctx.orgId), eq(memberships.userId, changes.cleanerUserId)),
+            );
+          if (!member)
+            throw new HttpError(400, 'not_a_member', 'The cleaner has to be a member of this workspace.');
+        }
         await tx
           .update(properties)
           .set(changes as Partial<typeof properties.$inferInsert>)

@@ -5,6 +5,23 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-19
 
+- **Tasks and the field team (design roadmap Phase 2, "Operations in motion"; built 19 Oct 2026).**
+  Cleans, maintenance and inspections as tasks (`app.tasks`, migration 0026), each on a property,
+  due on a day and by a time, assigned to a person, with a checklist, notes and photos. The worker
+  makes a clean for every check-out (`makeCheckOutCleans`, every 15 minutes with the dirty marking):
+  one per booking, due by the next guest's arrival when one arrives that day, assigned to the
+  property's usual cleaner (`properties.cleaner_user_id`, set under Settings), with the workspace's
+  cleaning checklist; a cancelled booking takes its open clean with it. Each kind has a template
+  (`app.task_templates`: title, checklist, and for cleans whether they are automatic), edited under
+  Task settings. The office sees every job (Today, Next two weeks, All open, Done; by property and
+  person), makes and assigns; the field team sees "My jobs" — theirs and anyone's to take, on a
+  phone with big targets — starts, ticks off, adds photos (the camera on a phone; same public bucket
+  as listing photos, under `{org}/tasks/{task}/`), marks done, and can **report damage**, which
+  becomes an unassigned maintenance task on the same property for the office. A finished clean
+  marks the property clean. Whoever on the crew starts an unassigned job becomes its assignee.
+  Roles: `tasks.read` everyone, `tasks.write` admin, operations and field, `tasks.manage` admin and
+  operations. Claims (the roadmap's third Phase 2 piece) come next.
+
 - **Text actions are buttons, never underlined (Alpha, 19 Oct 2026: "the underline is not good at
   all… makes this project half done").** Every action that used to be a teal word with an underline
   on hover (Show, Rename, Remove, Unlink, Pause on Airbnb, Manage fields, Back to properties, a

@@ -24,6 +24,7 @@ import { fieldRoutes } from './routes/fields.ts';
 import { meRoutes } from './routes/me.ts';
 import { propertyRoutes } from './routes/properties.ts';
 import { reservationRoutes } from './routes/reservations.ts';
+import { taskRoutes } from './routes/tasks.ts';
 import { todayRoutes } from './routes/today.ts';
 import { webhookRoutes } from './routes/webhooks.ts';
 import { workspaceRoutes } from './routes/workspace.ts';
@@ -112,9 +113,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const box = deps.env.FIELD_SECRET_KEY ? new SecretBox(deps.env.FIELD_SECRET_KEY) : undefined;
   meRoutes(app, { db: deps.db, scope });
   workspaceRoutes(app, { scope });
+  const photos = deps.photos ?? photoStoreFrom(deps.env);
   propertyRoutes(app, {
     scope,
-    photos: deps.photos ?? photoStoreFrom(deps.env),
+    photos,
     box,
     bucket: deps.env.PHOTO_BUCKET,
   });
@@ -125,6 +127,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   channexRoutes(app, { scope });
   channelRoutes(app, { scope });
   todayRoutes(app, { scope });
+  taskRoutes(app, { scope, photos, bucket: deps.env.PHOTO_BUCKET });
   consoleRoutes(app, { scope });
   await webhookRoutes(app, { db: deps.db, channexSecret: deps.env.CHANNEX_WEBHOOK_SECRET });
 

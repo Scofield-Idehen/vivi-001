@@ -20,6 +20,7 @@ import type {
   CustomFieldCreate,
   CustomFieldList,
   CustomFieldUpdate,
+  DamageReport,
   Me,
   PhotoUploadTicket,
   PropertyCreate,
@@ -39,12 +40,20 @@ import type {
   SupportGrant,
   SupportGrantList,
   SupportVisitList,
+  Task,
+  TaskCreate,
+  TaskList,
+  TaskListQuery,
+  TaskTemplate,
+  TaskTemplateUpdate,
+  TaskUpdate,
+  TeamList,
   Today,
   Workspace,
   WorkspaceSync,
 } from '@v01/shared';
 import { config } from './config.ts';
-import { demoAddPhoto, demoFetch } from './demo.ts';
+import { demoAddPhoto, demoAddTaskPhoto, demoFetch } from './demo.ts';
 import { ApiError } from './errors.ts';
 import { PhotoError, type PreparedPhoto, preparePhoto } from './images.ts';
 import { useSession } from './session.tsx';
@@ -716,5 +725,185 @@ export function useWorkspaceSync(orgId: string | null) {
     enabled: Boolean(token && orgId),
     queryFn: () => apiFetch<WorkspaceSync>('/v1/channels/sync', { token: token as string, orgId }),
     refetchInterval: 30_000,
+  });
+}
+
+// Tasks: cleans, maintenance and inspections for the field team.
+
+export function useTasks(orgId: string | null, query: TaskListQuery) {
+  const token = useToken();
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) if (v) params.set(k, String(v));
+  return useQuery({
+    queryKey: ['tasks', orgId, params.toString()],
+    enabled: Boolean(token && orgId),
+    queryFn: () => apiFetch<TaskList>(`/v1/tasks?${params}`, { token: token as string, orgId }),
+    placeholderData: keepPreviousData,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useTask(orgId: string | null, taskId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['task', orgId, taskId],
+    enabled: Boolean(token && orgId && taskId),
+    queryFn: () => apiFetch<Task>(`/v1/tasks/${taskId}`, { token: token as string, orgId }),
+  });
+}
+
+export function useCreateTask(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TaskCreate) =>
+      apiFetch<Task>('/v1/tasks', { token: token as string, orgId, method: 'POST', body }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['today', orgId] });
+    },
+  });
+}
+
+export function useUpdateTask(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, ...body }: { taskId: string } & TaskUpdate) =>
+      apiFetch<Task>(`/v1/tasks/${taskId}`, { token: token as string, orgId, method: 'PATCH', body }),
+    onSuccess: (task) => {
+      queryClient.setQueryData(['task', orgId, task.id], task);
+      void queryClient.invalidateQueries({ queryKey: ['tasks', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['today', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['calendar', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['property', orgId, task.propertyId] });
+    },
+  });
+}
+
+/** One photo onto a task: the ticket, the upload, the register. */
+async function uploadTaskPhoto(
+  token: string,
+  orgId: string | null,
+  taskId: string,
+  file: File,
+): Promise<Task> {
+  const photo = await preparePhoto(file, config.demo ? 1600 : 2048);
+  if (config.demo) return demoAddTaskPhoto(orgId, taskId, photo);
+  const ticket = await apiFetch<PhotoUploadTicket>(`/v1/tasks/${taskId}/photos/uploads`, {
+    token,
+    orgId,
+    method: 'POST',
+    body: { contentType: photo.contentType, bytes: photo.blob.size },
+  });
+  let response: Response;
+  try {
+    response = await fetch(ticket.uploadUrl, {
+      method: ticket.method,
+      headers: ticket.headers,
+      body: photo.blob,
+    });
+  } catch {
+    throw new ApiError(0, 'offline', 'Cannot reach photo storage. Check your connection and try again.');
+  }
+  if (!response.ok)
+    throw new ApiError(response.status, 'upload_failed', 'The photo could not be uploaded. Try again.');
+  return apiFetch<Task>(`/v1/tasks/${taskId}/photos`, {
+    token,
+    orgId,
+    method: 'POST',
+    body: { path: ticket.path, width: photo.width, height: photo.height },
+  });
+}
+
+export function useAddTaskPhotos(orgId: string | null, taskId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (files: File[]) => {
+      const problems: string[] = [];
+      let task: Task | null = null;
+      for (const file of files) {
+        try {
+          task = await uploadTaskPhoto(token as string, orgId, taskId, file);
+          queryClient.setQueryData(['task', orgId, taskId], task);
+        } catch (error) {
+          problems.push(
+            error instanceof PhotoError || error instanceof ApiError
+              ? error.message
+              : `${file.name} could not be added.`,
+          );
+        }
+      }
+      return { task, problems };
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['tasks', orgId] }),
+  });
+}
+
+export function useRemoveTaskPhoto(orgId: string | null, taskId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (photoId: string) =>
+      apiFetch<Task>(`/v1/tasks/${taskId}/photos/${photoId}`, {
+        token: token as string,
+        orgId,
+        method: 'DELETE',
+      }),
+    onSuccess: (task) => {
+      queryClient.setQueryData(['task', orgId, taskId], task);
+      void queryClient.invalidateQueries({ queryKey: ['tasks', orgId] });
+    },
+  });
+}
+
+/** The crew reporting damage from a job: a maintenance task for the office. */
+export function useReportDamage(orgId: string | null, taskId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: DamageReport) =>
+      apiFetch<Task>(`/v1/tasks/${taskId}/report`, { token: token as string, orgId, method: 'POST', body }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['today', orgId] });
+    },
+  });
+}
+
+export function useTaskTemplates(orgId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['task-templates', orgId],
+    enabled: Boolean(token && orgId),
+    queryFn: () =>
+      apiFetch<{ templates: TaskTemplate[] }>('/v1/task-templates', { token: token as string, orgId }),
+  });
+}
+
+export function useUpdateTaskTemplate(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ kind, ...body }: { kind: TaskTemplate['kind'] } & TaskTemplateUpdate) =>
+      apiFetch<TaskTemplate>(`/v1/task-templates/${kind}`, {
+        token: token as string,
+        orgId,
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['task-templates', orgId] }),
+  });
+}
+
+/** The workspace's people, for assigning tasks and naming a property's usual cleaner. */
+export function useTeam(orgId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['team', orgId],
+    enabled: Boolean(token && orgId),
+    queryFn: () => apiFetch<TeamList>('/v1/team', { token: token as string, orgId }),
+    staleTime: 5 * 60_000,
   });
 }

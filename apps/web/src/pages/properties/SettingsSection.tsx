@@ -1,8 +1,9 @@
 import { MANAGED_BY_LABELS, type PropertyDetail } from '@v01/shared';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { SelectField } from '../../components/fields.tsx';
 import { Button, Notice } from '../../components/ui.tsx';
-import { ApiError, useArchiveProperty } from '../../lib/api.ts';
+import { ApiError, useArchiveProperty, useTeam, useUpdateProperty } from '../../lib/api.ts';
 import { V01 } from '../../lib/format.ts';
 import { Section } from './Section.tsx';
 
@@ -29,8 +30,14 @@ export function SettingsSection({
   canEdit: boolean;
 }) {
   const archive = useArchiveProperty(orgId);
+  const update = useUpdateProperty(orgId, d.id);
+  const team = useTeam(canEdit ? orgId : null);
   const navigate = useNavigate();
   const [asking, setAsking] = useState(false);
+  // The field team first, then everyone else: whoever usually does the check-out clean.
+  const people = [...(team.data?.members ?? [])].sort((a, b) =>
+    a.role === b.role ? a.name.localeCompare(b.name) : a.role === 'field' ? -1 : b.role === 'field' ? 1 : 0,
+  );
   return (
     <Section
       id="settings"
@@ -50,6 +57,33 @@ export function SettingsSection({
         The short code and area are changed under The place. Who runs the channels changes only in the
         move-over step, once its listings are off Guesty.
       </p>
+      <div className="mt-8 max-w-[420px]">
+        {canEdit ? (
+          <SelectField
+            label="Usual cleaner"
+            value={d.cleaner?.id ?? ''}
+            onChange={(v) => update.mutate({ cleanerUserId: v || null })}
+            options={[
+              { value: '', label: 'Nobody yet' },
+              ...people.map((m) => ({ value: m.id, label: m.name })),
+            ]}
+            hint="The clean made at every check-out is assigned to them."
+          />
+        ) : (
+          <dl className="m-0">
+            <Fact label="Usual cleaner">
+              {d.cleaner?.name ?? <span className="text-mist">Nobody yet</span>}
+            </Fact>
+          </dl>
+        )}
+        {update.error ? (
+          <div className="mt-3">
+            <Notice tone="urgent">
+              {update.error instanceof ApiError ? update.error.message : 'That didn’t go through. Try again.'}
+            </Notice>
+          </div>
+        ) : null}
+      </div>
       {canEdit ? (
         <div className="mt-8 rounded-xl border border-hairline p-4">
           <p className="text-[14.5px] font-medium text-ink">Archive this property</p>

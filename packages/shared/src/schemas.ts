@@ -185,6 +185,7 @@ export const PropertyDetailSchema = PropertySchema.extend({
   securityDepositMinor: z.number().int().nullable(),
   // Legal.
   licenceNumber: z.string().nullable(),
+  cleaner: z.object({ id: Uuid, name: z.string() }).nullable(),
   rooms: z.array(RoomSchema),
   amenities: z.array(z.string()),
   photos: z.array(PhotoSchema),
@@ -312,6 +313,8 @@ export const PropertyUpdateSchema = z
     securityDepositMinor: Minor,
     licenceNumber: Text(80),
     tags: TagsSchema.optional(),
+    /** Who usually cleans it; the check-out clean is assigned to them. Null: nobody yet. */
+    cleanerUserId: z.uuid().nullable().optional(),
   })
   .refine((p) => Object.keys(p).length > 0, 'Nothing to change')
   .refine((p) => !p.minPriceMinor || !p.maxPriceMinor || p.minPriceMinor <= p.maxPriceMinor, {

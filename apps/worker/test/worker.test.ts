@@ -12,7 +12,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { availabilityRanges } from '../src/availability.ts';
 import { importBookings, processWebhooks, sweepBookingFeed } from '../src/bookings.ts';
-import { markDirtyAfterCheckOut } from '../src/cleaning.ts';
+import { makeCheckOutCleans, markDirtyAfterCheckOut } from '../src/cleaning.ts';
 import {
   CROSS_CHECK_DAYS,
   compareNights,
@@ -688,6 +688,64 @@ describe('clean and dirty', () => {
     expect(await markDirtyAfterCheckOut(at('2026-10-20T11:30:00Z'))).toBe(0);
     expect(await markDirtyAfterCheckOut(at('2026-10-20T12:05:00Z'))).toBe(1);
     expect((await state())?.changed_at).toBe('2026-10-20 12:00:00');
+  });
+
+  it('makes one clean for every check-out ahead, assigned to the usual cleaner, and cancels it with the booking', async () => {
+    await owner('update app.properties set cleaner_user_id = $2 where id = $1', [cottage, op.userId]);
+    // The next guest arrives on the 20th at 15:00, so the clean is due by then.
+    const [next] = await owner<{ id: string }>(
+      `insert into app.reservations (organisation_id, property_id, channel, status, check_in, check_out)
+       values ($1, $2, 'airbnb', 'confirmed', '2026-10-20', '2026-10-23') returning id`,
+      [op.orgId, cottage],
+    );
+    // Looking from the 15th: the 16th and 20th check-outs are within the week; the 23rd is too.
+    expect(await makeCheckOutCleans(at('2026-10-15T08:00:00Z'), 7)).toEqual({ made: 2, cancelled: 0 });
+    const cleans = await owner<Record<string, unknown>>(
+      `select due_on::text, due_time::text, notes, assignee_user_id as assignee, status, title, checklist
+         from app.tasks where property_id = $1 and source = 'check_out' order by due_on`,
+      [cottage],
+    );
+    expect(cleans).toEqual([
+      expect.objectContaining({
+        due_on: '2026-10-16',
+        due_time: null,
+        notes: 'Guest leaves at 10:00. Nobody arrives today.',
+        assignee: op.userId,
+        status: 'open',
+        title: 'Clean after check-out',
+      }),
+      expect.objectContaining({
+        due_on: '2026-10-20',
+        due_time: '15:00:00',
+        notes: 'Guest leaves at 13:00. Next guest arrives at 15:00.',
+      }),
+    ]);
+    expect((cleans[0]?.checklist as { text: string; done: boolean }[] | undefined)?.[0]).toEqual({
+      text: 'Strip and remake every bed',
+      done: false,
+    });
+    // Again: nothing doubles. A week on, the 23rd comes into view.
+    expect(await makeCheckOutCleans(at('2026-10-15T09:00:00Z'), 7)).toEqual({ made: 0, cancelled: 0 });
+    expect(await makeCheckOutCleans(at('2026-10-17T09:00:00Z'), 7)).toEqual({ made: 1, cancelled: 0 });
+    // The guest cancels: their clean goes too.
+    await owner(`update app.reservations set status = 'cancelled', cancelled_at = now() where id = $1`, [
+      next!.id,
+    ]);
+    expect(await makeCheckOutCleans(at('2026-10-17T10:00:00Z'), 7)).toEqual({ made: 0, cancelled: 1 });
+    const [gone] = await owner<{ status: string }>(
+      "select status from app.tasks where reservation_id = $1 and source = 'check_out'",
+      [next!.id],
+    );
+    expect(gone?.status).toBe('cancelled');
+    // Switched off for the workspace, nothing more is made.
+    await owner("update app.task_templates set automatic = false where kind = 'cleaning'");
+    await owner(
+      `insert into app.reservations (organisation_id, property_id, channel, status, check_in, check_out)
+       values ($1, $2, 'direct', 'confirmed', '2026-10-24', '2026-10-25')`,
+      [op.orgId, cottage],
+    );
+    expect(await makeCheckOutCleans(at('2026-10-24T09:00:00Z'), 7)).toEqual({ made: 0, cancelled: 0 });
+    await owner("update app.task_templates set automatic = true where kind = 'cleaning'");
   });
 });
 

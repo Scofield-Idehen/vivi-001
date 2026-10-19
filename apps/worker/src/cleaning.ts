@@ -1,4 +1,4 @@
-import { addDays } from '@v01/shared';
+import { addDays, todayIn } from '@v01/shared';
 import { sql } from 'drizzle-orm';
 import type { WorkerDeps } from './deps.ts';
 
@@ -48,4 +48,73 @@ export async function markDirtyAfterCheckOut(deps: Pick<WorkerDeps, 'db' | 'log'
   }
   if (marked) deps.log.info({ marked }, 'Properties marked dirty after check-out');
   return marked;
+}
+
+/**
+ * A clean for every check-out (design roadmap, Phase 2): for each confirmed booking leaving within
+ * the next `daysAhead` days, one cleaning task on the check-out day, due by the next guest's arrival
+ * when one arrives that day, assigned to the property's usual cleaner, with the workspace's cleaning
+ * checklist. One per booking (a unique index), so running again never doubles it; a booking that is
+ * cancelled takes its open clean with it. Off per workspace when the cleaning template says so.
+ */
+export async function makeCheckOutCleans(
+  deps: Pick<WorkerDeps, 'db' | 'log' | 'now'>,
+  daysAhead = 7,
+): Promise<{ made: number; cancelled: number }> {
+  const now = deps.now?.() ?? new Date();
+  let made = 0;
+  let cancelled = 0;
+  for (const org of await deps.db.listOrganisations()) {
+    const result = await deps.db.withOrg({ orgId: org.id }, async (tx) => {
+      const [template] = await tx
+        .execute<{ title: string; checklist: string[]; automatic: boolean; time_zone: string }>(sql`
+        select t.title, t.checklist, t.automatic, s.time_zone
+          from app.task_templates t
+          join app.organisation_settings s on s.organisation_id = t.organisation_id
+         where t.kind = 'cleaning'`)
+        .then((r) => r.rows);
+      if (!template?.automatic) return { made: 0, cancelled: 0 };
+      const today = todayIn(template.time_zone, now);
+      const until = addDays(today, daysAhead);
+      const checklist = JSON.stringify((template.checklist ?? []).map((text) => ({ text, done: false })));
+      const inserted = await tx.execute(sql`
+        insert into app.tasks (organisation_id, property_id, reservation_id, kind, source, title, notes,
+                               due_on, due_time, assignee_user_id, checklist)
+        select r.organisation_id, r.property_id, r.id, 'cleaning', 'check_out', ${template.title},
+               'Guest leaves at ' || to_char(coalesce(r.check_out_time, p.check_out_time), 'HH24:MI')
+                 || coalesce('. Next guest arrives at ' || to_char(n.arrives, 'HH24:MI') || '.', '. Nobody arrives today.'),
+               r.check_out, n.arrives, p.cleaner_user_id, ${checklist}::jsonb
+          from app.reservations r
+          join app.properties p on p.id = r.property_id
+          left join lateral (
+            select coalesce(x.check_in_time, p.check_in_time) as arrives
+              from app.reservations x
+             where x.property_id = r.property_id and x.status = 'confirmed' and x.check_in = r.check_out
+             order by coalesce(x.check_in_time, p.check_in_time)
+             limit 1
+          ) n on true
+         where r.status = 'confirmed'
+           and p.archived_at is null
+           and r.check_out between ${today}::date and ${until}::date
+           and not exists (
+             select 1 from app.tasks t
+              where t.reservation_id = r.id and t.kind = 'cleaning' and t.source = 'check_out'
+           )
+        returning id`);
+      // A booking that was cancelled, or moved off its day, takes its open clean with it.
+      const gone = await tx.execute(sql`
+        update app.tasks t
+           set status = 'cancelled'
+          from app.reservations r
+         where t.reservation_id = r.id and t.source = 'check_out' and t.kind = 'cleaning'
+           and t.status in ('open', 'in_progress')
+           and (r.status <> 'confirmed' or r.check_out <> t.due_on)
+        returning t.id`);
+      return { made: inserted.rows.length, cancelled: gone.rows.length };
+    });
+    made += result.made;
+    cancelled += result.cancelled;
+  }
+  if (made || cancelled) deps.log.info({ made, cancelled }, 'Check-out cleans kept up to date');
+  return { made, cancelled };
 }

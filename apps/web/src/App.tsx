@@ -24,6 +24,7 @@ import { ReservationPage } from './pages/reservations/ReservationPage.tsx';
 import { Reservations } from './pages/reservations/Reservations.tsx';
 import { SignIn } from './pages/SignIn.tsx';
 import { Today } from './pages/Today.tsx';
+import { TasksPage } from './pages/tasks/TasksPage.tsx';
 import { WorkspacePage } from './pages/WorkspacePage.tsx';
 
 /**
@@ -131,6 +132,7 @@ const routes = [
             children: [{ path: 'new', element: <NewPropertyPanel /> }],
           },
           { path: 'properties/:id', element: <PropertyPage /> },
+          { path: 'tasks', element: <TasksPage /> },
           { path: 'channels', element: <ChannelsPage /> },
           { path: 'workspace', element: <WorkspacePage /> },
           { path: 'about', element: <About /> },

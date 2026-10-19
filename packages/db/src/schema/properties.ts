@@ -110,6 +110,8 @@ export const properties = app.table(
     cleaningChangedAt: timestamp('cleaning_changed_at', { withTimezone: true, mode: 'string' }),
     /** Who marked it; null when the worker did, at a check-out. */
     cleaningChangedBy: uuid('cleaning_changed_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    /** Who usually cleans it: the check-out clean is assigned to them. */
+    cleanerUserId: uuid('cleaner_user_id').references(() => appUsers.id, { onDelete: 'set null' }),
     archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'string' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

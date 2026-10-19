@@ -136,3 +136,23 @@ export type OutboxStatus = (typeof OUTBOX_STATUSES)[number];
  */
 export const CHANNEX_SETUP_STATUSES = ['queued', 'working', 'done', 'failed'] as const;
 export type ChannexSetupStatus = (typeof CHANNEX_SETUP_STATUSES)[number];
+
+/** Tasks for the field team (design roadmap, Phase 2). */
+export const TASK_KINDS = ['cleaning', 'maintenance', 'inspection'] as const;
+export type TaskKind = (typeof TASK_KINDS)[number];
+
+export const TASK_KIND_LABELS: Record<TaskKind, string> = {
+  cleaning: 'Clean',
+  maintenance: 'Maintenance',
+  inspection: 'Inspection',
+};
+
+export const TASK_STATUSES = ['open', 'in_progress', 'done', 'cancelled'] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  open: 'To do',
+  in_progress: 'Started',
+  done: 'Done',
+  cancelled: 'Cancelled',
+};

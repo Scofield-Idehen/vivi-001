@@ -16,6 +16,8 @@ import {
   RESERVATION_STATUSES,
   ROOM_KINDS,
   SPACE_TYPES,
+  TASK_KINDS,
+  TASK_STATUSES,
 } from '@v01/shared';
 import { customType, pgSchema, timestamp } from 'drizzle-orm/pg-core';
 
@@ -34,6 +36,8 @@ export const managedBy = app.enum('managed_by', MANAGED_BY);
 export const priceOwner = app.enum('price_owner', PRICE_OWNERS);
 export const outboxKind = app.enum('outbox_kind', OUTBOX_KINDS);
 export const outboxStatus = app.enum('outbox_status', OUTBOX_STATUSES);
+export const taskKind = app.enum('task_kind', TASK_KINDS);
+export const taskStatus = app.enum('task_status', TASK_STATUSES);
 export const channexSetupStatus = app.enum('channex_setup_status', CHANNEX_SETUP_STATUSES);
 export const fieldKind = app.enum('field_kind', FIELD_KINDS);
 export const platformRole = app.enum('platform_role', PLATFORM_ROLES);
