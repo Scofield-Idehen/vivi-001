@@ -65,6 +65,9 @@ export const reservations = app.table(
     checkInTime: time('check_in_time'),
     checkOutTime: time('check_out_time'),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true, mode: 'string' }),
+    /** Why, when the team cancelled it here (a direct booking); a channel's cancellation carries none. */
+    cancellationReason: text('cancellation_reason'),
+    cancelledBy: uuid('cancelled_by').references(() => appUsers.id, { onDelete: 'set null' }),
     /** The private key in the guest's link to their stay page: 128 random bits as hex, made with the row. */
     guestKey: text('guest_key')
       .notNull()
@@ -81,6 +84,10 @@ export const reservations = app.table(
     unique('reservations_guest_key_key').on(t.guestKey),
     check('reservations_dates_order', sql`${t.checkOut} > ${t.checkIn}`),
     check('reservations_notes_length', sql`char_length(${t.notes}) <= 4000`),
+    check(
+      'reservations_cancellation_reason_length',
+      sql`${t.cancellationReason} is null or char_length(${t.cancellationReason}) <= 400`,
+    ),
   ],
 );
 
@@ -179,5 +186,66 @@ export const occupancies = app.table(
     index('occupancies_org_idx').on(t.organisationId),
     unique('occupancies_source_key').on(t.sourceType, t.sourceId),
     check('occupancies_source_type', sql`${t.sourceType} in ('reservation', 'block')`),
+  ],
+);
+
+/**
+ * Extra charges on a booking, on top of the channel's total: a late check-out, a pet, damage
+ * agreed with the guest; a negative amount is a discount. For the record and the balance; nothing
+ * is charged from here yet (payments and Stripe come in Phase 4).
+ */
+export const reservationCharges = app.table(
+  'reservation_charges',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    reservationId: uuid('reservation_id')
+      .notNull()
+      .references(() => reservations.id, { onDelete: 'cascade' }),
+    label: text('label').notNull(),
+    amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
+    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('reservation_charges_reservation_idx').on(t.reservationId),
+    check('reservation_charges_label_length', sql`char_length(${t.label}) between 1 and 80`),
+    check('reservation_charges_amount', sql`${t.amountMinor} <> 0`),
+  ],
+);
+
+/**
+ * Money received against a booking, as the team records it: a bank transfer, cash at the door,
+ * a card payment taken elsewhere, or what the channel collected. A negative amount is a refund.
+ * The balance is the total plus charges, less payments.
+ */
+export const reservationPayments = app.table(
+  'reservation_payments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    reservationId: uuid('reservation_id')
+      .notNull()
+      .references(() => reservations.id, { onDelete: 'cascade' }),
+    amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
+    /** channel | card | bank_transfer | cash | other. */
+    method: text('method').notNull(),
+    paidOn: date('paid_on', { mode: 'string' }).notNull(),
+    note: text('note'),
+    recordedBy: uuid('recorded_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('reservation_payments_reservation_idx').on(t.reservationId),
+    check(
+      'reservation_payments_method',
+      sql`${t.method} in ('channel', 'card', 'bank_transfer', 'cash', 'other')`,
+    ),
+    check('reservation_payments_amount', sql`${t.amountMinor} <> 0`),
+    check('reservation_payments_note_length', sql`${t.note} is null or char_length(${t.note}) <= 400`),
   ],
 );

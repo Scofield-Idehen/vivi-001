@@ -24,7 +24,7 @@ let lodge: string;
 const today = todayIn('Europe/London');
 const day = (n: number) => addDays(today, n);
 
-type Method = 'GET' | 'PATCH' | 'POST';
+type Method = 'GET' | 'PATCH' | 'POST' | 'DELETE';
 type Who = { userId: string; email: string; orgId: string };
 
 async function call(
@@ -557,5 +557,110 @@ describe('a booking made by the team', () => {
         })
       ).status,
     ).toBe(404);
+  });
+});
+
+describe('money on a booking, and cancelling one', () => {
+  let id: string;
+
+  it('keeps extra charges and payments, and works out the balance', async () => {
+    id = (
+      await call('POST', '/v1/reservations', {
+        as: asA(),
+        body: {
+          propertyId: lodge,
+          checkIn: day(70),
+          checkOut: day(72),
+          guestName: 'Pat Balance',
+          totalMinor: 30000,
+        },
+      })
+    ).body.id;
+    const fresh = (await call('GET', `/v1/reservations/${id}`, { as: asA() })).body;
+    expect(fresh).toMatchObject({
+      charges: [],
+      payments: [],
+      chargesMinor: 0,
+      paidMinor: 0,
+      balanceMinor: 30000,
+    });
+    const charged = await call('POST', `/v1/reservations/${id}/charges`, {
+      as: as('accounts'),
+      body: { label: 'Late check-out', amountMinor: 4500 },
+    });
+    expect(charged.status).toBe(201);
+    expect(charged.body.charges[0]).toMatchObject({
+      label: 'Late check-out',
+      amountMinor: 4500,
+      createdBy: 'accounts@example.test',
+    });
+    const paid = await call('POST', `/v1/reservations/${id}/payments`, {
+      as: as('accounts'),
+      body: { amountMinor: 20000, method: 'bank_transfer', paidOn: day(-1), note: 'Deposit' },
+    });
+    expect(paid.body).toMatchObject({ chargesMinor: 4500, paidMinor: 20000, balanceMinor: 14500 });
+    const refund = await call('POST', `/v1/reservations/${id}/payments`, {
+      as: asA(),
+      body: { amountMinor: -5000, method: 'bank_transfer', paidOn: day(0) },
+    });
+    expect(refund.body).toMatchObject({ paidMinor: 15000, balanceMinor: 19500 });
+    const less = await call('DELETE', `/v1/reservations/${id}/charges/${charged.body.charges[0].id}`, {
+      as: asA(),
+    });
+    expect(less.body).toMatchObject({ charges: [], balanceMinor: 15000 });
+    // Guest comms and the field team don't touch money; a zero amount is refused.
+    expect(
+      (
+        await call('POST', `/v1/reservations/${id}/charges`, {
+          as: as('comms'),
+          body: { label: 'x', amountMinor: 100 },
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await call('POST', `/v1/reservations/${id}/charges`, {
+          as: asA(),
+          body: { label: 'x', amountMinor: 0 },
+        })
+      ).status,
+    ).toBe(400);
+  });
+
+  it('cancels a direct booking with a reason, freeing the nights; a channel booking is cancelled on the channel', async () => {
+    const empty = await call('POST', `/v1/reservations/${id}/cancel`, { as: asA(), body: { reason: '  ' } });
+    expect(empty.status).toBe(400);
+    const { status, body } = await call('POST', `/v1/reservations/${id}/cancel`, {
+      as: as('comms'),
+      body: { reason: 'Guest’s flight was cancelled; rebooking next month.' },
+    });
+    expect(status).toBe(200);
+    expect(body).toMatchObject({
+      status: 'cancelled',
+      cancellationReason: 'Guest’s flight was cancelled; rebooking next month.',
+      cancelledBy: 'comms@example.test',
+    });
+    expect(body.cancelledAt).not.toBeNull();
+    // The nights are free again.
+    const again = await call('POST', '/v1/reservations', {
+      as: asA(),
+      body: { propertyId: lodge, checkIn: day(70), checkOut: day(72), guestName: 'Next Guest' },
+    });
+    expect(again.status).toBe(201);
+    expect(
+      (await call('POST', `/v1/reservations/${id}/cancel`, { as: asA(), body: { reason: 'again' } })).body
+        .error.code,
+    ).toBe('already_cancelled');
+    const [airbnb] = await owner<{ id: string }>(
+      `select id from app.reservations where organisation_id = $1 and channel = 'airbnb' limit 1`,
+      [a.orgId],
+    );
+    if (airbnb) {
+      const refused = await call('POST', `/v1/reservations/${airbnb.id}/cancel`, {
+        as: asA(),
+        body: { reason: 'x' },
+      });
+      expect(refused.body.error.code).toBe('cancel_on_channel');
+    }
   });
 });

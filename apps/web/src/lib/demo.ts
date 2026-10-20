@@ -3,6 +3,7 @@ import {
   AmenitiesUpdateSchema,
   AmenityCodesSchema,
   addDays,
+  BrandUpdateSchema,
   CALENDAR_DAYS_AHEAD,
   type Calendar,
   type CalendarBlock,
@@ -17,6 +18,8 @@ import {
   ChannelAccountConnectSchema,
   ChannelAccountCreateSchema,
   type ChannexState,
+  type Charge,
+  ChargeCreateSchema,
   type CleaningState,
   CleaningUpdateSchema,
   type ConsoleOperator,
@@ -52,6 +55,8 @@ import {
   type MessageVia,
   nightRules,
   nightsBetween,
+  type Payment,
+  PaymentCreateSchema,
   type Permission,
   PHOTO_MAX_COUNT,
   PhotoOrderSchema,
@@ -69,6 +74,7 @@ import {
   PropertyUpdateSchema,
   RESERVATION_LIST_LIMIT,
   type Reservation,
+  ReservationCancelSchema,
   ReservationCreateSchema,
   type ReservationList,
   ReservationListQuerySchema,
@@ -236,6 +242,11 @@ interface DemoStay extends Omit<CalendarStay, 'status'> {
   createdAt: string;
   updatedAt: string;
   cancelledAt: string | null;
+  /** Money for the record, and why the team cancelled it. Missing in older saved states. */
+  charges?: Charge[];
+  payments?: Payment[];
+  cancellationReason?: string | null;
+  cancelledBy?: string | null;
 }
 
 /** The operator's nights with their own rules, bookings and blocks, as the API keeps them. */
@@ -922,6 +933,7 @@ function operatorWorkspace(
       accentHex,
       senderName: name,
       emailDomain: null,
+      guestPhone: null,
     },
   };
 }
@@ -2451,6 +2463,18 @@ function toReservation(operator: DemoOperator, x: DemoStay): Reservation {
     payoutMinor: x.payoutMinor,
     notes: x.notes,
     cancelledAt: x.cancelledAt,
+    cancellationReason: x.cancellationReason ?? null,
+    cancelledBy: x.cancelledBy ?? null,
+    charges: x.charges ?? [],
+    payments: x.payments ?? [],
+    chargesMinor: (x.charges ?? []).reduce((sum, c) => sum + c.amountMinor, 0),
+    paidMinor: (x.payments ?? []).reduce((sum, p) => sum + p.amountMinor, 0),
+    balanceMinor:
+      x.totalMinor === null
+        ? null
+        : x.totalMinor +
+          (x.charges ?? []).reduce((sum, c) => sum + c.amountMinor, 0) -
+          (x.payments ?? []).reduce((sum, p) => sum + p.amountMinor, 0),
     updatedAt: x.updatedAt,
     today: todayIn(operator.workspace.settings.timeZone),
   };
@@ -2726,7 +2750,7 @@ function demoGuestStay(s: DemoState, key: string): GuestStay {
         displayName: operator.workspace.brand.displayName,
         logoLightUrl: operator.workspace.brand.logoLightUrl,
         accentHex: operator.workspace.brand.accentHex,
-        phone: '+44 1631 000000',
+        phone: operator.workspace.brand.guestPhone ?? '+44 1631 000000',
         email: `hello@${operator.workspace.brand.emailDomain ?? 'example.com'}`,
       },
       fields,
@@ -2798,6 +2822,16 @@ export async function demoFetch<T>(
 
   if (method === 'GET' && path === '/v1/workspace') {
     const { operator, role } = access(options.orgId, 'workspace.read');
+    return { ...operator.workspace, role } as T;
+  }
+
+  if (method === 'PATCH' && path === '/v1/workspace/brand') {
+    const { operator, role } = access(options.orgId, 'workspace.manage');
+    const parsed = BrandUpdateSchema.safeParse(options.body);
+    if (!parsed.success) invalid(parsed.error.issues);
+    if (parsed.data.guestPhone !== undefined)
+      operator.workspace.brand.guestPhone = parsed.data.guestPhone || null;
+    save();
     return { ...operator.workspace, role } as T;
   }
 
@@ -3837,6 +3871,72 @@ export async function demoFetch<T>(
     operator.calendar.stays.push(stay);
     save();
     return toReservation(operator, stay) as T;
+  }
+
+  const moneyMatch =
+    /^\/v1\/reservations\/([0-9a-f-]{36})\/(charges|payments|cancel)(?:\/([0-9a-f-]{36}))?$/.exec(path);
+  if (moneyMatch?.[1]) {
+    const [, stayId, what, itemId] = moneyMatch;
+    if (what === 'cancel' && method === 'POST') {
+      const { operator } = access(options.orgId, 'reservations.write');
+      const stay = findStay(operator, stayId);
+      const parsed = ReservationCancelSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      if (stay.channel !== 'direct')
+        throw new ApiError(
+          400,
+          'cancel_on_channel',
+          'This booking came from a channel; cancel it there and it arrives here.',
+        );
+      if (stay.status === 'cancelled')
+        throw new ApiError(400, 'already_cancelled', 'This booking is already cancelled.');
+      stay.status = 'cancelled';
+      stay.cancelledAt = new Date().toISOString();
+      stay.cancellationReason = parsed.data.reason;
+      stay.cancelledBy = operator.team.find((m) => m.email === DEMO_USER.email)?.fullName ?? 'Demo user';
+      stay.updatedAt = stay.cancelledAt;
+      save();
+      return toReservation(operator, stay) as T;
+    }
+    const { operator } = access(options.orgId, 'money.write');
+    const stay = findStay(operator, stayId);
+    const by = operator.team.find((m) => m.email === DEMO_USER.email)?.fullName ?? 'Demo user';
+    if (method === 'POST' && what === 'charges') {
+      const parsed = ChargeCreateSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      stay.charges ??= [];
+      stay.charges.push({
+        id: crypto.randomUUID(),
+        ...parsed.data,
+        createdBy: by,
+        createdAt: new Date().toISOString(),
+      });
+      save();
+      return toReservation(operator, stay) as T;
+    }
+    if (method === 'POST' && what === 'payments') {
+      const parsed = PaymentCreateSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      stay.payments ??= [];
+      stay.payments.push({
+        id: crypto.randomUUID(),
+        amountMinor: parsed.data.amountMinor,
+        method: parsed.data.method,
+        paidOn: parsed.data.paidOn,
+        note: parsed.data.note || null,
+        recordedBy: by,
+        createdAt: new Date().toISOString(),
+      });
+      stay.payments.sort((a, b) => a.paidOn.localeCompare(b.paidOn));
+      save();
+      return toReservation(operator, stay) as T;
+    }
+    if (method === 'DELETE' && itemId) {
+      if (what === 'charges') stay.charges = (stay.charges ?? []).filter((c) => c.id !== itemId);
+      else stay.payments = (stay.payments ?? []).filter((p) => p.id !== itemId);
+      save();
+      return toReservation(operator, stay) as T;
+    }
   }
 
   const reservationMatch = RESERVATION_PATH.exec(path);

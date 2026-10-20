@@ -5,17 +5,20 @@ import {
   IconExternalLink,
   IconPencil,
 } from '@tabler/icons-react';
-import { can, formatMoney, nightsBetween, type Reservation } from '@v01/shared';
+import { CANCELLATION_REASON_MAX, can, nightsBetween, type Reservation } from '@v01/shared';
 import { type ReactNode, useEffect, useId, useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { TextArea } from '../../components/fields.tsx';
+import { Sheet } from '../../components/Sheet.tsx';
 import { PageLoading } from '../../components/Spinner.tsx';
 import { Button, EmptyState, Notice } from '../../components/ui.tsx';
-import { ApiError, useGuestLink, useReservation, useWorkspace } from '../../lib/api.ts';
+import { ApiError, useCancelReservation, useGuestLink, useReservation, useWorkspace } from '../../lib/api.ts';
 import { config } from '../../lib/config.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
 import { Facts, Missing } from '../properties/Section.tsx';
+import { Money } from './Money.tsx';
 import { contactRoutes, dayLabel, partyLabel, stayTimes, whenLabel } from './model.ts';
-import { ChannelName, MessageGuest, ReservationEditor, StatusLabel } from './parts.tsx';
+import { MessageGuest, ReservationEditor, StatusLabel } from './parts.tsx';
 
 function Part({ title, children }: { title: string; children: ReactNode }) {
   const id = useId();
@@ -46,40 +49,6 @@ function TimeLine({
       {dayLabel(date)}, {word} {time}
       {agreed ? <span className="text-slate">, agreed for this stay</span> : null}
     </>
-  );
-}
-
-function Booked({ r, locale, timeZone }: { r: Reservation; locale: string; timeZone: string }) {
-  const when = new Intl.DateTimeFormat(locale, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone,
-  }).format(new Date(r.createdAt));
-  const money = (minor: number) => formatMoney({ amountMinor: minor, currency: r.currency ?? 'GBP' }, locale);
-  return (
-    <div className="rounded-2xl bg-paper p-5">
-      <p className="text-[13px] text-slate">Booked on</p>
-      <p className="mt-1.5 text-[14.5px] text-ink">
-        <ChannelName channel={r.channel} reference={r.channelReference} />
-      </p>
-      <dl className="mt-4 flex flex-col gap-2.5 border-t border-hairline pt-4 text-[13.5px]">
-        <div className="flex justify-between gap-4">
-          <dt className="text-slate">Booked</dt>
-          <dd className="text-ink">{when}</dd>
-        </div>
-        <div className="flex justify-between gap-4">
-          <dt className="text-slate">Total</dt>
-          <dd className="tnum text-ink">{r.totalMinor !== null ? money(r.totalMinor) : 'Not sent'}</dd>
-        </div>
-        {r.payoutMinor !== null ? (
-          <div className="flex justify-between gap-4">
-            <dt className="text-slate">Payout</dt>
-            <dd className="tnum text-ink">{money(r.payoutMinor)}</dd>
-          </div>
-        ) : null}
-      </dl>
-    </div>
   );
 }
 
@@ -138,6 +107,51 @@ function GuestPage({ orgId, reservationId }: { orgId: string; reservationId: str
   );
 }
 
+/** Cancelling a booking made here: a reason, then the nights are free. */
+function CancelSheet({ orgId, r, onClose }: { orgId: string; r: Reservation; onClose(): void }) {
+  const cancel = useCancelReservation(orgId, r.id);
+  const [reason, setReason] = useState('');
+  const ready = reason.trim().length > 0 && !cancel.isPending;
+  return (
+    <Sheet
+      title="Cancel this booking"
+      subtitle={`${r.guestName ?? 'The guest'}, ${dayLabel(r.checkIn)} to ${dayLabel(r.checkOut)}. The nights are free again the moment it is cancelled.`}
+      onClose={onClose}
+      busy={cancel.isPending}
+      footer={
+        <>
+          <Button
+            variant="primary"
+            disabled={!ready}
+            onClick={() => cancel.mutate({ reason: reason.trim() }, { onSuccess: onClose })}
+          >
+            Cancel the booking
+          </Button>
+          <Button variant="quiet" onClick={onClose}>
+            Keep it
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <TextArea
+          label="Why"
+          value={reason}
+          onChange={setReason}
+          max={CANCELLATION_REASON_MAX}
+          rows={3}
+          placeholder="The guest’s plans changed; rebooking in March."
+        />
+        {cancel.error ? (
+          <Notice tone="urgent">
+            {cancel.error instanceof ApiError ? cancel.error.message : 'That didn’t go through.'}
+          </Notice>
+        ) : null}
+      </div>
+    </Sheet>
+  );
+}
+
 export function ReservationPage() {
   const { id = '' } = useParams();
   const { orgId, entry } = useCurrentWorkspace();
@@ -148,6 +162,8 @@ export function ReservationPage() {
   const timeZone = workspace.data?.settings.timeZone ?? 'Europe/London';
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const canMoney = can(entry.role, 'money.write');
 
   useEffect(() => {
     if (!saved) return;
@@ -188,7 +204,7 @@ export function ReservationPage() {
           </h1>
           <p className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1 text-[14px] text-slate">
             <StatusLabel status={r.status} />
-            <span>{whenLabel(r, r.today)}</span>
+            {r.status === 'cancelled' ? null : <span>{whenLabel(r, r.today)}</span>}
             <span>
               {r.propertyName}, {nights === 1 ? '1 night' : `${nights} nights`}
             </span>
@@ -202,6 +218,11 @@ export function ReservationPage() {
             </Button>
           ) : null}
           <MessageGuest reservation={r} routes={contactRoutes(r)} />
+          {canEdit && r.channel === 'direct' && r.status !== 'cancelled' && !editing ? (
+            <Button variant="quiet" className="action-urgent" onClick={() => setCancelling(true)}>
+              Cancel booking
+            </Button>
+          ) : null}
         </div>
       </header>
 
@@ -221,7 +242,8 @@ export function ReservationPage() {
               year: 'numeric',
               timeZone,
             }).format(new Date(r.cancelledAt))}
-            . The nights are free again.
+            {r.cancelledBy ? ` by ${r.cancelledBy}` : ''}. The nights are free again.
+            {r.cancellationReason ? <span className="block text-slate">{r.cancellationReason}</span> : null}
           </Notice>
         ) : null}
         {saved ? <Notice tone="done">Saved.</Notice> : null}
@@ -326,7 +348,7 @@ export function ReservationPage() {
         </div>
 
         <aside className="flex flex-col gap-4 lg:sticky lg:top-8 lg:self-start">
-          <Booked r={r} locale={locale} timeZone={timeZone} />
+          <Money orgId={orgId} r={r} locale={locale} timeZone={timeZone} canWrite={canMoney} />
           {canEdit && r.status === 'confirmed' ? <GuestPage orgId={orgId} reservationId={r.id} /> : null}
           <Link
             to={`/calendar?from=${r.checkIn}`}
@@ -337,6 +359,7 @@ export function ReservationPage() {
           </Link>
         </aside>
       </div>
+      {cancelling ? <CancelSheet orgId={orgId} r={r} onClose={() => setCancelling(false)} /> : null}
     </div>
   );
 }

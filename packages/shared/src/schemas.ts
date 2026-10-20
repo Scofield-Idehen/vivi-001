@@ -74,10 +74,26 @@ export const WorkspaceSchema = z.object({
     accentHex: z.string().nullable(),
     senderName: z.string().nullable(),
     emailDomain: z.string().nullable(),
+    /** The number guests call, on their stay page. */
+    guestPhone: z.string().nullable(),
   }),
   role: WorkspaceRoleSchema,
 });
 export type Workspace = z.infer<typeof WorkspaceSchema>;
+
+/** What an admin changes about the outside brand here, for now: the number guests call. */
+export const BrandUpdateSchema = z
+  .object({
+    guestPhone: z
+      .string()
+      .trim()
+      .max(40)
+      .refine((v) => v === '' || /^\+?[0-9 ().-]{6,40}$/.test(v), 'A phone number, such as +44 7700 900123')
+      .nullable()
+      .optional(),
+  })
+  .refine((u) => Object.values(u).some((v) => v !== undefined), 'Nothing to change');
+export type BrandUpdate = z.input<typeof BrandUpdateSchema>;
 
 export const PropertySchema = z.object({
   id: Uuid,

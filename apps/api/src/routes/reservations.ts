@@ -1,7 +1,20 @@
-import { guests, organisationSettings, properties, reservations, type Tx } from '@v01/db';
 import {
+  appUsers,
+  guests,
+  organisationSettings,
+  properties,
+  reservationCharges,
+  reservationPayments,
+  reservations,
+  type Tx,
+} from '@v01/db';
+import {
+  ChargeCreateSchema,
+  PaymentCreateSchema,
+  type PaymentMethod,
   RESERVATION_LIST_LIMIT,
   type Reservation,
+  ReservationCancelSchema,
   ReservationCreateSchema,
   type ReservationList,
   ReservationListQuerySchema,
@@ -18,6 +31,10 @@ import { pgConstraint, type RequestScope, toIso } from '../context.ts';
 import { HttpError } from '../errors.ts';
 
 const ReservationParams = z.object({ id: z.uuid() });
+const ChargeParams = z.object({ id: z.uuid(), chargeId: z.uuid() });
+const PaymentParams = z.object({ id: z.uuid(), paymentId: z.uuid() });
+
+const personName = sql<string>`coalesce(${appUsers.fullName}, ${appUsers.email})`;
 
 const notFound = () =>
   new HttpError(404, 'reservation_not_found', 'That booking does not exist in this workspace.');
@@ -67,6 +84,8 @@ async function loadReservation(tx: Tx, id: string): Promise<Reservation> {
       payoutMinor: reservations.payoutMinor,
       notes: reservations.notes,
       cancelledAt: reservations.cancelledAt,
+      cancellationReason: reservations.cancellationReason,
+      cancelledBy: reservations.cancelledBy,
       updatedAt: reservations.updatedAt,
     })
     .from(reservations)
@@ -74,6 +93,44 @@ async function loadReservation(tx: Tx, id: string): Promise<Reservation> {
     .leftJoin(guests, eq(guests.id, reservations.guestId))
     .where(eq(reservations.id, id));
   if (!row) throw notFound();
+  const chargeRows = await tx
+    .select({ c: reservationCharges, by: personName })
+    .from(reservationCharges)
+    .leftJoin(appUsers, eq(appUsers.id, reservationCharges.createdBy))
+    .where(eq(reservationCharges.reservationId, id))
+    .orderBy(asc(reservationCharges.createdAt));
+  const paymentRows = await tx
+    .select({ p: reservationPayments, by: personName })
+    .from(reservationPayments)
+    .leftJoin(appUsers, eq(appUsers.id, reservationPayments.recordedBy))
+    .where(eq(reservationPayments.reservationId, id))
+    .orderBy(asc(reservationPayments.paidOn), asc(reservationPayments.createdAt));
+  const charges = chargeRows.map(({ c, by }) => ({
+    id: c.id,
+    label: c.label,
+    amountMinor: c.amountMinor,
+    createdBy: c.createdBy ? by : null,
+    createdAt: toIso(c.createdAt),
+  }));
+  const payments = paymentRows.map(({ p, by }) => ({
+    id: p.id,
+    amountMinor: p.amountMinor,
+    method: p.method as PaymentMethod,
+    paidOn: p.paidOn,
+    note: p.note,
+    recordedBy: p.recordedBy ? by : null,
+    createdAt: toIso(p.createdAt),
+  }));
+  const chargesMinor = charges.reduce((sum, c) => sum + c.amountMinor, 0);
+  const paidMinor = payments.reduce((sum, p) => sum + p.amountMinor, 0);
+  let cancelledByName: string | null = null;
+  if (row.cancelledBy) {
+    const [who] = await tx
+      .select({ name: personName })
+      .from(appUsers)
+      .where(eq(appUsers.id, row.cancelledBy));
+    cancelledByName = who?.name ?? null;
+  }
   return {
     ...row,
     propertyCheckInTime: clock(row.propertyCheckInTime) ?? '15:00',
@@ -83,6 +140,12 @@ async function loadReservation(tx: Tx, id: string): Promise<Reservation> {
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
     cancelledAt: row.cancelledAt ? toIso(row.cancelledAt) : null,
+    cancelledBy: cancelledByName,
+    charges,
+    payments,
+    chargesMinor,
+    paidMinor,
+    balanceMinor: row.totalMinor === null ? null : row.totalMinor + chargesMinor - paidMinor,
     today: await operatorToday(tx),
   };
 }
@@ -254,6 +317,124 @@ export function reservationRoutes(app: FastifyInstance, deps: { scope: RequestSc
           await tx.update(reservations).set(stay).where(eq(reservations.id, booking.id));
         }
         return loadReservation(tx, booking.id);
+      }),
+  );
+  // Money for the record: extra charges and payments, and the balance they make. Nothing is charged from here.
+
+  typed.post(
+    '/v1/reservations/:id/charges',
+    { schema: { params: ReservationParams, body: ChargeCreateSchema, response: { 201: ReservationSchema } } },
+    async (req, reply) =>
+      deps.scope.inOrg(req, 'money.write', async (tx, ctx) => {
+        await loadReservation(tx, req.params.id);
+        await tx.insert(reservationCharges).values({
+          organisationId: ctx.orgId,
+          reservationId: req.params.id,
+          label: req.body.label,
+          amountMinor: req.body.amountMinor,
+          createdBy: ctx.userId,
+        });
+        return reply.code(201).send(await loadReservation(tx, req.params.id));
+      }),
+  );
+
+  typed.delete(
+    '/v1/reservations/:id/charges/:chargeId',
+    { schema: { params: ChargeParams, response: { 200: ReservationSchema } } },
+    async (req) =>
+      deps.scope.inOrg(req, 'money.write', async (tx) => {
+        const gone = await tx
+          .delete(reservationCharges)
+          .where(
+            and(
+              eq(reservationCharges.id, req.params.chargeId),
+              eq(reservationCharges.reservationId, req.params.id),
+            ),
+          )
+          .returning({ id: reservationCharges.id });
+        if (gone.length === 0)
+          throw new HttpError(404, 'charge_not_found', 'That charge is not on this booking.');
+        return loadReservation(tx, req.params.id);
+      }),
+  );
+
+  typed.post(
+    '/v1/reservations/:id/payments',
+    {
+      schema: { params: ReservationParams, body: PaymentCreateSchema, response: { 201: ReservationSchema } },
+    },
+    async (req, reply) =>
+      deps.scope.inOrg(req, 'money.write', async (tx, ctx) => {
+        await loadReservation(tx, req.params.id);
+        await tx.insert(reservationPayments).values({
+          organisationId: ctx.orgId,
+          reservationId: req.params.id,
+          amountMinor: req.body.amountMinor,
+          method: req.body.method,
+          paidOn: req.body.paidOn,
+          note: req.body.note || null,
+          recordedBy: ctx.userId,
+        });
+        return reply.code(201).send(await loadReservation(tx, req.params.id));
+      }),
+  );
+
+  typed.delete(
+    '/v1/reservations/:id/payments/:paymentId',
+    { schema: { params: PaymentParams, response: { 200: ReservationSchema } } },
+    async (req) =>
+      deps.scope.inOrg(req, 'money.write', async (tx) => {
+        const gone = await tx
+          .delete(reservationPayments)
+          .where(
+            and(
+              eq(reservationPayments.id, req.params.paymentId),
+              eq(reservationPayments.reservationId, req.params.id),
+            ),
+          )
+          .returning({ id: reservationPayments.id });
+        if (gone.length === 0)
+          throw new HttpError(404, 'payment_not_found', 'That payment is not on this booking.');
+        return loadReservation(tx, req.params.id);
+      }),
+  );
+
+  /**
+   * Cancelling a booking made here, with a reason. The nights come free at once (and go to the
+   * channels for a property V-01 runs). A channel's booking is cancelled on the channel, which
+   * then tells V-01; cancelling it here would leave the two disagreeing.
+   */
+  typed.post(
+    '/v1/reservations/:id/cancel',
+    {
+      schema: {
+        params: ReservationParams,
+        body: ReservationCancelSchema,
+        response: { 200: ReservationSchema },
+      },
+    },
+    async (req) =>
+      deps.scope.inOrg(req, 'reservations.write', async (tx, ctx) => {
+        const current = await loadReservation(tx, req.params.id);
+        if (current.channel !== 'direct') {
+          throw new HttpError(
+            400,
+            'cancel_on_channel',
+            `This booking came from ${current.channel === 'booking_com' ? 'Booking.com' : current.channel === 'airbnb' ? 'Airbnb' : 'the channel'}; cancel it there and it arrives here.`,
+          );
+        }
+        if (current.status === 'cancelled')
+          throw new HttpError(400, 'already_cancelled', 'This booking is already cancelled.');
+        await tx
+          .update(reservations)
+          .set({
+            status: 'cancelled',
+            cancelledAt: sql`now()`,
+            cancellationReason: req.body.reason,
+            cancelledBy: ctx.userId,
+          })
+          .where(eq(reservations.id, req.params.id));
+        return loadReservation(tx, req.params.id);
       }),
   );
 }

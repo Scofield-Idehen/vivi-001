@@ -1,7 +1,7 @@
-import { ROLE_LABELS } from '@v01/shared';
-import type { ReactNode } from 'react';
-import { Notice, PageHeader, SectionHeading, StatusDot } from '../components/ui.tsx';
-import { ApiError, useMe, useSupportVisits, useWorkspace } from '../lib/api.ts';
+import { can, ROLE_LABELS } from '@v01/shared';
+import { type ReactNode, useState } from 'react';
+import { Button, Notice, PageHeader, SectionHeading, StatusDot } from '../components/ui.tsx';
+import { ApiError, useMe, useSupportVisits, useUpdateBrand, useWorkspace } from '../lib/api.ts';
 import { dateTime, duration, useNow } from '../lib/format.ts';
 import { useCurrentWorkspace } from '../lib/workspace.tsx';
 import { TeamSection } from './workspace/TeamSection.tsx';
@@ -68,6 +68,13 @@ export function WorkspacePage() {
               <Row label="Emails come from">{data.brand.senderName}</Row>
               <Row label="Email domain">{data.brand.emailDomain}</Row>
               <Row label="Logo">{data.brand.logoLightUrl ? 'Uploaded' : null}</Row>
+              <Row label="Phone guests call">
+                <GuestPhone
+                  orgId={orgId}
+                  value={data.brand.guestPhone}
+                  canEdit={can(entry.role, 'workspace.manage')}
+                />
+              </Row>
             </dl>
           </section>
           <p className="text-[13px] leading-relaxed text-mist lg:col-span-2">
@@ -79,6 +86,61 @@ export function WorkspacePage() {
       ) : null}
       <SupportVisits orgId={orgId} />
     </>
+  );
+}
+
+/** The number on every guest's stay page. Admins change it here; the rest of the brand waits for the settings screens. */
+function GuestPhone({ orgId, value, canEdit }: { orgId: string; value: string | null; canEdit: boolean }) {
+  const update = useUpdateBrand(orgId);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value ?? '');
+  if (!editing) {
+    return (
+      <span className="inline-flex flex-wrap items-center gap-2">
+        {value ? <span className="tnum">{value}</span> : <span className="text-mist">Not set</span>}
+        {canEdit ? (
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(value ?? '');
+              setEditing(true);
+            }}
+            className="action !h-7 text-[12.5px]"
+          >
+            {value ? 'Change' : 'Add'}
+          </button>
+        ) : null}
+      </span>
+    );
+  }
+  return (
+    <span className="flex flex-col gap-2">
+      <span className="flex flex-wrap items-center gap-2">
+        <input
+          type="tel"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="+44 7700 900123"
+          aria-label="Phone guests call"
+          className="h-9 w-[220px] rounded-md border border-edge bg-white px-3 text-[14px] text-ink focus:border-accent focus:outline-none"
+        />
+        <Button
+          variant="primary"
+          disabled={update.isPending}
+          onClick={() => update.mutate({ guestPhone: draft.trim() }, { onSuccess: () => setEditing(false) })}
+        >
+          Save
+        </Button>
+        <Button variant="quiet" onClick={() => setEditing(false)}>
+          Cancel
+        </Button>
+      </span>
+      {update.error ? (
+        <span className="text-[12.5px] text-urgent">
+          {update.error instanceof ApiError ? update.error.message : 'That didn’t go through.'}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

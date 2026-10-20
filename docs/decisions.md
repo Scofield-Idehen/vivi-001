@@ -5,6 +5,16 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-20
 
+- **Money on a booking, for the record, and cancelling one (built 20 Oct 2026).** A booking's
+  page shows the channel's total, the team's extra charges (a late check-out, a pet; a minus is a
+  discount), payments received (bank transfer, cash, card taken elsewhere, or collected by the
+  channel; a minus is a refund) and the balance they make, "Balance due" or "Paid in full".
+  Admins, operations and accounts record them (`money.write`); nothing is charged from here, which
+  is Phase 4 with Stripe. A direct booking is cancelled on its page with a reason, kept with who
+  cancelled it; the nights are free at once. A channel's booking is cancelled on the channel, which
+  tells V-01; cancelling it here is refused so the two never disagree. Migration 0029. The number
+  guests call, on their stay page, is now set on the Workspace page by an admin.
+
 - **The team invites itself (built 20 Oct 2026).** On the Workspace page an admin invites a
   colleague by email and role; Supabase sends its invitation email (someone who already has a
   sign-in gets a sign-in link instead), and the first sign-in with that email makes the membership

@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AccountListingList,
+  BrandUpdate,
   Calendar,
   CalendarChange,
   CalendarChangeResult,
@@ -9,6 +10,7 @@ import type {
   ChannelAccountCreate,
   ChannelAccountList,
   ChannexState,
+  ChargeCreate,
   CleaningState,
   CleaningUpdate,
   ConnectAllResult,
@@ -34,6 +36,7 @@ import type {
   MessageTemplateCreate,
   MessageTemplateList,
   MessageTemplateUpdate,
+  PaymentCreate,
   PhotoUploadTicket,
   PropertyCreate,
   PropertyDetail,
@@ -44,6 +47,7 @@ import type {
   PropertyList,
   PropertyUpdate,
   Reservation,
+  ReservationCancel,
   ReservationCreate,
   ReservationList,
   ReservationUpdate,
@@ -534,6 +538,40 @@ export function useUpdateReservation(orgId: string | null, id: string) {
     },
   });
 }
+
+/** Charges, payments and cancelling: each answers with the whole booking, which replaces the one on screen. */
+function useReservationAction<B>(orgId: string | null, id: string, path: (b: B) => string, method: Method) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: B) =>
+      apiFetch<Reservation>(`/v1/reservations/${id}${path(body)}`, {
+        token: token as string,
+        orgId,
+        method,
+        ...(method === 'DELETE' ? {} : { body }),
+      }),
+    onSuccess: async (reservation) => {
+      queryClient.setQueryData(['reservation', orgId, id], reservation);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['reservations', orgId] }),
+        queryClient.invalidateQueries({ queryKey: ['calendar', orgId] }),
+        queryClient.invalidateQueries({ queryKey: ['today', orgId] }),
+      ]);
+    },
+  });
+}
+
+export const useAddCharge = (orgId: string | null, id: string) =>
+  useReservationAction<ChargeCreate>(orgId, id, () => '/charges', 'POST');
+export const useRemoveCharge = (orgId: string | null, id: string) =>
+  useReservationAction<string>(orgId, id, (chargeId) => `/charges/${chargeId}`, 'DELETE');
+export const useAddPayment = (orgId: string | null, id: string) =>
+  useReservationAction<PaymentCreate>(orgId, id, () => '/payments', 'POST');
+export const useRemovePayment = (orgId: string | null, id: string) =>
+  useReservationAction<string>(orgId, id, (paymentId) => `/payments/${paymentId}`, 'DELETE');
+export const useCancelReservation = (orgId: string | null, id: string) =>
+  useReservationAction<ReservationCancel>(orgId, id, () => '/cancel', 'POST');
 
 /** The token for work that runs outside a hook, like uploading photos after adding a property. */
 export function useApiToken(): string | null {
@@ -1154,5 +1192,18 @@ export function useRemoveMember(orgId: string | null) {
     mutationFn: (userId: string) =>
       apiFetch<null>(`/v1/members/${userId}`, { token: token as string, orgId, method: 'DELETE' }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['team', orgId] }),
+  });
+}
+
+/** The number guests call, on the Workspace page (admins). */
+export function useUpdateBrand(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: BrandUpdate) =>
+      apiFetch<Workspace>('/v1/workspace/brand', { token: token as string, orgId, method: 'PATCH', body }),
+    onSuccess: (workspace) => {
+      queryClient.setQueryData(['workspace', orgId], workspace);
+    },
   });
 }

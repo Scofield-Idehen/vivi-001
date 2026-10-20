@@ -69,6 +69,71 @@ export const ReservationListSchema = z.object({
 });
 export type ReservationList = z.infer<typeof ReservationListSchema>;
 
+/** How money was received. `channel`: the site collected it and pays it out. */
+export const PAYMENT_METHODS = ['channel', 'card', 'bank_transfer', 'cash', 'other'] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  channel: 'Collected by the channel',
+  card: 'Card',
+  bank_transfer: 'Bank transfer',
+  cash: 'Cash',
+  other: 'Other',
+};
+
+/** An extra on top of the total: a late check-out, a pet, agreed damage. Negative: a discount. */
+export const ChargeSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  amountMinor: z.number().int(),
+  createdBy: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type Charge = z.infer<typeof ChargeSchema>;
+
+export const ChargeCreateSchema = z.object({
+  label: z.string().trim().min(1).max(80),
+  /** In the booking's currency; negative for a discount; never zero. */
+  amountMinor: z
+    .number()
+    .int()
+    .refine((n) => n !== 0, 'An amount, such as 45 or -20'),
+});
+export type ChargeCreate = z.infer<typeof ChargeCreateSchema>;
+
+/** Money received, as the team records it. Negative: a refund. */
+export const PaymentSchema = z.object({
+  id: z.string(),
+  amountMinor: z.number().int(),
+  method: z.enum(PAYMENT_METHODS),
+  paidOn: z.string(),
+  note: z.string().nullable(),
+  recordedBy: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type Payment = z.infer<typeof PaymentSchema>;
+
+const DayString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'A date like 2026-11-05');
+
+export const PaymentCreateSchema = z.object({
+  amountMinor: z
+    .number()
+    .int()
+    .refine((n) => n !== 0, 'An amount, such as 450; negative for a refund'),
+  method: z.enum(PAYMENT_METHODS),
+  paidOn: DayString,
+  note: z.string().trim().max(400).optional(),
+});
+export type PaymentCreate = z.infer<typeof PaymentCreateSchema>;
+
+export const CANCELLATION_REASON_MAX = 400;
+
+/** Cancelling a booking made here. A channel's booking is cancelled on the channel. */
+export const ReservationCancelSchema = z.object({
+  reason: z.string().trim().min(1, 'Say why, in a few words.').max(CANCELLATION_REASON_MAX),
+});
+export type ReservationCancel = z.infer<typeof ReservationCancelSchema>;
+
 /** One booking, with everything the reservation page shows. */
 export const ReservationSchema = ReservationSummarySchema.extend({
   propertyCode: z.string().nullable(),
@@ -83,6 +148,15 @@ export const ReservationSchema = ReservationSummarySchema.extend({
   payoutMinor: z.number().int().nullable(),
   notes: z.string().nullable(),
   cancelledAt: z.string().nullable(),
+  cancellationReason: z.string().nullable(),
+  cancelledBy: z.string().nullable(),
+  charges: z.array(ChargeSchema),
+  payments: z.array(PaymentSchema),
+  /** The sum of the charges, and of the payments (refunds taken off). */
+  chargesMinor: z.number().int(),
+  paidMinor: z.number().int(),
+  /** Total plus charges, less payments; null when the channel sent no total. */
+  balanceMinor: z.number().int().nullable(),
   updatedAt: z.string(),
   today: z.string(),
 });
