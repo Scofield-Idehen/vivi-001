@@ -54,7 +54,7 @@ and `firebase` command-line tools, and the values from your laptop's `.env` file
 4. **Supabase → Authentication → URL Configuration:** Site URL `https://<project-id>.web.app`, and
    add it to the redirect list, or the sign-in email's link will send people back to localhost.
 
-5. **`.firebaserc`:** change `v01-staging` to the project id (only needed for deploying from a
+5. **`.firebaserc`:** already set to `vivi-os` (only needed for deploying from a
    laptop; the action takes the id from the variable).
 
 6. **Deploy:** push to `main`, or Actions → Deploy → Run workflow. The first run takes about ten
