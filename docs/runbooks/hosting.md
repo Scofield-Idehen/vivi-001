@@ -47,8 +47,7 @@ and `firebase` command-line tools, and the values from your laptop's `.env` file
    - `WORKER_ENV`: the worker's, as in `apps/worker/.env`, with `APP_URL=https://<project-id>.web.app`
      and `NODE_ENV=production`. Leave out `PORT`.
 
-   Variables:
-   - `GCP_PROJECT_ID`: the project id.
+   Variables (under the environment):
    - `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`: the same two the web app uses on your laptop
      (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`). They are public; variables, not secrets.
 

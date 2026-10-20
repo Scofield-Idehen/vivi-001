@@ -20,6 +20,8 @@ env:
 jobs:
   web:
     name: Web app to Firebase Hosting
+    # Until the project id is set (docs/runbooks/hosting.md), nothing to deploy to: skip quietly.
+    if: ${{ vars.GCP_PROJECT_ID != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: staging
@@ -47,6 +49,7 @@ jobs:
 
   services:
     name: API and worker to Cloud Run
+    if: ${{ vars.GCP_PROJECT_ID != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: staging
