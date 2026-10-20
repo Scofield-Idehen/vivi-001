@@ -209,6 +209,19 @@ function Manage({ fields, orgId, onDone }: { fields: PropertyField[]; orgId: str
                     />
                     Guests see it
                   </label>
+                  <label
+                    className="inline-flex cursor-pointer items-center gap-1.5 text-[12.5px] text-slate"
+                    title="Cleaners and maintenance see it inside their job at the property, on the job's day."
+                  >
+                    <input
+                      type="checkbox"
+                      checked={f.crewVisible}
+                      disabled={busy}
+                      onChange={(e) => update.mutate({ id: f.id, crewVisible: e.target.checked })}
+                      className="size-4 accent-ink"
+                    />
+                    Field team sees it
+                  </label>
                 </>
               )}
               {renaming?.id !== f.id ? (

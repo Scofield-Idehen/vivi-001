@@ -245,10 +245,24 @@ function TaskSheet({
         <div className="flex flex-col gap-6">
           <div className="rounded-xl bg-paper px-4 py-3 text-[14px] leading-relaxed text-ink">
             <p>
-              <Link to={`/properties/${t.propertyId}`} className="font-medium">
-                {t.propertyName}
-              </Link>
+              {office ? (
+                <Link to={`/properties/${t.propertyId}`} className="font-medium">
+                  {t.propertyName}
+                </Link>
+              ) : (
+                <span className="font-medium">{t.propertyName}</span>
+              )}
             </p>
+            {t.propertyAddress ? (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.propertyAddress)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="action -ml-2.5 text-[13.5px]"
+              >
+                {t.propertyAddress}
+              </a>
+            ) : null}
             <p className="text-slate">
               {dayWord(t.dueOn, new Date().toISOString().slice(0, 10))}
               {t.dueTime ? `, by ${t.dueTime}` : ''}
@@ -300,6 +314,7 @@ function TaskSheet({
             </div>
           ) : null}
 
+          {t.access.length ? <GettingIn access={t.access} /> : null}
           <TaskPhotos t={t} orgId={orgId} live={Boolean(live)} />
 
           {live ? <ReportDamage t={t} orgId={orgId} /> : null}
@@ -342,6 +357,25 @@ function TaskSheet({
 }
 
 /** The crew's photos on a job: proof of a clean, or what they found. Big targets; the camera on a phone. */
+/** The codes for this job, big enough to read at the door. Only on the job's day, only for who works it. */
+function GettingIn({ access }: { access: Task['access'] }) {
+  return (
+    <section className="rounded-xl border border-hairline px-4 py-3">
+      <h3 className="mb-2 text-[13px] text-slate">Getting in</h3>
+      <dl className="flex flex-col gap-2">
+        {access.map((a) => (
+          <div key={a.name} className="flex items-baseline justify-between gap-4">
+            <dt className="text-[14px] text-ink">{a.name}</dt>
+            <dd className="font-serif text-[24px] leading-none tracking-[0.06em] text-ink tnum">
+              {a.value ?? <span className="font-sans text-[13px] tracking-normal text-mist">Not set</span>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
 function TaskPhotos({ t, orgId, live }: { t: Task; orgId: string; live: boolean }) {
   const add = useAddTaskPhotos(orgId, t.id);
   const remove = useRemoveTaskPhoto(orgId, t.id);

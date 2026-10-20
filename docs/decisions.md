@@ -5,6 +5,14 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-20
 
+- **The field team sees the bottom lock code (Alpha, 20 Oct 2026: "both should see it because they
+  need it"; settles the open question).** Cleaners and maintenance see it inside their job, in a
+  "Getting in" box, never on a property page: only when they open one job they may work, only from
+  the job's day, only while it's open. Accounts and V-01 support still never see codes. Which fields
+  the crew sees is a per-field setting, "Field team sees it", beside "Guests see it"; the standard
+  set has it on for the bottom lock only (migration 0032). The job also shows the address, with a
+  link to Maps.
+
 - **Cleaners and maintenance get their own screen; photo times come from the camera (Alpha, 20
   Oct 2026: "the cleaner dashboard should be different and should only show what they need to see
   … how do they snap images with timestamp").** The field team no longer gets the office's menu:

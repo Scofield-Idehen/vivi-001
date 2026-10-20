@@ -138,7 +138,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   channexRoutes(app, { scope });
   channelRoutes(app, { scope });
   todayRoutes(app, { scope });
-  taskRoutes(app, { scope, photos: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET });
+  taskRoutes(app, { scope, photos: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, box });
   inboxRoutes(app, { scope });
   memberRoutes(app, {
     scope,

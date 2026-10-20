@@ -26,7 +26,7 @@ let lodge: string;
 const today = todayIn('Europe/London');
 const day = (n: number) => addDays(today, n);
 
-type Method = 'GET' | 'PATCH' | 'POST' | 'DELETE';
+type Method = 'GET' | 'PATCH' | 'POST' | 'PUT' | 'DELETE';
 type Who = { userId: string; email: string; orgId: string };
 
 async function call(
@@ -93,7 +93,12 @@ beforeAll(async () => {
   crew2 = await member('field', 'jo@example.test', 'Jo Cleaner');
   db = new ApiDatabase(t.apiUrl);
   app = await buildApp({
-    env: loadEnv({ NODE_ENV: 'test', DATABASE_URL: t.apiUrl, SUPABASE_JWT_SECRET: JWT_SECRET }),
+    env: loadEnv({
+      NODE_ENV: 'test',
+      DATABASE_URL: t.apiUrl,
+      SUPABASE_JWT_SECRET: JWT_SECRET,
+      FIELD_SECRET_KEY: 'test-only-field-secret-key-with-enough-length',
+    }),
     db,
     verifyToken: createTokenVerifier({ jwtSecret: JWT_SECRET }),
     photos,
@@ -367,5 +372,47 @@ describe('making and working tasks', () => {
     expect((await call('PATCH', `/v1/tasks/${fixId}`, { as: asB(), body: { status: 'done' } })).status).toBe(
       404,
     );
+  });
+});
+
+describe('getting in', () => {
+  it('shows the crew the bottom lock code inside their job, on its day only, and never to accounts', async () => {
+    const fields = (await call('GET', '/v1/custom-fields', { as: asA() })).body.fields as {
+      id: string;
+      name: string;
+      crewVisible: boolean;
+    }[];
+    const bottom = fields.find((f) => f.name === 'Bottom lock code');
+    const top = fields.find((f) => f.name === 'Top lock code');
+    expect(bottom?.crewVisible).toBe(true);
+    expect(top?.crewVisible).toBe(false);
+    await call('PUT', `/v1/properties/${lodge}/fields`, {
+      as: asA(),
+      body: { values: { [bottom!.id]: '7731', [top!.id]: '4921#' } },
+    });
+    const job = await call('POST', '/v1/tasks', {
+      as: asA(),
+      body: { propertyId: lodge, kind: 'cleaning', dueOn: day(0), assigneeId: crew.userId },
+    });
+    const seen = await call('GET', `/v1/tasks/${job.body.id}`, { as: crew });
+    expect(seen.body.access).toEqual([{ name: 'Bottom lock code', kind: 'secret', value: '7731' }]);
+    // In the list, never: codes come only with one job opened.
+    const list = await call('GET', '/v1/tasks', { as: crew });
+    expect(list.body.tasks.every((x: { access: unknown[] }) => x.access.length === 0)).toBe(true);
+    // A job next week shows no code yet; a done one none any more.
+    const later = await call('POST', '/v1/tasks', {
+      as: asA(),
+      body: { propertyId: lodge, kind: 'cleaning', dueOn: day(7), assigneeId: crew.userId },
+    });
+    expect((await call('GET', `/v1/tasks/${later.body.id}`, { as: crew })).body.access).toEqual([]);
+    await call('PATCH', `/v1/tasks/${job.body.id}`, { as: crew, body: { status: 'done' } });
+    expect((await call('GET', `/v1/tasks/${job.body.id}`, { as: crew })).body.access).toEqual([]);
+    // Accounts read tasks but never codes.
+    const money = await member('accounts', 'books@example.test', 'Books Person');
+    const open = await call('POST', '/v1/tasks', {
+      as: asA(),
+      body: { propertyId: lodge, kind: 'cleaning', dueOn: day(0) },
+    });
+    expect((await call('GET', `/v1/tasks/${open.body.id}`, { as: money })).body.access).toEqual([]);
   });
 });

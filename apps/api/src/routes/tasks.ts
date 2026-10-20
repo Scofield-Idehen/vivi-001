@@ -1,15 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import {
   appUsers,
+  customFields,
   memberships,
   organisationSettings,
   properties,
+  propertyFieldValues,
   reservations,
   type Tx,
   taskPhotos,
   tasks,
   taskTemplates,
 } from '@v01/db';
+import type { SecretBox } from '@v01/integrations';
 import {
   addDays,
   can,
@@ -200,8 +203,45 @@ async function loadTasks(
       doneBy: t.doneBy ? (doneNames.get(t.doneBy) ?? null) : null,
       doneAt: t.doneAt ? toIso(t.doneAt) : null,
       createdAt: toIso(t.createdAt),
+      access: [],
     };
   });
+}
+
+/**
+ * Getting in, for one job: the property's fields marked for the crew, with secrets opened. Only for
+ * someone who may work the job (the API has already checked that), only while it is open, and only
+ * from its day: a code isn't handed out a week early or after the job is done.
+ */
+async function accessFor(
+  tx: Tx,
+  task: Task,
+  today: string,
+  box: SecretBox | undefined,
+): Promise<Task['access']> {
+  if (task.status === 'done' || task.status === 'cancelled' || task.dueOn > today) return [];
+  const rows = await tx
+    .select({
+      name: customFields.name,
+      kind: customFields.kind,
+      value: propertyFieldValues.value,
+      secret: propertyFieldValues.secret,
+    })
+    .from(customFields)
+    .leftJoin(
+      propertyFieldValues,
+      and(
+        eq(propertyFieldValues.fieldId, customFields.id),
+        eq(propertyFieldValues.propertyId, task.propertyId),
+      ),
+    )
+    .where(eq(customFields.crewVisible, true))
+    .orderBy(asc(customFields.position));
+  return rows.map((r) => ({
+    name: r.name,
+    kind: r.kind,
+    value: r.secret ? (box ? box.open(Buffer.from(r.secret)) : null) : (r.value ?? null),
+  }));
 }
 
 function toTemplate(row: typeof taskTemplates.$inferSelect): TaskTemplate {
@@ -210,7 +250,7 @@ function toTemplate(row: typeof taskTemplates.$inferSelect): TaskTemplate {
 
 export function taskRoutes(
   app: FastifyInstance,
-  deps: { scope: RequestScope; photos: PhotoStore; bucket?: string },
+  deps: { scope: RequestScope; photos: PhotoStore; bucket?: string; box?: SecretBox },
 ) {
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
@@ -266,6 +306,10 @@ export function taskRoutes(
       if (!task) throw new HttpError(404, 'task_not_found', 'That task does not exist in this workspace.');
       if (ctx.role === 'field' && task.assignee && task.assignee.id !== ctx.userId) {
         throw new HttpError(404, 'task_not_found', 'That task does not exist in this workspace.');
+      }
+      // The crew working it, and the office roles that may see codes anyway; never accounts or support.
+      if (ctx.role === 'field' || can(ctx.role, 'secrets.read')) {
+        task.access = await accessFor(tx, task, await todayOf(tx), deps.box);
       }
       return task;
     }),

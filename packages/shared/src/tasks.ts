@@ -75,6 +75,11 @@ export const TaskSchema = z.object({
   doneBy: z.string().nullable(),
   doneAt: Timestamp.nullable(),
   createdAt: Timestamp,
+  /**
+   * Getting in: the fields marked for the crew (the bottom lock code), opened only on one task
+   * read, only on the job's day while it is open, and only for someone who may work it.
+   */
+  access: z.array(z.object({ name: z.string(), kind: z.string(), value: z.string().nullable() })),
 });
 export type Task = z.infer<typeof TaskSchema>;
 

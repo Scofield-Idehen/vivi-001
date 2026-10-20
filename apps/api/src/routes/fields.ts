@@ -35,6 +35,7 @@ const toField = (row: FieldRow): CustomField => ({
   kind: row.kind,
   position: row.position,
   guestVisible: row.guestVisible,
+  crewVisible: row.crewVisible,
 });
 
 /** The workspace's fields in order. */
@@ -64,6 +65,7 @@ export async function fieldsOf(
       kind: customFields.kind,
       position: customFields.position,
       guestVisible: customFields.guestVisible,
+      crewVisible: customFields.crewVisible,
       value: propertyFieldValues.value,
       secret: propertyFieldValues.secret,
     })
@@ -79,6 +81,7 @@ export async function fieldsOf(
     kind: r.kind,
     position: r.position,
     guestVisible: r.guestVisible,
+    crewVisible: r.crewVisible,
     value: r.kind === 'secret' ? (reveal && r.secret ? box.open(r.secret) : null) : r.value,
     hidden: r.kind === 'secret' && r.secret !== null && !reveal,
   }));
@@ -117,6 +120,7 @@ export function fieldRoutes(app: FastifyInstance, deps: { scope: RequestScope; b
               name: req.body.name,
               kind: req.body.kind,
               guestVisible: req.body.guestVisible ?? false,
+              crewVisible: req.body.crewVisible ?? false,
               position: sql`(select coalesce(max(position), -1) + 1 from ${customFields})`,
             })
             .returning();
@@ -161,6 +165,13 @@ export function fieldRoutes(app: FastifyInstance, deps: { scope: RequestScope; b
             .set({ guestVisible: req.body.guestVisible })
             .where(eq(customFields.id, moving.id));
           moving.guestVisible = req.body.guestVisible;
+        }
+        if (req.body.crewVisible !== undefined) {
+          await tx
+            .update(customFields)
+            .set({ crewVisible: req.body.crewVisible })
+            .where(eq(customFields.id, moving.id));
+          moving.crewVisible = req.body.crewVisible;
         }
         if (req.body.position !== undefined) {
           const rest = all.filter((f) => f.id !== moving.id);

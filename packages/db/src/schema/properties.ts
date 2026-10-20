@@ -255,6 +255,11 @@ export const customFields = app.table(
      * password) appears there only from the day of arrival until departure.
      */
     guestVisible: boolean('guest_visible').notNull().default(false),
+    /**
+     * Shown to the field team inside a job at this property, on the job's day: the bottom lock
+     * code, an alarm code. Never the custom fields themselves.
+     */
+    crewVisible: boolean('crew_visible').notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

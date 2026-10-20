@@ -37,6 +37,8 @@ export const CustomFieldSchema = z.object({
   position: z.number().int(),
   /** Shown on the guest's stay page. A secret appears there only from the day of arrival until departure. */
   guestVisible: z.boolean(),
+  /** Shown to the field team inside their job at a property, on the job's day. */
+  crewVisible: z.boolean(),
 });
 export type CustomField = z.infer<typeof CustomFieldSchema>;
 
@@ -47,6 +49,7 @@ export const CustomFieldCreateSchema = z.object({
   name: z.string().trim().min(1).max(FIELD_NAME_MAX),
   kind: z.enum(FIELD_KINDS),
   guestVisible: z.boolean().optional(),
+  crewVisible: z.boolean().optional(),
 });
 export type CustomFieldCreate = z.infer<typeof CustomFieldCreateSchema>;
 
@@ -55,8 +58,9 @@ export const CustomFieldUpdateSchema = z
     name: z.string().trim().min(1).max(FIELD_NAME_MAX).optional(),
     position: z.number().int().min(0).optional(),
     guestVisible: z.boolean().optional(),
+    crewVisible: z.boolean().optional(),
   })
-  .refine((u) => u.name !== undefined || u.position !== undefined || u.guestVisible !== undefined, {
+  .refine((u) => Object.values(u).some((v) => v !== undefined), {
     message: 'Nothing to change',
   });
 export type CustomFieldUpdate = z.infer<typeof CustomFieldUpdateSchema>;

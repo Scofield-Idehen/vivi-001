@@ -1335,6 +1335,7 @@ function settleTasks(operator: DemoOperator): Task[] {
         propertyId: property.id,
         propertyName: property.name,
         propertyAddress: addressOf(property),
+        access: [],
         reservationId: stay.id,
         kind: 'cleaning',
         source: 'check_out',
@@ -1366,6 +1367,7 @@ function settleTasks(operator: DemoOperator): Task[] {
         propertyId: p0.id,
         propertyName: p0.name,
         propertyAddress: addressOf(p0),
+        access: [],
         reservationId: null,
         kind: 'cleaning',
         source: 'check_out',
@@ -1392,6 +1394,7 @@ function settleTasks(operator: DemoOperator): Task[] {
         propertyId: p1.id,
         propertyName: p1.name,
         propertyAddress: addressOf(p1),
+        access: [],
         reservationId: null,
         kind: 'maintenance',
         source: 'report',
@@ -1569,9 +1572,14 @@ function seedLinks(s: DemoState): void {
  * as an operator leaving Guesty fills them. Sample values only; nothing here is real.
  */
 function seedFields(s: DemoState): void {
-  const defs: { name: string; kind: CustomField['kind']; guestVisible: boolean }[] = [
-    ...standardFields().map(({ name, kind, guestVisible }) => ({ name, kind, guestVisible })),
-    { name: 'Note for the team', kind: 'long_text', guestVisible: false },
+  const defs: { name: string; kind: CustomField['kind']; guestVisible: boolean; crewVisible: boolean }[] = [
+    ...standardFields().map(({ name, kind, guestVisible, crewVisible }) => ({
+      name,
+      kind,
+      guestVisible,
+      crewVisible,
+    })),
+    { name: 'Note for the team', kind: 'long_text', guestVisible: false, crewVisible: false },
   ];
   type Values = [string | null, string | null, string | null, string | null, string | null, string | null];
   const samples: Record<string, Values> = {
@@ -1690,6 +1698,7 @@ function standardFields(): CustomField[] {
     kind,
     position,
     guestVisible,
+    crewVisible: name === 'Bottom lock code',
   }));
 }
 
@@ -1722,6 +1731,7 @@ function load(): DemoState {
         };
         for (const operator of parsed.operators) {
           for (const f of operator.fields) f.guestVisible ??= standard.has(f.name.toLowerCase());
+          for (const f of operator.fields) f.crewVisible ??= f.name.toLowerCase() === 'bottom lock code';
           for (const p of operator.properties) {
             const a = addresses[p.internalCode ?? ''];
             if (a && !p.addressLine1) [p.addressLine1, p.city, p.postcode] = a;
@@ -3268,6 +3278,7 @@ export async function demoFetch<T>(
       propertyId: property.id,
       propertyName: property.name,
       propertyAddress: addressOf(property),
+      access: [],
       reservationId: null,
       kind: b.kind,
       source: 'manual',
@@ -3297,7 +3308,21 @@ export async function demoFetch<T>(
     const [, taskId, part, photoId] = taskMatch;
     if (method === 'GET' && !part) {
       const { operator, role } = access(options.orgId, 'tasks.read');
-      return (await resolvedTask(findTask(operator, role, taskId as string))) as T;
+      const task = await resolvedTask(findTask(operator, role, taskId as string));
+      // Getting in: the crew's fields, on the job's day, for whoever may work it; never accounts.
+      const today = todayIn(operator.workspace.settings.timeZone);
+      const open = task.status !== 'done' && task.status !== 'cancelled' && task.dueOn <= today;
+      const allowed = role === 'field' || can(role, 'secrets.read');
+      const values = operator.fieldValues[task.propertyId] ?? {};
+      return {
+        ...task,
+        access:
+          open && allowed
+            ? operator.fields
+                .filter((f) => f.crewVisible)
+                .map((f) => ({ name: f.name, kind: f.kind, value: values[f.id] ?? null }))
+            : [],
+      } as T;
     }
     if (method === 'PATCH' && !part) {
       const { operator, role } = access(options.orgId, 'tasks.write');
@@ -3357,6 +3382,7 @@ export async function demoFetch<T>(
         propertyId: from.propertyId,
         propertyName: from.propertyName,
         propertyAddress: from.propertyAddress,
+        access: [],
         reservationId: null,
         kind: 'maintenance',
         source: 'report',
@@ -3622,6 +3648,7 @@ export async function demoFetch<T>(
         name: parsed.data.name,
         kind: parsed.data.kind,
         guestVisible: parsed.data.guestVisible ?? false,
+        crewVisible: parsed.data.crewVisible ?? false,
         position: operator.fields.length,
       };
       operator.fields.push(field);
@@ -3639,6 +3666,7 @@ export async function demoFetch<T>(
         field.name = parsed.data.name;
       }
       if (parsed.data.guestVisible !== undefined) field.guestVisible = parsed.data.guestVisible;
+      if (parsed.data.crewVisible !== undefined) field.crewVisible = parsed.data.crewVisible;
       if (parsed.data.position !== undefined) {
         const rest = operator.fields.filter((f) => f.id !== field.id);
         rest.splice(Math.min(parsed.data.position, rest.length), 0, field);
