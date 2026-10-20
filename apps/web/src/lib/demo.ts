@@ -3133,7 +3133,7 @@ export async function demoFetch<T>(
     };
     operator.invitations.unshift(invitation);
     save();
-    return { invitation, email: 'invited' } as T;
+    return { invitation, email: 'invited', reason: null } as T;
   }
 
   const invitationMatch = /^\/v1\/invitations\/([0-9a-f-]{36})$/.exec(path);

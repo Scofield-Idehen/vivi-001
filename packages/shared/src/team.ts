@@ -37,6 +37,8 @@ export type InviteEmailResult = (typeof INVITE_EMAIL_RESULTS)[number];
 export const InviteResultSchema = z.object({
   invitation: InvitationSchema,
   email: z.enum(INVITE_EMAIL_RESULTS),
+  /** When nothing was sent: why, in the sender's own words, so the admin can act on it. */
+  reason: z.string().nullable(),
 });
 export type InviteResult = z.infer<typeof InviteResultSchema>;
 

@@ -15,7 +15,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { type RequestScope, toIso } from '../context.ts';
 import { HttpError } from '../errors.ts';
-import type { InviteMailer } from '../invites.ts';
+import { type InviteMailer, NO_INVITE_MAILER } from '../invites.ts';
 
 /**
  * The team (admins only): invite a colleague by email and role, change a role, remove someone.
@@ -108,14 +108,19 @@ export function memberRoutes(
           .returning({ id: invitations.id });
         if (!row) throw new Error('Inserting the invitation returned nothing.');
         let sent: Awaited<ReturnType<InviteMailer['send']>> = 'none';
+        let reason: string | null =
+          deps.mailer === NO_INVITE_MAILER
+            ? 'The API has no Supabase service key, so it cannot ask for emails.'
+            : null;
         try {
           sent = await deps.mailer.send(email, `${deps.appUrl}/`);
         } catch (error) {
+          reason = error instanceof Error ? error.message : String(error);
           req.log.warn({ err: error, email }, "The invitation email couldn't be sent");
         }
         const invitation = (await openInvitations(tx)).find((i) => i.id === row.id);
         if (!invitation) throw new Error('The invitation was not found after insert.');
-        return reply.code(201).send({ invitation, email: sent });
+        return reply.code(201).send({ invitation, email: sent, reason: sent === 'none' ? reason : null });
       }),
   );
 

@@ -58,7 +58,7 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
               ? `${r.invitation.email} has an email with a sign-in link.`
               : r.email === 'existing'
                 ? `${r.invitation.email} already had a sign-in; they’ve been sent a link, and they’re in the moment they use it.`
-                : `${r.invitation.email} is invited. No email could be sent from here yet: tell them to sign in at this address with that email.`,
+                : `${r.invitation.email} is invited, but no email went out${r.reason ? `: ${r.reason}` : ''}. They can still sign in at this address with that email.`,
           );
         },
       },
