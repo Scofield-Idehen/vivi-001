@@ -23,7 +23,12 @@ import type {
   DamageReport,
   GuestLink,
   GuestStay,
+  Invitation,
+  InvitationList,
+  Invite,
+  InviteResult,
   Me,
+  MemberRoleUpdate,
   MessageSend,
   MessageTemplate,
   MessageTemplateCreate,
@@ -56,6 +61,7 @@ import type {
   TaskTemplateUpdate,
   TaskUpdate,
   TeamList,
+  TeamMember,
   Thread,
   ThreadDetail,
   ThreadList,
@@ -1097,5 +1103,56 @@ export function useDeleteMessageTemplate(orgId: string | null) {
     mutationFn: (id: string) =>
       apiFetch<null>(`/v1/inbox/templates/${id}`, { token: token as string, orgId, method: 'DELETE' }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['message-templates', orgId] }),
+  });
+}
+
+// The team: invitations and roles (admins).
+
+export function useInvitations(orgId: string | null, enabled = true) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['invitations', orgId],
+    enabled: Boolean(token && orgId && enabled),
+    queryFn: () => apiFetch<InvitationList>('/v1/invitations', { token: token as string, orgId }),
+  });
+}
+
+export function useInvite(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Invite) =>
+      apiFetch<InviteResult>('/v1/invitations', { token: token as string, orgId, method: 'POST', body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['invitations', orgId] }),
+  });
+}
+
+export function useCancelInvitation(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: Invitation['id']) =>
+      apiFetch<null>(`/v1/invitations/${id}`, { token: token as string, orgId, method: 'DELETE' }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['invitations', orgId] }),
+  });
+}
+
+export function useChangeRole(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, ...body }: { userId: string } & MemberRoleUpdate) =>
+      apiFetch<TeamMember>(`/v1/members/${userId}`, { token: token as string, orgId, method: 'PATCH', body }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['team', orgId] }),
+  });
+}
+
+export function useRemoveMember(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      apiFetch<null>(`/v1/members/${userId}`, { token: token as string, orgId, method: 'DELETE' }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['team', orgId] }),
   });
 }

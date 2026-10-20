@@ -14,6 +14,7 @@ import type { TokenVerifier } from './auth.ts';
 import { RequestScope } from './context.ts';
 import type { Env } from './env.ts';
 import { errorBody, HttpError } from './errors.ts';
+import { type InviteMailer, NO_INVITE_MAILER, SupabaseInviteMailer } from './invites.ts';
 import { NO_PHOTO_STORE, type PhotoStore, SupabasePhotoStore } from './photos.ts';
 import { calendarRoutes } from './routes/calendar.ts';
 import { channelRoutes } from './routes/channels.ts';
@@ -24,6 +25,7 @@ import { fieldRoutes } from './routes/fields.ts';
 import { guestRoutes } from './routes/guest.ts';
 import { inboxRoutes } from './routes/inbox.ts';
 import { meRoutes } from './routes/me.ts';
+import { memberRoutes } from './routes/members.ts';
 import { propertyRoutes } from './routes/properties.ts';
 import { reservationRoutes } from './routes/reservations.ts';
 import { taskRoutes } from './routes/tasks.ts';
@@ -37,6 +39,8 @@ export interface AppDeps {
   verifyToken: TokenVerifier;
   /** Defaults to Supabase Storage when it is configured. */
   photos?: PhotoStore;
+  /** Defaults to Supabase Auth's invitation email when the service key is configured. */
+  mailer?: InviteMailer;
   /** The clock, so tests can fix today for the guest page. */
   now?: () => Date;
 }
@@ -133,6 +137,19 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   todayRoutes(app, { scope });
   taskRoutes(app, { scope, photos, bucket: deps.env.PHOTO_BUCKET });
   inboxRoutes(app, { scope });
+  memberRoutes(app, {
+    scope,
+    mailer:
+      deps.mailer ??
+      (deps.env.SUPABASE_URL && deps.env.SUPABASE_SERVICE_ROLE_KEY
+        ? new SupabaseInviteMailer({
+            supabaseUrl: deps.env.SUPABASE_URL,
+            serviceKey: deps.env.SUPABASE_SERVICE_ROLE_KEY,
+          })
+        : NO_INVITE_MAILER),
+    // The app's address, for the link in the invitation: the first allowed browser origin.
+    appUrl: (deps.env.CORS_ORIGINS.split(',')[0] ?? 'http://localhost:5173').trim().replace(/\/$/, ''),
+  });
   guestRoutes(app, { db: deps.db, scope, box, now: deps.now });
   consoleRoutes(app, { scope });
   await webhookRoutes(app, { db: deps.db, channexSecret: deps.env.CHANNEX_WEBHOOK_SECRET });

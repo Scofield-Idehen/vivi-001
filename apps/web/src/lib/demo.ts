@@ -36,11 +36,14 @@ import {
   formatMoney,
   type GuestLink,
   type GuestStay,
+  type Invitation,
+  InviteSchema,
   isWebAddress,
   listingUrl,
   longDay,
   type Me,
   type MemberRole,
+  MemberRoleUpdateSchema,
   type Message,
   MessageSendSchema,
   type MessageTemplate,
@@ -191,6 +194,8 @@ interface DemoOperator {
   /** Tasks for the field team, and what each kind starts with. Missing in older saved states. */
   tasks?: Task[];
   taskTemplates?: TaskTemplate[];
+  /** Open invitations to the team. Missing in older saved states. */
+  invitations?: Invitation[];
   /** The Inbox: a thread per booking, and the automatic messages and saved replies. Missing in older saved states. */
   threads?: DemoThread[];
   messageTemplates?: MessageTemplate[];
@@ -3041,6 +3046,80 @@ export async function demoFetch<T>(
     const { operator } = access(options.orgId, 'reservations.read');
     const query = Object.fromEntries(new URLSearchParams(path.split('?')[1] ?? ''));
     return demoReservations(operator, query) as T;
+  }
+
+  // The team: invitations and roles ----------------------------------------------------------------
+
+  if (method === 'GET' && path === '/v1/invitations') {
+    const { operator } = access(options.orgId, 'members.manage');
+    return { invitations: operator.invitations ?? [] } as T;
+  }
+
+  if (method === 'POST' && path === '/v1/invitations') {
+    const { operator } = access(options.orgId, 'members.manage');
+    const parsed = InviteSchema.safeParse(options.body);
+    if (!parsed.success) invalid(parsed.error.issues);
+    const email = parsed.data.email.trim().toLowerCase();
+    if (operator.team.some((m) => m.email.toLowerCase() === email && m.status === 'active'))
+      throw new ApiError(409, 'already_member', `${email} is already in this workspace.`);
+    operator.invitations ??= [];
+    operator.invitations = operator.invitations.filter((i) => i.email !== email);
+    const now = Date.now();
+    const invitation: Invitation = {
+      id: crypto.randomUUID(),
+      email,
+      role: parsed.data.role,
+      invitedBy: operator.team.find((m) => m.email === DEMO_USER.email)?.fullName ?? 'Demo user',
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + 14 * 86_400_000).toISOString(),
+    };
+    operator.invitations.unshift(invitation);
+    save();
+    return { invitation, email: 'invited' } as T;
+  }
+
+  const invitationMatch = /^\/v1\/invitations\/([0-9a-f-]{36})$/.exec(path);
+  if (method === 'DELETE' && invitationMatch?.[1]) {
+    const { operator } = access(options.orgId, 'members.manage');
+    const before = operator.invitations?.length ?? 0;
+    operator.invitations = (operator.invitations ?? []).filter((i) => i.id !== invitationMatch[1]);
+    if (operator.invitations.length === before)
+      throw new ApiError(404, 'invitation_not_found', 'That invitation is no longer open.');
+    save();
+    return null as T;
+  }
+
+  const memberMatch = /^\/v1\/members\/([0-9a-f-]{36})$/.exec(path);
+  if (memberMatch?.[1] && (method === 'PATCH' || method === 'DELETE')) {
+    const { operator } = access(options.orgId, 'members.manage');
+    const member = operator.team.find((m) => memberId(m.email) === memberMatch[1] && m.status === 'active');
+    if (!member) throw new ApiError(404, 'member_not_found', 'That person is not in this workspace.');
+    if (member.email === DEMO_USER.email)
+      throw new ApiError(
+        400,
+        method === 'PATCH' ? 'own_role' : 'own_membership',
+        `Ask another admin to ${method === 'PATCH' ? 'change your role' : 'remove you'}.`,
+      );
+    const adminCount = operator.team.filter((m) => m.status === 'active' && m.role === 'admin').length;
+    if (method === 'DELETE') {
+      if (member.role === 'admin' && adminCount <= 1)
+        throw new ApiError(400, 'last_admin', 'The workspace needs at least one admin.');
+      operator.team.splice(operator.team.indexOf(member), 1);
+      save();
+      return null as T;
+    }
+    const parsed = MemberRoleUpdateSchema.safeParse(options.body);
+    if (!parsed.success) invalid(parsed.error.issues);
+    if (member.role === 'admin' && parsed.data.role !== 'admin' && adminCount <= 1)
+      throw new ApiError(400, 'last_admin', 'The workspace needs at least one admin.');
+    member.role = parsed.data.role;
+    save();
+    return {
+      id: memberId(member.email),
+      name: member.fullName ?? member.email,
+      email: member.email,
+      role: member.role,
+    } as T;
   }
 
   if (method === 'GET' && path === '/v1/team') {

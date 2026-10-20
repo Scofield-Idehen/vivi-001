@@ -5,6 +5,13 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-20
 
+- **The team invites itself (built 20 Oct 2026).** On the Workspace page an admin invites a
+  colleague by email and role; Supabase sends its invitation email (someone who already has a
+  sign-in gets a sign-in link instead), and the first sign-in with that email makes the membership
+  with that role. Admins change roles and remove people; never their own, and never the last
+  admin. Invitations stay open 14 days and show until used. The field team and accounts see
+  names only, as before.
+
 - **Staging on Firebase Hosting and Cloud Run (Alpha, 20 Oct 2026: "we need to host this on
   Firebase so that the team can see and test it while we build").** One Google project: the web
   app on Firebase Hosting, the API and worker as Cloud Run services in `europe-west1` (next to

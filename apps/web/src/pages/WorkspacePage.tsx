@@ -1,9 +1,10 @@
 import { ROLE_LABELS } from '@v01/shared';
 import type { ReactNode } from 'react';
 import { Notice, PageHeader, SectionHeading, StatusDot } from '../components/ui.tsx';
-import { ApiError, useSupportVisits, useWorkspace } from '../lib/api.ts';
+import { ApiError, useMe, useSupportVisits, useWorkspace } from '../lib/api.ts';
 import { dateTime, duration, useNow } from '../lib/format.ts';
 import { useCurrentWorkspace } from '../lib/workspace.tsx';
+import { TeamSection } from './workspace/TeamSection.tsx';
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -17,6 +18,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 export function WorkspacePage() {
   const { orgId, entry } = useCurrentWorkspace();
   const workspace = useWorkspace(orgId);
+  const me = useMe();
   const data = workspace.data;
 
   return (
@@ -72,6 +74,7 @@ export function WorkspacePage() {
             Editing these arrives with the workspace settings screens (design phase D2). Until then, contact
             support to change them.
           </p>
+          <TeamSection orgId={orgId} role={entry.role} selfId={me.data?.user.id ?? ''} />
         </div>
       ) : null}
       <SupportVisits orgId={orgId} />

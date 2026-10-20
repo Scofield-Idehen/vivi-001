@@ -13,4 +13,5 @@ export * from './permissions.ts';
 export * from './reservations.ts';
 export * from './schemas.ts';
 export * from './tasks.ts';
+export * from './team.ts';
 export * from './today.ts';
