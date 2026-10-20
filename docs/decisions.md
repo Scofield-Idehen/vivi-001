@@ -3,6 +3,23 @@
 Newest first. Each entry says what was decided and why. Product decisions also live in the
 V-01 Build Playbook and Design Roadmap.
 
+## 2026-10-20
+
+- **The guest's page for their stay (design roadmap: guests "get check-in details"; built 20 Oct
+  2026).** Every confirmed booking has a private link, `/stay/{key}` (128 random bits, made with
+  the booking; migration 0027), with no sign-in: the home's photo and title, the dates, check-in
+  from and check-out by, how to get in, the address with Open in Maps, the Wi-Fi, the house rules,
+  anything else marked for guests, and who to call (`organisation_brand.guest_phone`, sender
+  email). Which custom fields guests see is a setting per field (`custom_fields.guest_visible`;
+  the standard set has the top lock code, Wi-Fi name and password and check-in instructions on,
+  the bottom lock off). A secret marked for guests appears only from the day of arrival to the day
+  of departure, where the operator is, so a link passed around never hands out codes for months.
+  The public read goes through `app.guest_stay(key)` (SECURITY DEFINER, returns only what a guest
+  may see, sealed secrets opened by the API inside the window; nothing for a cancelled booking).
+  The booking page has the link (Copy link, See what the guest sees) for roles that may change the
+  booking. The page is one column, large type, the operator's name and accent. Sending the link by
+  message comes with the inbox; until then the team pastes it into the channel's chat.
+
 ## 2026-10-19
 
 - **Tasks and the field team (design roadmap Phase 2, "Operations in motion"; built 19 Oct 2026).**

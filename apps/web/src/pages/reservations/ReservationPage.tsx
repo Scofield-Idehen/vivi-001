@@ -1,10 +1,17 @@
-import { IconArrowLeft, IconCalendarMonth, IconPencil } from '@tabler/icons-react';
+import {
+  IconArrowLeft,
+  IconCalendarMonth,
+  IconCopy,
+  IconExternalLink,
+  IconPencil,
+} from '@tabler/icons-react';
 import { can, formatMoney, nightsBetween, type Reservation } from '@v01/shared';
 import { type ReactNode, useEffect, useId, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { PageLoading } from '../../components/Spinner.tsx';
 import { Button, EmptyState, Notice } from '../../components/ui.tsx';
-import { ApiError, useReservation, useWorkspace } from '../../lib/api.ts';
+import { ApiError, useGuestLink, useReservation, useWorkspace } from '../../lib/api.ts';
+import { config } from '../../lib/config.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
 import { Facts, Missing } from '../properties/Section.tsx';
 import { contactRoutes, dayLabel, partyLabel, stayTimes, whenLabel } from './model.ts';
@@ -81,6 +88,56 @@ function Booked({ r, locale, timeZone }: { r: Reservation; locale: string; timeZ
  * sent beside them. Edit changes the guest's details, times agreed for this stay and the notes;
  * the dates, party and price change on the channel.
  */
+/**
+ * The guest's page for this stay: the private link the team sends. Copy it into a message on the
+ * channel, or open it to see what the guest sees. Codes appear on it only from the day of arrival.
+ */
+function GuestPage({ orgId, reservationId }: { orgId: string; reservationId: string }) {
+  const link = useGuestLink(orgId, reservationId, true);
+  const [copied, setCopied] = useState(false);
+  const href = link.data ? `${window.location.origin}${link.data.path}` : null;
+  return (
+    <section className="rounded-xl bg-paper px-4 py-3.5 text-[13.5px]">
+      <p className="font-medium text-ink">The guest’s page</p>
+      <p className="mt-1 leading-relaxed text-slate">
+        Arrival time, address, check-in instructions, Wi-Fi and house rules, on a private link. The door code
+        and Wi-Fi password appear on it from the day of arrival until the guest leaves.
+      </p>
+      {link.isPending ? null : link.error ? (
+        <p className="mt-2 text-urgent">
+          {link.error instanceof ApiError ? link.error.message : 'Couldn’t get the link.'}
+        </p>
+      ) : href ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            className="!h-9"
+            onClick={() => {
+              void navigator.clipboard?.writeText(href).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              });
+            }}
+          >
+            <IconCopy size={15} stroke={1.75} aria-hidden />
+            {copied ? 'Copied' : 'Copy link'}
+          </Button>
+          {config.demo && link.data ? (
+            <Link to={link.data.path} className="action">
+              See what the guest sees
+            </Link>
+          ) : (
+            <a href={href} target="_blank" rel="noreferrer" className="action">
+              See what the guest sees
+              <IconExternalLink size={14} stroke={1.75} aria-hidden />
+            </a>
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export function ReservationPage() {
   const { id = '' } = useParams();
   const { orgId, entry } = useCurrentWorkspace();
@@ -270,6 +327,7 @@ export function ReservationPage() {
 
         <aside className="flex flex-col gap-4 lg:sticky lg:top-8 lg:self-start">
           <Booked r={r} locale={locale} timeZone={timeZone} />
+          {canEdit && r.status === 'confirmed' ? <GuestPage orgId={orgId} reservationId={r.id} /> : null}
           <Link
             to={`/calendar?from=${r.checkIn}`}
             className="inline-flex items-center gap-2 px-1 text-[13.5px] action"

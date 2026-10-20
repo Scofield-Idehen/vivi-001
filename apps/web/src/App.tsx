@@ -23,6 +23,7 @@ import { PropertyPage } from './pages/properties/PropertyPage.tsx';
 import { ReservationPage } from './pages/reservations/ReservationPage.tsx';
 import { Reservations } from './pages/reservations/Reservations.tsx';
 import { SignIn } from './pages/SignIn.tsx';
+import { StayPage } from './pages/StayPage.tsx';
 import { Today } from './pages/Today.tsx';
 import { TasksPage } from './pages/tasks/TasksPage.tsx';
 import { WorkspacePage } from './pages/WorkspacePage.tsx';
@@ -101,6 +102,8 @@ function StaffOnly() {
 
 const routes = [
   { path: '/sign-in', element: <SignIn /> },
+  // The guest's page for their stay: public, by the key in their link.
+  { path: '/stay/:key', element: <StayPage /> },
   {
     path: '/',
     element: <Gate />,

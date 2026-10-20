@@ -46,6 +46,8 @@ export const organisationBrand = app.table(
     senderEmail: text('sender_email'),
     emailDomain: text('email_domain'),
     legalFooter: text('legal_footer'),
+    /** The number guests call during a stay, on their stay page. */
+    guestPhone: text('guest_phone'),
     updatedAt: updatedAt(),
   },
   (t) => [check('organisation_brand_accent_hex', sql`${t.accentHex} ~ '^#[0-9A-Fa-f]{6}$'`)],

@@ -65,6 +65,10 @@ export const reservations = app.table(
     checkInTime: time('check_in_time'),
     checkOutTime: time('check_out_time'),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true, mode: 'string' }),
+    /** The private key in the guest's link to their stay page: 128 random bits as hex, made with the row. */
+    guestKey: text('guest_key')
+      .notNull()
+      .default(sql`md5(gen_random_uuid()::text || gen_random_uuid()::text)`),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -74,6 +78,7 @@ export const reservations = app.table(
     // The Reservations list: an operator's bookings by arrival.
     index('reservations_org_check_in_idx').on(t.organisationId, t.checkIn),
     unique('reservations_channel_reference_key').on(t.organisationId, t.channel, t.channelReference),
+    unique('reservations_guest_key_key').on(t.guestKey),
     check('reservations_dates_order', sql`${t.checkOut} > ${t.checkIn}`),
     check('reservations_notes_length', sql`char_length(${t.notes}) <= 4000`),
   ],

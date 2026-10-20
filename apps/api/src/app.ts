@@ -21,6 +21,7 @@ import { channexRoutes } from './routes/channex.ts';
 import { cleaningRoutes } from './routes/cleaning.ts';
 import { consoleRoutes } from './routes/console.ts';
 import { fieldRoutes } from './routes/fields.ts';
+import { guestRoutes } from './routes/guest.ts';
 import { meRoutes } from './routes/me.ts';
 import { propertyRoutes } from './routes/properties.ts';
 import { reservationRoutes } from './routes/reservations.ts';
@@ -35,6 +36,8 @@ export interface AppDeps {
   verifyToken: TokenVerifier;
   /** Defaults to Supabase Storage when it is configured. */
   photos?: PhotoStore;
+  /** The clock, so tests can fix today for the guest page. */
+  now?: () => Date;
 }
 
 function photoStoreFrom(env: Env): PhotoStore {
@@ -128,6 +131,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   channelRoutes(app, { scope });
   todayRoutes(app, { scope });
   taskRoutes(app, { scope, photos, bucket: deps.env.PHOTO_BUCKET });
+  guestRoutes(app, { db: deps.db, scope, box, now: deps.now });
   consoleRoutes(app, { scope });
   await webhookRoutes(app, { db: deps.db, channexSecret: deps.env.CHANNEX_WEBHOOK_SECRET });
 

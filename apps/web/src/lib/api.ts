@@ -21,6 +21,8 @@ import type {
   CustomFieldList,
   CustomFieldUpdate,
   DamageReport,
+  GuestLink,
+  GuestStay,
   Me,
   PhotoUploadTicket,
   PropertyCreate,
@@ -64,10 +66,11 @@ type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
 async function apiFetch<T>(
   path: string,
-  options: { token: string; orgId?: string | null; method?: Method; body?: unknown },
+  options: { token: string | null; orgId?: string | null; method?: Method; body?: unknown },
 ): Promise<T> {
   if (config.demo) return demoFetch<T>(path, options);
-  const headers: Record<string, string> = { authorization: `Bearer ${options.token}` };
+  // The guest's stay page is the one call made without signing in.
+  const headers: Record<string, string> = options.token ? { authorization: `Bearer ${options.token}` } : {};
   if (options.orgId) headers['x-org-id'] = options.orgId;
   if (options.body !== undefined) headers['content-type'] = 'application/json';
   let response: Response;
@@ -715,6 +718,29 @@ export function useToday(orgId: string | null) {
     enabled: Boolean(token && orgId),
     queryFn: () => apiFetch<Today>('/v1/today', { token: token as string, orgId }),
     refetchInterval: 60_000,
+  });
+}
+
+/** The booking's private link for the guest; for roles that may change the booking. */
+export function useGuestLink(orgId: string | null, reservationId: string | null, enabled: boolean) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['guest-link', orgId, reservationId],
+    enabled: Boolean(token && orgId && reservationId && enabled),
+    queryFn: () =>
+      apiFetch<GuestLink>(`/v1/reservations/${reservationId}/guest-link`, { token: token as string, orgId }),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+/** The guest's page for their stay: public, by the key in their link. */
+export function useGuestStay(key: string | null) {
+  return useQuery({
+    queryKey: ['stay', key],
+    enabled: Boolean(key),
+    queryFn: () => apiFetch<GuestStay>(`/v1/stay/${key}`, { token: null }),
+    retry: false,
+    refetchInterval: 5 * 60_000,
   });
 }
 

@@ -192,6 +192,23 @@ function Manage({ fields, orgId, onDone }: { fields: PropertyField[]; orgId: str
                 <>
                   <span className="min-w-0 flex-1 truncate text-ink">{f.name}</span>
                   <span className="text-[12.5px] text-mist">{FIELD_KIND_LABELS[f.kind]}</span>
+                  <label
+                    className="inline-flex cursor-pointer items-center gap-1.5 text-[12.5px] text-slate"
+                    title={
+                      f.kind === 'secret'
+                        ? 'Guests see it on their stay page from the day they arrive until they leave.'
+                        : 'Guests see it on their stay page.'
+                    }
+                  >
+                    <input
+                      type="checkbox"
+                      checked={f.guestVisible}
+                      disabled={busy}
+                      onChange={(e) => update.mutate({ id: f.id, guestVisible: e.target.checked })}
+                      className="size-4 accent-ink"
+                    />
+                    Guests see it
+                  </label>
                 </>
               )}
               {renaming?.id !== f.id ? (
@@ -376,7 +393,21 @@ export function FieldsSection({
       <dl className="divide-y divide-hairline border-y border-hairline">
         {d.fields.map((f) => (
           <div key={f.id} className="grid gap-x-6 gap-y-0.5 py-3 sm:grid-cols-[200px_minmax(0,1fr)]">
-            <dt className="text-[13.5px] text-slate">{f.name}</dt>
+            <dt className="text-[13.5px] text-slate">
+              {f.name}
+              {f.guestVisible ? (
+                <span
+                  className="ml-2 inline-block rounded-full bg-paper px-1.5 py-px text-[11px] text-mist"
+                  title={
+                    f.kind === 'secret'
+                      ? 'On the guest’s stay page from the day they arrive until they leave.'
+                      : 'On the guest’s stay page.'
+                  }
+                >
+                  guests
+                </span>
+              ) : null}
+            </dt>
             <dd className="min-w-0 text-[14.5px] leading-relaxed text-ink">
               <Value field={f} />
             </dd>

@@ -34,6 +34,8 @@ import {
   eachNight,
   FIELDS_MAX,
   formatMoney,
+  type GuestLink,
+  type GuestStay,
   isWebAddress,
   listingUrl,
   type Me,
@@ -184,6 +186,8 @@ interface DemoOperator {
 /** A booking as the API keeps it: what the calendar shows, and what the reservation page adds. */
 interface DemoStay extends Omit<CalendarStay, 'status'> {
   status: ReservationStatus;
+  /** The key in the guest's link, made the first time the link is asked for. */
+  guestKey?: string;
   adults: number;
   children: number;
   infants: number;
@@ -228,7 +232,7 @@ interface DemoSyncError {
 
 interface DemoState {
   /** Raised whenever the shape changes, so a browser holding older sample data starts fresh. */
-  version: 12;
+  version: 13;
   /** The day the sample bookings were laid out from. They are laid out afresh each week. */
   calendarFrom: string;
   operators: DemoOperator[];
@@ -425,15 +429,17 @@ function sampleProperty(p: {
   tags?: string[];
   /** Drawn sample rooms, by key (see sample-photos.ts), the first as the cover. */
   photos?: string[];
+  /** An invented address, so the guest's page has somewhere to point. */
+  address?: [string, string, string];
 }): PropertyDetail {
   const createdAt = new Date('2026-10-14T09:00:00Z').toISOString();
   return {
     id: crypto.randomUUID(),
     name: p.name,
     internalCode: p.code,
-    addressLine1: null,
-    city: null,
-    postcode: null,
+    addressLine1: p.address?.[0] ?? null,
+    city: p.address?.[1] ?? null,
+    postcode: p.address?.[2] ?? null,
     countryCode: 'GB',
     area: p.area,
     propertyType: p.type,
@@ -889,7 +895,7 @@ function operatorWorkspace(
 function seed(): DemoState {
   const pastVisit = Date.now() - (2 * 24 * 60 + 190) * MINUTE;
   const state: DemoState = {
-    version: 12,
+    version: 13,
     calendarFrom: demoTodayDate(),
     operators: [
       {
@@ -929,6 +935,7 @@ function seed(): DemoState {
           sampleProperty({
             name: 'Harbour View Lodge',
             code: 'HVL',
+            address: ['4 Quay Lane', 'Harbourside', 'HB1 2QL'],
             area: 'Harbourside',
             type: 'house',
             bedrooms: 3,
@@ -946,6 +953,7 @@ function seed(): DemoState {
           sampleProperty({
             name: 'Mill Street Flat',
             code: 'MSF',
+            address: ['12 Mill Street, Flat 2', 'Harbourside', 'HB1 3MS'],
             area: 'Old Town',
             type: 'flat',
             bedrooms: 1,
@@ -961,6 +969,7 @@ function seed(): DemoState {
           sampleProperty({
             name: 'Orchard Cottage',
             code: 'ORC',
+            address: ['Orchard Lane', 'Appleford', 'AP2 7OC'],
             area: 'Riverside',
             type: 'cottage',
             bedrooms: 2,
@@ -976,6 +985,7 @@ function seed(): DemoState {
           sampleProperty({
             name: 'The Granary',
             code: 'GRN',
+            address: ['The Granary, Home Farm', 'Appleford', 'AP2 7HF'],
             area: 'Riverside',
             type: 'unusual',
             bedrooms: 4,
@@ -1061,6 +1071,7 @@ function seed(): DemoState {
           sampleProperty({
             name: 'Quay House',
             code: 'QYH',
+            address: ['9 Quay Street', 'Brightwater', 'BW4 1QS'],
             area: 'Quayside',
             type: 'house',
             bedrooms: 3,
@@ -1488,9 +1499,9 @@ function seedLinks(s: DemoState): void {
  * as an operator leaving Guesty fills them. Sample values only; nothing here is real.
  */
 function seedFields(s: DemoState): void {
-  const defs: { name: string; kind: CustomField['kind'] }[] = [
-    ...standardFields().map(({ name, kind }) => ({ name, kind })),
-    { name: 'Note for the team', kind: 'long_text' },
+  const defs: { name: string; kind: CustomField['kind']; guestVisible: boolean }[] = [
+    ...standardFields().map(({ name, kind, guestVisible }) => ({ name, kind, guestVisible })),
+    { name: 'Note for the team', kind: 'long_text', guestVisible: false },
   ];
   type Values = [string | null, string | null, string | null, string | null, string | null, string | null];
   const samples: Record<string, Values> = {
@@ -1597,13 +1608,19 @@ function sweepCleaning(operator: DemoOperator): void {
 function standardFields(): CustomField[] {
   return (
     [
-      ['Top lock code', 'secret'],
-      ['Bottom lock code', 'secret'],
-      ['Wi-Fi name', 'text'],
-      ['Wi-Fi password', 'secret'],
-      ['Check-in instructions', 'link'],
+      ['Top lock code', 'secret', true],
+      ['Bottom lock code', 'secret', false],
+      ['Wi-Fi name', 'text', true],
+      ['Wi-Fi password', 'secret', true],
+      ['Check-in instructions', 'link', true],
     ] as const
-  ).map(([name, kind], position) => ({ id: crypto.randomUUID(), name, kind, position }));
+  ).map(([name, kind, guestVisible], position) => ({
+    id: crypto.randomUUID(),
+    name,
+    kind,
+    position,
+    guestVisible,
+  }));
 }
 
 let state: DemoState | null = null;
@@ -1621,9 +1638,28 @@ function load(): DemoState {
       }
       if ((parsed.version as number) === 11) {
         // Version 12 brought tasks; the sample workspaces get their check-out cleans.
-        parsed.version = 12;
+        (parsed as { version: number }).version = 12;
       }
-      if (parsed.version === 12) {
+      if ((parsed.version as number) === 12) {
+        // Version 13: which fields guests see. The standard ones, except the bottom lock.
+        const standard = new Set(['top lock code', 'wi-fi name', 'wi-fi password', 'check-in instructions']);
+        const addresses: Record<string, [string, string, string]> = {
+          HVL: ['4 Quay Lane', 'Harbourside', 'HB1 2QL'],
+          MSF: ['12 Mill Street, Flat 2', 'Harbourside', 'HB1 3MS'],
+          ORC: ['Orchard Lane', 'Appleford', 'AP2 7OC'],
+          GRN: ['The Granary, Home Farm', 'Appleford', 'AP2 7HF'],
+          QYH: ['9 Quay Street', 'Brightwater', 'BW4 1QS'],
+        };
+        for (const operator of parsed.operators) {
+          for (const f of operator.fields) f.guestVisible ??= standard.has(f.name.toLowerCase());
+          for (const p of operator.properties) {
+            const a = addresses[p.internalCode ?? ''];
+            if (a && !p.addressLine1) [p.addressLine1, p.city, p.postcode] = a;
+          }
+        }
+        (parsed as { version: number }).version = 13;
+      }
+      if (parsed.version === 13) {
         // A week on, the sample bookings would all be in the past: lay them out again from today.
         if (parsed.calendarFrom <= addDays(demoTodayDate(), -7)) {
           layOutSamples(parsed);
@@ -2571,6 +2607,73 @@ function findStay(operator: DemoOperator, id: string): DemoStay {
   return stay;
 }
 
+/** GET /v1/stay/:key: the guest's page, public, with codes only from arrival to departure. */
+function demoGuestStay(s: DemoState, key: string): GuestStay {
+  for (const operator of s.operators) {
+    const stay = operator.calendar.stays.find((x) => x.guestKey === key);
+    if (!stay) continue;
+    const property = operator.properties.find((p) => p.id === stay.propertyId);
+    if (!property || stay.status !== 'confirmed') break;
+    const today = todayIn(operator.workspace.settings.timeZone);
+    const phase: GuestStay['phase'] =
+      today < stay.checkIn ? 'before' : today <= stay.checkOut ? 'during' : 'after';
+    const values = operator.fieldValues[property.id] ?? {};
+    const fields: GuestStay['fields'] = operator.fields
+      .filter((f) => f.guestVisible && values[f.id])
+      .map((f) => ({
+        name: f.name,
+        kind: f.kind,
+        value:
+          f.kind === 'secret' ? (phase === 'during' ? (values[f.id] ?? null) : null) : (values[f.id] ?? null),
+      }));
+    const photo = property.photos[0]?.url ?? null;
+    return {
+      guestName: stay.guestName,
+      checkIn: stay.checkIn,
+      checkOut: stay.checkOut,
+      checkInTime: stay.checkInTime ?? property.checkInTime,
+      checkOutTime: stay.checkOutTime ?? property.checkOutTime,
+      nights: Math.round((Date.parse(stay.checkOut) - Date.parse(stay.checkIn)) / 86_400_000),
+      guests: stay.adults + stay.children,
+      timeZone: operator.workspace.settings.timeZone,
+      phase,
+      codesFrom: phase === 'before' ? stay.checkIn : null,
+      property: {
+        name: property.name,
+        title: property.title,
+        summary: property.summary,
+        addressLine1: property.addressLine1,
+        addressLine2: property.addressLine2,
+        city: property.city,
+        postcode: property.postcode,
+        countryCode: property.countryCode,
+        gettingAround: property.gettingAround,
+        guestAccess: property.guestAccess,
+        checkInMethod: property.checkInMethod,
+        houseRules: property.houseRules,
+        petsAllowed: property.petsAllowed,
+        smokingAllowed: property.smokingAllowed,
+        eventsAllowed: property.eventsAllowed,
+        childrenAllowed: property.childrenAllowed,
+        quietHoursStart: property.quietHoursStart,
+        quietHoursEnd: property.quietHoursEnd,
+        maxGuests: property.maxGuests,
+        photoUrl:
+          photo && photo.startsWith('sample-photo:') ? (SAMPLE_PHOTOS[photo.slice(13)] ?? null) : photo,
+      },
+      brand: {
+        displayName: operator.workspace.brand.displayName,
+        logoLightUrl: operator.workspace.brand.logoLightUrl,
+        accentHex: operator.workspace.brand.accentHex,
+        phone: '+44 1631 000000',
+        email: `hello@${operator.workspace.brand.emailDomain ?? 'example.com'}`,
+      },
+      fields,
+    };
+  }
+  throw new ApiError(404, 'stay_not_found', 'This link is not for a current stay.');
+}
+
 /** The API's PATCH /v1/reservations/:id: contact details, agreed times and notes. */
 function changeDemoReservation(operator: DemoOperator, id: string, body: unknown): Reservation {
   const stay = findStay(operator, id);
@@ -3284,7 +3387,9 @@ export async function demoFetch<T>(
         throw new ApiError(409, 'field_exists', `There is already a field called "${parsed.data.name}".`);
       const field: CustomField = {
         id: crypto.randomUUID(),
-        ...parsed.data,
+        name: parsed.data.name,
+        kind: parsed.data.kind,
+        guestVisible: parsed.data.guestVisible ?? false,
         position: operator.fields.length,
       };
       operator.fields.push(field);
@@ -3301,6 +3406,7 @@ export async function demoFetch<T>(
           throw new ApiError(409, 'field_exists', `There is already a field called "${parsed.data.name}".`);
         field.name = parsed.data.name;
       }
+      if (parsed.data.guestVisible !== undefined) field.guestVisible = parsed.data.guestVisible;
       if (parsed.data.position !== undefined) {
         const rest = operator.fields.filter((f) => f.id !== field.id);
         rest.splice(Math.min(parsed.data.position, rest.length), 0, field);
@@ -3377,6 +3483,24 @@ export async function demoFetch<T>(
     operator.cleaning = { ...operator.cleaning, [property.id]: marked };
     save();
     return marked as T;
+  }
+
+  const guestLinkMatch = /^\/v1\/reservations\/([0-9a-f-]{36})\/guest-link$/.exec(path);
+  if (method === 'GET' && guestLinkMatch?.[1]) {
+    const { operator } = access(options.orgId, 'reservations.write');
+    const stay = findStay(operator, guestLinkMatch[1]);
+    if (!stay.guestKey) {
+      stay.guestKey = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) =>
+        b.toString(16).padStart(2, '0'),
+      ).join('');
+      save();
+    }
+    return { key: stay.guestKey, path: `/stay/${stay.guestKey}` } satisfies GuestLink as T;
+  }
+
+  const stayMatch = /^\/v1\/stay\/([0-9a-f]{32})$/.exec(path);
+  if (method === 'GET' && stayMatch?.[1]) {
+    return demoGuestStay(s, stayMatch[1]) as T;
   }
 
   const reservationMatch = RESERVATION_PATH.exec(path);

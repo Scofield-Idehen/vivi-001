@@ -248,6 +248,11 @@ export const customFields = app.table(
     name: text('name').notNull(),
     kind: fieldKind('kind').notNull(),
     position: integer('position').notNull().default(0),
+    /**
+     * Shown on the guest's page for their stay. A secret marked visible (a lock code, the Wi-Fi
+     * password) appears there only from the day of arrival until departure.
+     */
+    guestVisible: boolean('guest_visible').notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

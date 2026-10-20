@@ -96,6 +96,19 @@ export class ApiDatabase extends Database {
     });
   }
 
+  /**
+   * The guest's page for their stay, by the key in their link: a public read, with no operator in
+   * scope, through a function that returns only what a guest may see. Null when the key is unknown
+   * or the booking is not confirmed.
+   */
+  async guestStay(key: string): Promise<Record<string, unknown> | null> {
+    const { rows } = await this.pool.query<{ stay: Record<string, unknown> | null }>(
+      'select app.guest_stay($1) as stay',
+      [key],
+    );
+    return rows[0]?.stay ?? null;
+  }
+
   /** Stores a raw webhook before anything else happens. The API may insert but never read these. */
   async recordWebhook(event: {
     provider: string;
