@@ -445,6 +445,12 @@ describe('Today', () => {
     // Hannah Lee (until day 2) and Mia (arriving) are in tonight; Tom is leaving.
     expect(body.staying).toBe(2);
     expect(body.cleansDue).toEqual([expect.objectContaining({ propertyName: 'Mill Street Flat' })]);
+    // At a glance: 14 nights from tonight, each counting homes with a guest in.
+    expect(body.glance.nights).toHaveLength(14);
+    expect(body.glance.nights[0]).toEqual({ date: today, occupied: 2 });
+    expect(body.glance.homes).toBeGreaterThanOrEqual(2);
+    expect(body.glance.money.currency).toBe('GBP');
+    expect(body.glance.channels.length).toBeGreaterThan(0);
   });
 
   it('puts what needs a person first: the clash, the refused change, then last night’s drift', async () => {
@@ -475,6 +481,9 @@ describe('Today', () => {
     expect(field.arrivals[0].guestName).toBeNull();
     expect(field.cleansDue).toEqual([]);
     expect(field.attention).toEqual([]);
+    // The field team never sees money or where bookings come from.
+    expect(field.glance.money).toBeNull();
+    expect(field.glance.channels).toEqual([]);
     const accounts = (await call('GET', '/v1/today', { as: as('accounts') })).body;
     expect(accounts.arrivals[0].guestName).toBe('Mia Arrives');
     expect(accounts.attention.map((i: { id: string }) => i.id)).toEqual([

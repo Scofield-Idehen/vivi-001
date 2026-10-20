@@ -38,6 +38,32 @@ export const AttentionItemSchema = z.object({
 });
 export type AttentionItem = z.infer<typeof AttentionItemSchema>;
 
+/** The operator at a glance: how full, how much, from where, and what's on today. */
+export const GlanceSchema = z.object({
+  /** Homes being run (not archived). */
+  homes: z.number().int(),
+  /** The next 14 nights from tonight: homes with a guest in, out of `homes`. */
+  nights: z.array(z.object({ date: z.string(), occupied: z.number().int() })),
+  /** Money from confirmed stays, by arrival: this calendar month, and the next 30 days. Null for roles that don't see money. */
+  money: z
+    .object({
+      currency: z.string(),
+      thisMonthMinor: z.number().int(),
+      lastMonthMinor: z.number().int(),
+      next30Minor: z.number().int(),
+    })
+    .nullable(),
+  /** Confirmed bookings made in the last 90 days, by channel, most first. */
+  channels: z.array(z.object({ channel: z.enum(CHANNELS), bookings: z.number().int() })),
+  /** Bookings made in the last 7 days. */
+  newBookings: z.number().int(),
+  /** Jobs due today or earlier and still open, and those done today. */
+  jobs: z.object({ open: z.number().int(), doneToday: z.number().int(), unassigned: z.number().int() }),
+  /** Guests waiting for a reply. */
+  awaitingReply: z.number().int(),
+});
+export type Glance = z.infer<typeof GlanceSchema>;
+
 export const TodaySchema = z.object({
   /** Today where the operator is. */
   date: z.string(),
@@ -49,5 +75,6 @@ export const TodaySchema = z.object({
   attention: z.array(AttentionItemSchema),
   /** When the worker last reported in; null when it never has. */
   workerSeenAt: z.string().nullable(),
+  glance: GlanceSchema,
 });
 export type Today = z.infer<typeof TodaySchema>;

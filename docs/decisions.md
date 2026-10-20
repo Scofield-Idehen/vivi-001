@@ -5,6 +5,19 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-20
 
+- **Build first, switch later (Alpha, 20 Oct 2026: "we are not getting off guesty anytime soon so
+  we want to build almost everything first").** Work that costs money or needs Guesty or Channex for
+  real is parked in `docs/waiting.md`, starting with moving the worker to the cloud.
+
+- **Today is an at-a-glance page (Alpha, 20 Oct 2026: "too poor in design we should have charts,
+  checkin and checkout, top notifications … a glance what that operator has").** Top to bottom:
+  what needs attention; five numbers (homes in tonight, arrivals, jobs, guests waiting for a reply,
+  new bookings), each a link; the next 14 nights as a bar chart of homes with a guest in; money
+  booked this month against last month and the next 30 days; check-ins (with each home's clean
+  state) beside check-outs; where bookings came from in the last 90 days; cleans due. The API
+  sends these as `glance` on `GET /v1/today`. Money and channels need `reservations.read`, so the
+  field team never gets them.
+
 - **The field team sees the bottom lock code (Alpha, 20 Oct 2026: "both should see it because they
   need it"; settles the open question).** Cleaners and maintenance see it inside their job, in a
   "Getting in" box, never on a property page: only when they open one job they may work, only from

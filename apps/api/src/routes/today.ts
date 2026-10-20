@@ -340,6 +340,61 @@ export function todayRoutes(app: FastifyInstance, deps: { scope: RequestScope })
 
         attention.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'urgent' ? -1 : 1));
 
+        // At a glance.
+        const seesMoney = can(ctx.role, 'reservations.read');
+        const [{ homes } = { homes: 0 }] = await tx
+          .select({ homes: sql<number>`count(*)::int` })
+          .from(properties)
+          .where(isNull(properties.archivedAt));
+        const nightRows = await tx.execute<{ date: string; occupied: number }>(sql`
+          select d::date::text as date,
+                 (select count(distinct o.property_id)::int from app.occupancies o
+                    join app.properties p on p.id = o.property_id and p.archived_at is null
+                   where o.source_type = 'reservation' and o.nights @> d::date) as occupied
+            from generate_series(${today}::date, ${today}::date + 13, interval '1 day') d
+           order by d`);
+        const [moneyRow] = seesMoney
+          ? (
+              await tx.execute<{
+                this_month: number;
+                last_month: number;
+                next30: number;
+                currency: string | null;
+              }>(sql`
+            select coalesce(sum(total_minor) filter (where date_trunc('month', check_in) = date_trunc('month', ${today}::date)), 0)::bigint::int as this_month,
+                   coalesce(sum(total_minor) filter (where date_trunc('month', check_in) = date_trunc('month', ${today}::date - interval '1 month')), 0)::bigint::int as last_month,
+                   coalesce(sum(total_minor) filter (where check_in >= ${today}::date and check_in < ${today}::date + 30), 0)::bigint::int as next30,
+                   (select currency from app.organisation_settings limit 1) as currency
+              from app.reservations where status = 'confirmed'`)
+            ).rows
+          : [];
+        const channelRows = await tx.execute<{
+          channel: (typeof reservations.$inferSelect)['channel'];
+          bookings: number;
+        }>(sql`
+          select channel, count(*)::int as bookings from app.reservations
+           where status = 'confirmed' and created_at > now() - interval '90 days'
+           group by channel order by count(*) desc`);
+        const [{ fresh } = { fresh: 0 }] = (
+          await tx.execute<{ fresh: number }>(
+            sql`select count(*)::int as fresh from app.reservations where created_at > now() - interval '7 days' and status <> 'cancelled'`,
+          )
+        ).rows;
+        const [jobRow] = (
+          await tx.execute<{ open: number; done_today: number; unassigned: number }>(sql`
+            select count(*) filter (where status in ('open', 'in_progress') and due_on <= ${today}::date)::int as open,
+                   count(*) filter (where status = 'done' and due_on = ${today}::date)::int as done_today,
+                   count(*) filter (where status in ('open', 'in_progress') and due_on <= ${today}::date and assignee_user_id is null)::int as unassigned
+              from app.tasks`)
+        ).rows;
+        const [{ awaiting } = { awaiting: 0 }] = can(ctx.role, 'inbox.read')
+          ? (
+              await tx.execute<{ awaiting: number }>(
+                sql`select count(*)::int as awaiting from app.message_threads where awaiting_since is not null`,
+              )
+            ).rows
+          : [];
+
         return {
           date: today,
           arrivals,
@@ -352,6 +407,28 @@ export function todayRoutes(app: FastifyInstance, deps: { scope: RequestScope })
           })),
           attention,
           workerSeenAt,
+          glance: {
+            homes,
+            nights: nightRows.rows.map((n) => ({ date: n.date, occupied: Number(n.occupied) })),
+            money: moneyRow
+              ? {
+                  currency: moneyRow.currency ?? 'GBP',
+                  thisMonthMinor: Number(moneyRow.this_month),
+                  lastMonthMinor: Number(moneyRow.last_month),
+                  next30Minor: Number(moneyRow.next30),
+                }
+              : null,
+            channels: seesGuests
+              ? channelRows.rows.map((c) => ({ channel: c.channel, bookings: Number(c.bookings) }))
+              : [],
+            newBookings: Number(fresh),
+            jobs: {
+              open: Number(jobRow?.open ?? 0),
+              doneToday: Number(jobRow?.done_today ?? 0),
+              unassigned: Number(jobRow?.unassigned ?? 0),
+            },
+            awaitingReply: Number(awaiting),
+          },
         };
       }),
     );

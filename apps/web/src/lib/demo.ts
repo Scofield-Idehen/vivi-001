@@ -2720,6 +2720,34 @@ function demoToday(operator: DemoOperator, role: WorkspaceRole): Today {
     }
   }
   attention.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'urgent' ? -1 : 1));
+
+  // At a glance, worked out the way the API does.
+  const plusDays = (day: string, n: number) =>
+    new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  const homes = operator.properties.length;
+  const glanceNights = Array.from({ length: 14 }, (_, i) => {
+    const date = plusDays(today, i);
+    const occupied = new Set(
+      confirmed.filter((x) => x.checkIn <= date && x.checkOut > date).map((x) => x.propertyId),
+    ).size;
+    return { date, occupied };
+  });
+  const month = today.slice(0, 7);
+  const lastMonth = plusDays(`${month}-01`, -1).slice(0, 7);
+  const sumWhere = (keep: (x: DemoStay) => boolean) =>
+    confirmed.filter(keep).reduce((sum, x) => sum + (x.totalMinor ?? 0), 0);
+  const ago = (days: number) => Date.now() - days * 86_400_000;
+  const channelCounts = new Map<DemoStay['channel'], number>();
+  for (const x of confirmed.filter((x) => Date.parse(x.createdAt) > ago(90))) {
+    channelCounts.set(x.channel, (channelCounts.get(x.channel) ?? 0) + 1);
+  }
+  const tasks = settleTasks(operator);
+  const due = tasks.filter((t) => (t.status === 'open' || t.status === 'in_progress') && t.dueOn <= today);
+  const awaiting = can(role, 'inbox.read')
+    ? settleThreads(operator)
+        .map((th) => threadView(operator, th))
+        .filter((t) => t.awaitingSince !== null).length
+    : 0;
   return {
     date: today,
     arrivals,
@@ -2728,6 +2756,32 @@ function demoToday(operator: DemoOperator, role: WorkspaceRole): Today {
     cleansDue,
     attention,
     workerSeenAt: new Date(Date.now() - 20_000).toISOString(),
+    glance: {
+      homes,
+      nights: glanceNights,
+      money: seesGuests
+        ? {
+            currency: operator.workspace.settings.currency,
+            thisMonthMinor: sumWhere((x) => x.checkIn.startsWith(month)),
+            lastMonthMinor: sumWhere((x) => x.checkIn.startsWith(lastMonth)),
+            next30Minor: sumWhere((x) => x.checkIn >= today && x.checkIn < plusDays(today, 30)),
+          }
+        : null,
+      channels: seesGuests
+        ? [...channelCounts]
+            .map(([channel, bookings]) => ({ channel, bookings }))
+            .sort((a, b) => b.bookings - a.bookings)
+        : [],
+      newBookings: operator.calendar.stays.filter(
+        (x) => x.status !== 'cancelled' && Date.parse(x.createdAt) > ago(7),
+      ).length,
+      jobs: {
+        open: due.length,
+        doneToday: tasks.filter((t) => t.status === 'done' && t.dueOn === today).length,
+        unassigned: due.filter((t) => !t.assignee).length,
+      },
+      awaitingReply: awaiting,
+    },
   };
 }
 
