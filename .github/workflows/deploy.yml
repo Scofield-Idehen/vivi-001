@@ -22,6 +22,8 @@ env:
 jobs:
   web:
     name: Web app to Firebase Hosting
+    # Hosting forwards /v1 to the API, so the API has to exist before the site is published.
+    needs: services
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: staging

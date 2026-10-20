@@ -34,7 +34,7 @@ and `firebase` command-line tools, and the values from your laptop's `.env` file
    P=<project-id>
    gcloud iam service-accounts create github-deploy --display-name "GitHub deploy"
    SA=github-deploy@$P.iam.gserviceaccount.com
-   for role in roles/run.admin roles/artifactregistry.writer roles/iam.serviceAccountUser roles/firebasehosting.admin; do
+   for role in roles/run.admin roles/run.viewer roles/artifactregistry.writer roles/iam.serviceAccountUser roles/firebasehosting.admin roles/serviceusage.apiKeysViewer; do
      gcloud projects add-iam-policy-binding $P --member "serviceAccount:$SA" --role $role
    done
    gcloud iam service-accounts keys create github-deploy.json --iam-account $SA
