@@ -7,8 +7,13 @@ Staging lives in one Google project: the web app on **Firebase Hosting**, the AP
 deploys (`.github/workflows/deploy.yml`). Migrations are run by hand first, from the **Migrate**
 action, whenever a push adds one.
 
-What it costs: Cloud Run with one API instance and one worker instance always on, about $25–35 a
-month; Hosting is free at this size; the database stays on Supabase.
+What it costs: nothing, the way it starts. Linking a billing account (needed for Cloud Run) charges
+nothing by itself; the API scales to zero when idle and stays inside Cloud Run's free allowance
+for a small team (the first click after a quiet spell waits a few seconds); the worker stays on
+the laptop until `DEPLOY_WORKER` is set. Always on later: `API_MIN_INSTANCES=1` and
+`DEPLOY_WORKER=true` (repository variables), about $25–35 a month together. Set a budget alert
+(Billing → Budgets) when linking the card. Hosting is free at this size; the database stays on
+Supabase.
 
 ## Set-up, once (about half an hour)
 
@@ -44,8 +49,8 @@ and `firebase` command-line tools, and the values from your laptop's `.env` file
    - `API_ENV`: the API's settings, one `KEY=VALUE` per line, as in `apps/api/.env` on your laptop
      but with `CORS_ORIGINS=https://<project-id>.web.app` and `NODE_ENV=production`. Leave out
      `PORT` and `HOST`.
-   - `WORKER_ENV`: the worker's, as in `apps/worker/.env`, with `APP_URL=https://<project-id>.web.app`
-     and `NODE_ENV=production`. Leave out `PORT`.
+   - `WORKER_ENV` (only once `DEPLOY_WORKER` is true): the worker's, as in `apps/worker/.env`, with
+     `APP_URL=https://<project-id>.web.app` and `NODE_ENV=production`. Leave out `PORT`.
 
    Variables (under the environment):
    - `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`: the same two the web app uses on your laptop

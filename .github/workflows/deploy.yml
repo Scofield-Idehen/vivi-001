@@ -66,9 +66,11 @@ jobs:
           REPO: ${{ env.REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/v01
         run: |
           docker build -f apps/api/Dockerfile -t "$REPO/api:${GITHUB_SHA}" .
-          docker build -f apps/worker/Dockerfile -t "$REPO/worker:${GITHUB_SHA}" .
           docker push "$REPO/api:${GITHUB_SHA}"
-          docker push "$REPO/worker:${GITHUB_SHA}"
+          if [ "${{ vars.DEPLOY_WORKER }}" = "true" ]; then
+            docker build -f apps/worker/Dockerfile -t "$REPO/worker:${GITHUB_SHA}" .
+            docker push "$REPO/worker:${GITHUB_SHA}"
+          fi
       # Each service's settings come from one GitHub secret holding its .env (KEY=VALUE lines),
       # turned into the YAML Cloud Run takes. Nothing secret is ever in this file or the image.
       - name: Write the services' settings
@@ -85,7 +87,9 @@ jobs:
           to_yaml "$API_ENV" > api.env.yaml
           to_yaml "$WORKER_ENV" > worker.env.yaml
           test -s api.env.yaml || { echo "The API_ENV secret is empty."; exit 1; }
-          test -s worker.env.yaml || { echo "The WORKER_ENV secret is empty."; exit 1; }
+          if [ "${{ vars.DEPLOY_WORKER }}" = "true" ]; then
+            test -s worker.env.yaml || { echo "The WORKER_ENV secret is empty."; exit 1; }
+          fi
       - name: Deploy the API
         env:
           REPO: ${{ env.REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/v01
@@ -93,9 +97,12 @@ jobs:
           gcloud run deploy v01-api \
             --image "$REPO/api:${GITHUB_SHA}" \
             --region "$REGION" --platform managed --allow-unauthenticated \
-            --port 8080 --cpu 1 --memory 1Gi --min-instances 1 --max-instances 3 \
+            --port 8080 --cpu 1 --memory 1Gi --min-instances "${{ vars.API_MIN_INSTANCES || 0 }}" --max-instances 3 \
             --env-vars-file api.env.yaml --quiet
+      # The worker runs its loops all day, so on Cloud Run it is one instance always on (about $15 a
+      # month). Until DEPLOY_WORKER is true it stays where it is (a laptop, say) and nothing is charged.
       - name: Deploy the worker
+        if: ${{ vars.DEPLOY_WORKER == 'true' }}
         env:
           REPO: ${{ env.REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/v01
         run: |
