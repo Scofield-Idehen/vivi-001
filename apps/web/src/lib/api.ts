@@ -69,7 +69,7 @@ import { config } from './config.ts';
 import { demoAddPhoto, demoAddTaskPhoto, demoFetch } from './demo.ts';
 import { ApiError } from './errors.ts';
 import { PhotoError, type PreparedPhoto, preparePhoto } from './images.ts';
-import { useSession } from './session.tsx';
+import { refreshedToken, signOut, useSession } from './session.tsx';
 
 export { ApiError };
 
@@ -78,6 +78,7 @@ type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 async function apiFetch<T>(
   path: string,
   options: { token: string | null; orgId?: string | null; method?: Method; body?: unknown },
+  retried = false,
 ): Promise<T> {
   if (config.demo) return demoFetch<T>(path, options);
   // The guest's stay page is the one call made without signing in.
@@ -98,9 +99,19 @@ async function apiFetch<T>(
     error?: { code: string; message: string };
   } | null;
   if (!response.ok) {
+    const code = data?.error?.code ?? 'error';
+    if (response.status === 401 && options.token) {
+      // The token in hand is stale (the laptop slept, say): get a fresh one and try once more.
+      if (code === 'invalid_token' && !retried) {
+        const fresh = await refreshedToken();
+        if (fresh) return apiFetch<T>(path, { ...options, token: fresh }, true);
+      }
+      // The sign-in itself has run out, or can't be refreshed: back to the sign-in page, cleanly.
+      if (code === 'invalid_token' || code === 'session_expired') void signOut();
+    }
     throw new ApiError(
       response.status,
-      data?.error?.code ?? 'error',
+      code,
       data?.error?.message ?? `The request failed (${response.status}).`,
     );
   }

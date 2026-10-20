@@ -156,6 +156,17 @@ What the import does is in `apps/worker/src/guesty/mapping.ts` (Guesty's words i
 functions) and `import.ts` (the database work), tested in `apps/worker/test/guesty.test.ts`
 against a stand-in for Guesty's API.
 
+## Sign-in and sessions
+
+Supabase Auth signs people in (email link); the app never touches the database directly. The
+access token lasts an hour and `supabase-js` refreshes it in the background; the API checks each
+token's signature (`apps/api/src/auth.ts`), allows a minute of clock drift, and refuses a sign-in
+older than `SESSION_MAX_HOURS` (48) with `session_expired`. The web app's `apiFetch` refreshes
+and retries once on `invalid_token`, and signs out on `session_expired` or a refresh that fails;
+every auth event is logged to the browser console as `[sign-in] …`. In the Supabase dashboard
+(Authentication → Sessions / Settings) keep: JWT expiry 3600 s; refresh token rotation on, reuse
+interval 10 s or more; no time-box or inactivity timeout shorter than `SESSION_MAX_HOURS`.
+
 ## The Inbox and guest messages
 
 Every booking has a thread (`app.message_threads`, made by a trigger on `reservations`); messages

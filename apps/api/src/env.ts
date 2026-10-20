@@ -12,6 +12,13 @@ const EnvSchema = z
     SUPABASE_URL: z.url().optional(),
     /** Only for projects still on the legacy shared secret, and for tests. */
     SUPABASE_JWT_SECRET: z.string().min(16).optional(),
+    /** How long one sign-in lasts before a person signs in again; tokens refresh silently within it. 0 = never. */
+    SESSION_MAX_HOURS: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(24 * 30)
+      .default(48),
     /** Comma-separated origins allowed to call the API from a browser. */
     CORS_ORIGINS: z.string().default('http://localhost:5173'),
     /** The signing secret set on the Channex webhook. Webhooks are refused until it is set. */

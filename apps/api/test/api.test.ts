@@ -120,6 +120,38 @@ describe('sign-in', () => {
     expect(response.statusCode).toBe(401);
   });
 
+  it('keeps a person signed in for two days of silent refreshes, then asks again', async () => {
+    const signedIn = Math.floor(Date.now() / 1000) - 47 * 3600;
+    const withAmr = (at: number) =>
+      new SignJWT({
+        email: 'admin-a@example.test',
+        role: 'authenticated',
+        amr: [{ method: 'otp', timestamp: at }],
+      })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setSubject(a.userId)
+        .setAudience('authenticated')
+        .setIssuedAt()
+        .setExpirationTime('1h')
+        .sign(new TextEncoder().encode(JWT_SECRET));
+    const fresh = await app.inject({
+      method: 'GET',
+      url: '/v1/me',
+      headers: { authorization: `Bearer ${await withAmr(signedIn)}` },
+    });
+    expect(fresh.statusCode).toBe(200);
+    const stale = await app.inject({
+      method: 'GET',
+      url: '/v1/me',
+      headers: { authorization: `Bearer ${await withAmr(signedIn - 2 * 3600)}` },
+    });
+    expect(stale.statusCode).toBe(401);
+    expect(stale.json().error).toEqual({
+      code: 'session_expired',
+      message: "You've been signed in for more than 2 days. Sign in again to carry on.",
+    });
+  });
+
   it('lists the operators a person belongs to', async () => {
     const { status, body } = await call('GET', '/v1/me', { as: asA() });
     expect(status).toBe(200);

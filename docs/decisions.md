@@ -5,6 +5,18 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-20
 
+- **Sign-ins last two days, and a stale token never signs anyone out (Alpha, 20 Oct 2026: "I always get
+  signed out very fast … we need a longer threshold like 12 to 24 hrs or even 48 hrs, then they have
+  to revalidate").** Supabase's access token lasts an hour and the app refreshes it silently for as
+  long as the page is open; the sign-in itself is what expires. The API now reads when the person
+  last signed in (the token's `amr` time, kept through refreshes) and refuses it after
+  `SESSION_MAX_HOURS` (48 by default, 0 for never) with `session_expired`, which sends them to the
+  sign-in page cleanly. A token the API finds expired (the laptop slept through a refresh) is
+  refreshed once and the request retried before anyone is signed out; the API allows a minute of
+  clock drift. The browser console now logs every sign-in event, so the next surprise sign-out can
+  be traced to its cause (Supabase's own settings: JWT expiry 1 hour, refresh token rotation on
+  with a reuse interval of at least 10 s, no time-box or inactivity timeout shorter than ours).
+
 - **The Inbox (design roadmap, Phase 2, D2; Alpha, 20 Oct 2026: "messaging the guest should link up
   with where they are booking from … it should sync with V-01's messaging page"; built the same
   day).** One conversation per booking, whichever site the guest booked on; the guest keeps using

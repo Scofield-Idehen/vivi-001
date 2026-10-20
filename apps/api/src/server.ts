@@ -8,7 +8,11 @@ const db = new ApiDatabase(env.DATABASE_URL, { applicationName: 'v01-api', max: 
 const app = await buildApp({
   env,
   db,
-  verifyToken: createTokenVerifier({ supabaseUrl: env.SUPABASE_URL, jwtSecret: env.SUPABASE_JWT_SECRET }),
+  verifyToken: createTokenVerifier({
+    supabaseUrl: env.SUPABASE_URL,
+    jwtSecret: env.SUPABASE_JWT_SECRET,
+    sessionMaxHours: env.SESSION_MAX_HOURS,
+  }),
 });
 
 let closing = false;
