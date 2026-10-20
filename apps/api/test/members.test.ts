@@ -101,12 +101,13 @@ describe('inviting a colleague', () => {
   it('records the invitation and sends the email to the app’s address', async () => {
     const { status, body } = await call('POST', '/v1/invitations', {
       as: asA(),
-      body: { email: 'Sam.Ops@Example.test', role: 'operations' },
+      body: { email: 'Sam.Ops@Example.test', name: 'Sam Okoro', role: 'operations' },
     });
     expect(status).toBe(201);
     expect(body.email).toBe('invited');
     expect(body.invitation).toMatchObject({
       email: 'sam.ops@example.test',
+      name: 'Sam Okoro',
       role: 'operations',
       invitedBy: 'admin-a@example.test',
     });
@@ -124,25 +125,40 @@ describe('inviting a colleague', () => {
     ]);
     expect((await call('GET', '/v1/invitations', { as: asA() })).body.invitations).toEqual([]);
     const team = await call('GET', '/v1/team', { as: asA() });
-    expect(team.body.members.map((m: { email: string; role: string }) => [m.email, m.role])).toEqual([
-      ['admin-a@example.test', 'admin'],
-      ['sam.ops@example.test', 'operations'],
+    // The name the admin gave is theirs from the first sign-in.
+    expect(
+      team.body.members.map((m: { name: string; email: string; role: string }) => [m.name, m.email, m.role]),
+    ).toEqual([
+      ['Sam Okoro', 'sam.ops@example.test', 'operations'],
+      ['admin-a@example.test', 'admin-a@example.test', 'admin'],
     ]);
+    // People name themselves; admins correct a colleague's.
+    expect(
+      (await call('PATCH', '/v1/me', { as: asA(), body: { fullName: 'Ada Admin' } })).body.fullName,
+    ).toBe('Ada Admin');
+    const renamed = await call('PATCH', `/v1/members/${ops.userId}`, {
+      as: asA(),
+      body: { name: 'Samuel Okoro' },
+    });
+    expect(renamed.body.name).toBe('Samuel Okoro');
+    expect(
+      (await call('PATCH', `/v1/members/${ops.userId}`, { as: asB(), body: { name: 'Nope' } })).status,
+    ).toBe(404);
   });
 
   it('refuses an email already in the team, and renews an open invitation instead of doubling it', async () => {
     const dup = await call('POST', '/v1/invitations', {
       as: asA(),
-      body: { email: 'sam.ops@example.test', role: 'admin' },
+      body: { email: 'sam.ops@example.test', name: 'Sam', role: 'admin' },
     });
     expect(dup.status).toBe(409);
     await call('POST', '/v1/invitations', {
       as: asA(),
-      body: { email: 'old.hand@example.test', role: 'accounts' },
+      body: { email: 'old.hand@example.test', name: 'Old Hand', role: 'accounts' },
     });
     const again = await call('POST', '/v1/invitations', {
       as: asA(),
-      body: { email: 'old.hand@example.test', role: 'field' },
+      body: { email: 'old.hand@example.test', name: 'Old Hand', role: 'field' },
     });
     expect(again.body.email).toBe('existing');
     const list = await call('GET', '/v1/invitations', { as: asA() });

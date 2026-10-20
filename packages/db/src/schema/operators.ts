@@ -95,6 +95,8 @@ export const invitations = app.table(
       .references(() => organisations.id, { onDelete: 'cascade' }),
     email: text('email').notNull(),
     role: memberRole('role').notNull(),
+    /** The name the admin gave when inviting; becomes the person's name on first sign-in if they have none. */
+    fullName: text('full_name'),
     invitedBy: uuid('invited_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }),

@@ -11,9 +11,13 @@ import { MEMBER_ROLES } from './enums.ts';
 const Uuid = z.uuid();
 const Timestamp = z.string();
 
+export const NAME_MAX = 120;
+
 export const InvitationSchema = z.object({
   id: Uuid,
   email: z.string(),
+  /** The name the admin gave, shown until the person signs in and it becomes theirs. */
+  name: z.string().nullable(),
   role: z.enum(MEMBER_ROLES),
   invitedBy: z.string().nullable(),
   createdAt: Timestamp,
@@ -26,6 +30,8 @@ export type InvitationList = z.infer<typeof InvitationListSchema>;
 
 export const InviteSchema = z.object({
   email: z.email('An email address like name@example.com').max(254),
+  /** Their name, as the team knows them. */
+  name: z.string().trim().min(1, 'Their name, so the team sees a person, not an address.').max(NAME_MAX),
   role: z.enum(MEMBER_ROLES),
 });
 export type Invite = z.infer<typeof InviteSchema>;
@@ -42,8 +48,18 @@ export const InviteResultSchema = z.object({
 });
 export type InviteResult = z.infer<typeof InviteResultSchema>;
 
-export const MemberRoleUpdateSchema = z.object({ role: z.enum(MEMBER_ROLES) });
+/** An admin changes a member's role, or corrects their name. */
+export const MemberRoleUpdateSchema = z
+  .object({
+    role: z.enum(MEMBER_ROLES).optional(),
+    name: z.string().trim().min(1).max(NAME_MAX).optional(),
+  })
+  .refine((u) => u.role !== undefined || u.name !== undefined, 'Nothing to change');
 export type MemberRoleUpdate = z.infer<typeof MemberRoleUpdateSchema>;
+
+/** A person's own details. */
+export const MeUpdateSchema = z.object({ fullName: z.string().trim().min(1).max(NAME_MAX) });
+export type MeUpdate = z.infer<typeof MeUpdateSchema>;
 
 /** How long an invitation stays open. */
 export const INVITATION_DAYS = 14;

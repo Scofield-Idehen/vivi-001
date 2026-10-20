@@ -1,9 +1,10 @@
 import type { ApiDatabase } from '@v01/db';
 import { appUsers, memberships, organisations } from '@v01/db';
-import { canPlatform, MeSchema, type PlatformRole } from '@v01/shared';
+import { canPlatform, MeSchema, MeUpdateSchema, type PlatformRole } from '@v01/shared';
 import { asc, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { z } from 'zod';
 import { isoOrNull, pgErrorCode, type RequestScope } from '../context.ts';
 import { HttpError } from '../errors.ts';
 
@@ -71,4 +72,19 @@ export function meRoutes(app: FastifyInstance, deps: { db: ApiDatabase; scope: R
         };
       });
     });
+
+  // A person's own name, as the team sees it.
+  app
+    .withTypeProvider<ZodTypeProvider>()
+    .patch(
+      '/v1/me',
+      { schema: { body: MeUpdateSchema, response: { 200: z.object({ fullName: z.string() }) } } },
+      async (req) => {
+        const user = await deps.scope.user(req);
+        return deps.db.withUser(user.id, async (tx) => {
+          await tx.update(appUsers).set({ fullName: req.body.fullName }).where(eq(appUsers.id, user.id));
+          return { fullName: req.body.fullName };
+        });
+      },
+    );
 }

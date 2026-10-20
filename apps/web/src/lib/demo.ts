@@ -53,6 +53,7 @@ import {
   MessageTemplateCreateSchema,
   MessageTemplateUpdateSchema,
   type MessageVia,
+  MeUpdateSchema,
   nightRules,
   nightsBetween,
   type Payment,
@@ -3108,6 +3109,17 @@ export async function demoFetch<T>(
 
   // The team: invitations and roles ----------------------------------------------------------------
 
+  if (method === 'PATCH' && path === '/v1/me') {
+    const parsed = MeUpdateSchema.safeParse(options.body);
+    if (!parsed.success) invalid(parsed.error.issues);
+    for (const o of load().operators) {
+      const me = o.team.find((m) => m.email === DEMO_USER.email);
+      if (me) me.fullName = parsed.data.fullName;
+    }
+    save();
+    return { fullName: parsed.data.fullName } as T;
+  }
+
   if (method === 'GET' && path === '/v1/invitations') {
     const { operator } = access(options.orgId, 'members.manage');
     return { invitations: operator.invitations ?? [] } as T;
@@ -3126,6 +3138,7 @@ export async function demoFetch<T>(
     const invitation: Invitation = {
       id: crypto.randomUUID(),
       email,
+      name: parsed.data.name,
       role: parsed.data.role,
       invitedBy: operator.team.find((m) => m.email === DEMO_USER.email)?.fullName ?? 'Demo user',
       createdAt: new Date(now).toISOString(),
@@ -3168,9 +3181,12 @@ export async function demoFetch<T>(
     }
     const parsed = MemberRoleUpdateSchema.safeParse(options.body);
     if (!parsed.success) invalid(parsed.error.issues);
-    if (member.role === 'admin' && parsed.data.role !== 'admin' && adminCount <= 1)
-      throw new ApiError(400, 'last_admin', 'The workspace needs at least one admin.');
-    member.role = parsed.data.role;
+    if (parsed.data.role !== undefined) {
+      if (member.role === 'admin' && parsed.data.role !== 'admin' && adminCount <= 1)
+        throw new ApiError(400, 'last_admin', 'The workspace needs at least one admin.');
+      member.role = parsed.data.role;
+    }
+    if (parsed.data.name !== undefined) member.fullName = parsed.data.name;
     save();
     return {
       id: memberId(member.email),

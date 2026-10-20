@@ -44,6 +44,7 @@ async function openInvitations(tx: Tx): Promise<Invitation[]> {
   return rows.map(({ i, invitedBy }) => ({
     id: i.id,
     email: i.email,
+    name: i.fullName,
     role: i.role,
     invitedBy: i.invitedBy ? invitedBy : null,
     createdAt: toIso(i.createdAt),
@@ -101,6 +102,7 @@ export function memberRoutes(
           .values({
             organisationId: ctx.orgId,
             email,
+            fullName: req.body.name,
             role: req.body.role,
             invitedBy: ctx.userId,
             expiresAt: sql`now() + interval '${sql.raw(String(INVITATION_DAYS))} days'`,
@@ -144,16 +146,23 @@ export function memberRoutes(
     { schema: { params: MemberParams, body: MemberRoleUpdateSchema, response: { 200: TeamMemberSchema } } },
     async (req) =>
       deps.scope.inOrg(req, 'members.manage', async (tx, ctx) => {
-        if (req.params.userId === ctx.userId)
+        if (req.params.userId === ctx.userId && req.body.role !== undefined)
           throw new HttpError(400, 'own_role', 'Ask another admin to change your role.');
         const member = await memberOr404(tx, ctx.orgId, req.params.userId);
-        if (member.role === 'admin' && req.body.role !== 'admin' && (await admins(tx, ctx.orgId)) <= 1) {
-          throw new HttpError(400, 'last_admin', 'The workspace needs at least one admin.');
+        if (req.body.role !== undefined) {
+          if (member.role === 'admin' && req.body.role !== 'admin' && (await admins(tx, ctx.orgId)) <= 1) {
+            throw new HttpError(400, 'last_admin', 'The workspace needs at least one admin.');
+          }
+          await tx
+            .update(memberships)
+            .set({ role: req.body.role })
+            .where(and(eq(memberships.organisationId, ctx.orgId), eq(memberships.userId, req.params.userId)));
         }
-        await tx
-          .update(memberships)
-          .set({ role: req.body.role })
-          .where(and(eq(memberships.organisationId, ctx.orgId), eq(memberships.userId, req.params.userId)));
+        if (req.body.name !== undefined) {
+          await tx.execute(
+            sql`select app.rename_member(${ctx.orgId}::uuid, ${req.params.userId}::uuid, ${req.body.name})`,
+          );
+        }
         return memberOr404(tx, ctx.orgId, req.params.userId);
       }),
   );

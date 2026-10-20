@@ -36,6 +36,7 @@ import type {
   MessageTemplateCreate,
   MessageTemplateList,
   MessageTemplateUpdate,
+  MeUpdate,
   PaymentCreate,
   PhotoStage,
   PhotoUploadTicket,
@@ -1221,6 +1222,20 @@ export function useUpdateBrand(orgId: string | null) {
       apiFetch<Workspace>('/v1/workspace/brand', { token: token as string, orgId, method: 'PATCH', body }),
     onSuccess: (workspace) => {
       queryClient.setQueryData(['workspace', orgId], workspace);
+    },
+  });
+}
+
+/** A person's own name, as the team sees it. */
+export function useUpdateMe() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: MeUpdate) =>
+      apiFetch<{ fullName: string }>('/v1/me', { token: token as string, method: 'PATCH', body }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['me'] });
+      void queryClient.invalidateQueries({ queryKey: ['team'] });
     },
   });
 }

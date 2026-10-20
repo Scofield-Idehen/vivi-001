@@ -40,19 +40,23 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
   const change = useChangeRole(orgId);
   const remove = useRemoveMember(orgId);
   const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [newRole, setNewRole] = useState<MemberRole>('operations');
   const [done, setDone] = useState<string | null>(null);
   const members = team.data?.members ?? [];
   const open = invitations.data?.invitations ?? [];
-  const ready = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && !invite.isPending;
+  const ready =
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && name.trim().length > 0 && !invite.isPending;
 
   const send = () => {
     if (!ready) return;
     invite.mutate(
-      { email: email.trim(), role: newRole },
+      { email: email.trim(), name: name.trim(), role: newRole },
       {
         onSuccess: (r) => {
           setEmail('');
+          setName('');
           setDone(
             r.email === 'invited'
               ? `${r.invitation.email} has an email with a sign-in link.`
@@ -83,11 +87,49 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
             className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3 text-[14px]"
           >
             <div className="min-w-0">
-              <p className="truncate text-ink">
-                {m.name}
-                {m.id === selfId ? <span className="text-mist"> (you)</span> : null}
-              </p>
-              {m.email ? <p className="truncate text-[12.5px] text-slate">{m.email}</p> : null}
+              {renaming?.id === m.id ? (
+                <span className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={renaming.name}
+                    onChange={(e) => setRenaming({ id: m.id, name: e.target.value })}
+                    aria-label="Name"
+                    className="h-8 w-[220px] rounded-md border border-edge bg-white px-2.5 text-[14px] text-ink focus:border-accent focus:outline-none"
+                  />
+                  <Button
+                    variant="primary"
+                    className="!h-8"
+                    disabled={!renaming.name.trim() || change.isPending}
+                    onClick={() =>
+                      change.mutate(
+                        { userId: m.id, name: renaming.name.trim() },
+                        { onSuccess: () => setRenaming(null) },
+                      )
+                    }
+                  >
+                    Save
+                  </Button>
+                  <Button variant="quiet" onClick={() => setRenaming(null)}>
+                    Cancel
+                  </Button>
+                </span>
+              ) : (
+                <p className="flex items-center gap-1 text-ink">
+                  <span className="truncate">{m.name}</span>
+                  {m.id === selfId ? <span className="text-mist"> (you)</span> : null}
+                  {manage && m.id !== selfId ? (
+                    <button
+                      type="button"
+                      onClick={() => setRenaming({ id: m.id, name: m.name === m.email ? '' : m.name })}
+                      className="action !h-7 text-[12.5px]"
+                    >
+                      {m.name === m.email ? 'Add name' : 'Rename'}
+                    </button>
+                  ) : null}
+                </p>
+              )}
+              {m.email && m.email !== m.name ? (
+                <p className="truncate text-[12.5px] text-slate">{m.email}</p>
+              ) : null}
             </div>
             <div className="flex items-center gap-2">
               {manage && m.id !== selfId ? (
@@ -144,7 +186,10 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
                     className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2.5 text-[14px]"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-ink">{i.email}</p>
+                      <p className="truncate text-ink">
+                        {i.name ?? i.email}
+                        {i.name ? <span className="text-slate"> · {i.email}</span> : null}
+                      </p>
                       <p className="text-[12.5px] text-slate">
                         {ROLE_LABELS[i.role]} · invited {shortDate(i.createdAt)}
                         {i.invitedBy ? ` by ${i.invitedBy}` : ''}

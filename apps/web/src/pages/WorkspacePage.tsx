@@ -1,7 +1,7 @@
 import { can, ROLE_LABELS } from '@v01/shared';
 import { type ReactNode, useState } from 'react';
 import { Button, Notice, PageHeader, SectionHeading, StatusDot } from '../components/ui.tsx';
-import { ApiError, useMe, useSupportVisits, useUpdateBrand, useWorkspace } from '../lib/api.ts';
+import { ApiError, useMe, useSupportVisits, useUpdateBrand, useUpdateMe, useWorkspace } from '../lib/api.ts';
 import { dateTime, duration, useNow } from '../lib/format.ts';
 import { useCurrentWorkspace } from '../lib/workspace.tsx';
 import { TeamSection } from './workspace/TeamSection.tsx';
@@ -45,6 +45,9 @@ export function WorkspacePage() {
               <Row label="Time zone">{data.settings.timeZone}</Row>
               <Row label="Country">{data.settings.countryCode}</Row>
               <Row label="Your role">{ROLE_LABELS[entry.role]}</Row>
+              <Row label="Your name">
+                <YourName current={me.data?.user.fullName ?? null} />
+              </Row>
             </dl>
           </section>
           <section aria-labelledby="brand">
@@ -86,6 +89,56 @@ export function WorkspacePage() {
       ) : null}
       <SupportVisits orgId={orgId} />
     </>
+  );
+}
+
+/** What the team sees instead of your email: on tasks, in the Inbox, on photo stamps. */
+function YourName({ current }: { current: string | null }) {
+  const update = useUpdateMe();
+  const [editing, setEditing] = useState(current === null);
+  const [draft, setDraft] = useState(current ?? '');
+  if (!editing) {
+    return (
+      <span className="inline-flex flex-wrap items-center gap-2">
+        <span>{current}</span>
+        <button type="button" onClick={() => setEditing(true)} className="action !h-7 text-[12.5px]">
+          Change
+        </button>
+      </span>
+    );
+  }
+  return (
+    <span className="flex flex-col gap-2">
+      <span className="flex flex-wrap items-center gap-2">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Your name"
+          aria-label="Your name"
+          className="h-9 w-[220px] rounded-md border border-edge bg-white px-3 text-[14px] text-ink focus:border-accent focus:outline-none"
+        />
+        <Button
+          variant="primary"
+          disabled={!draft.trim() || update.isPending}
+          onClick={() => update.mutate({ fullName: draft.trim() }, { onSuccess: () => setEditing(false) })}
+        >
+          Save
+        </Button>
+        {current ? (
+          <Button variant="quiet" onClick={() => setEditing(false)}>
+            Cancel
+          </Button>
+        ) : null}
+      </span>
+      {current === null ? (
+        <span className="text-[12.5px] text-slate">The team sees your email until you add it.</span>
+      ) : null}
+      {update.error ? (
+        <span className="text-[12.5px] text-urgent">
+          {update.error instanceof ApiError ? update.error.message : 'That didn’t go through.'}
+        </span>
+      ) : null}
+    </span>
   );
 }
 
