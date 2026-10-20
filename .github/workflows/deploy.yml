@@ -92,7 +92,7 @@ jobs:
           WORKER_ENV: ${{ secrets.WORKER_ENV }}
         run: |
           to_yaml() {
-            printf '%s\n' "$1" | grep -v '^\s*#' | grep '=' | while IFS= read -r line; do
+            printf '%s\n' "$1" | tr -d '\r' | grep -v '^\s*#' | grep '=' | while IFS= read -r line; do
               key="${line%%=*}"; value="${line#*=}"
               printf '%s: "%s"\n' "$key" "$(printf '%s' "$value" | sed 's/"/\\"/g')"
             done
@@ -104,6 +104,7 @@ jobs:
             test -s worker.env.yaml || { echo "The WORKER_ENV secret is empty."; exit 1; }
           fi
       - name: Deploy the API
+        id: api
         env:
           REPO: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/v01
         run: |
@@ -112,6 +113,12 @@ jobs:
             --region "$REGION" --platform managed --allow-unauthenticated \
             --port 8080 --cpu 1 --memory 1Gi --min-instances "${{ vars.API_MIN_INSTANCES || 0 }}" --max-instances 3 \
             --env-vars-file api.env.yaml --quiet
+      - name: Why the API didn't start
+        if: ${{ failure() && steps.api.conclusion == 'failure' }}
+        run: |
+          echo "The container's last log lines:"
+          gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="v01-api"' \
+            --project "$PROJECT" --limit 40 --format 'value(textPayload,jsonPayload.message,jsonPayload.msg)' --freshness 20m || true
       # The worker runs its loops all day, so on Cloud Run it is one instance always on (about $15 a
       # month). Until DEPLOY_WORKER is true it stays where it is (a laptop, say) and nothing is charged.
       - name: Deploy the worker
