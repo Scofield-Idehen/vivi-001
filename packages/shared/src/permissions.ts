@@ -23,6 +23,11 @@ export const PERMISSIONS = {
   'tasks.read': ['admin', 'operations', 'guest_comms', 'accounts', 'field', 'v01_support'],
   'tasks.write': ['admin', 'operations', 'field'],
   'tasks.manage': ['admin', 'operations'],
+  /** The Inbox: guest conversations. Everyone in the office reads; guest comms, operations and admins reply. */
+  'inbox.read': ['admin', 'operations', 'guest_comms', 'accounts', 'v01_support'],
+  'inbox.write': ['admin', 'operations', 'guest_comms'],
+  /** Automatic messages and saved replies. */
+  'inbox.manage': ['admin', 'operations', 'guest_comms'],
   'channels.read': ['admin', 'operations', 'guest_comms', 'accounts', 'v01_support'],
   'channels.manage': ['admin'],
   'workspace.read': ['admin', 'operations', 'guest_comms', 'accounts', 'field', 'v01_support'],

@@ -6,6 +6,7 @@ export * from './dates.ts';
 export * from './enums.ts';
 export * from './fields.ts';
 export * from './guest.ts';
+export * from './inbox.ts';
 export * from './listing.ts';
 export * from './money.ts';
 export * from './permissions.ts';

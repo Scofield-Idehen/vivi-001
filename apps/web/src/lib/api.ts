@@ -24,6 +24,11 @@ import type {
   GuestLink,
   GuestStay,
   Me,
+  MessageSend,
+  MessageTemplate,
+  MessageTemplateCreate,
+  MessageTemplateList,
+  MessageTemplateUpdate,
   PhotoUploadTicket,
   PropertyCreate,
   PropertyDetail,
@@ -51,6 +56,11 @@ import type {
   TaskTemplateUpdate,
   TaskUpdate,
   TeamList,
+  Thread,
+  ThreadDetail,
+  ThreadList,
+  ThreadListQuery,
+  ThreadUpdate,
   Today,
   Workspace,
   WorkspaceSync,
@@ -951,5 +961,130 @@ export function useTeam(orgId: string | null) {
     enabled: Boolean(token && orgId),
     queryFn: () => apiFetch<TeamList>('/v1/team', { token: token as string, orgId }),
     staleTime: 5 * 60_000,
+  });
+}
+
+// The Inbox: one thread per booking; replies queue for the worker.
+
+export function useThreads(orgId: string | null, query: ThreadListQuery) {
+  const token = useToken();
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) if (v) params.set(k, String(v));
+  return useQuery({
+    queryKey: ['threads', orgId, params.toString()],
+    enabled: Boolean(token && orgId),
+    queryFn: () => apiFetch<ThreadList>(`/v1/inbox/threads?${params}`, { token: token as string, orgId }),
+    placeholderData: keepPreviousData,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useThread(orgId: string | null, threadId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['thread', orgId, threadId],
+    enabled: Boolean(token && orgId && threadId),
+    queryFn: () => apiFetch<ThreadDetail>(`/v1/inbox/threads/${threadId}`, { token: token as string, orgId }),
+    refetchInterval: 20_000,
+  });
+}
+
+/** A booking's thread, for the link on its page. */
+export function useReservationThread(orgId: string | null, reservationId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['reservation-thread', orgId, reservationId],
+    enabled: Boolean(token && orgId && reservationId),
+    queryFn: () =>
+      apiFetch<Thread>(`/v1/reservations/${reservationId}/thread`, { token: token as string, orgId }),
+  });
+}
+
+export function useSendMessage(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ threadId, ...body }: { threadId: string } & MessageSend) =>
+      apiFetch<ThreadDetail>(`/v1/inbox/threads/${threadId}/messages`, {
+        token: token as string,
+        orgId,
+        method: 'POST',
+        body,
+      }),
+    onSuccess: (detail) => {
+      queryClient.setQueryData(['thread', orgId, detail.thread.id], detail);
+      void queryClient.invalidateQueries({ queryKey: ['threads', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['today', orgId] });
+    },
+  });
+}
+
+export function useUpdateThread(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ threadId, ...body }: { threadId: string } & ThreadUpdate) =>
+      apiFetch<Thread>(`/v1/inbox/threads/${threadId}`, {
+        token: token as string,
+        orgId,
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: (thread) => {
+      queryClient.setQueryData(['thread', orgId, thread.id], (old: ThreadDetail | undefined) =>
+        old ? { ...old, thread } : old,
+      );
+      void queryClient.invalidateQueries({ queryKey: ['threads', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['today', orgId] });
+    },
+  });
+}
+
+export function useMessageTemplates(orgId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['message-templates', orgId],
+    enabled: Boolean(token && orgId),
+    queryFn: () => apiFetch<MessageTemplateList>('/v1/inbox/templates', { token: token as string, orgId }),
+  });
+}
+
+export function useCreateMessageTemplate(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: MessageTemplateCreate) =>
+      apiFetch<MessageTemplate>('/v1/inbox/templates', {
+        token: token as string,
+        orgId,
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['message-templates', orgId] }),
+  });
+}
+
+export function useUpdateMessageTemplate(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string } & MessageTemplateUpdate) =>
+      apiFetch<MessageTemplate>(`/v1/inbox/templates/${id}`, {
+        token: token as string,
+        orgId,
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['message-templates', orgId] }),
+  });
+}
+
+export function useDeleteMessageTemplate(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<null>(`/v1/inbox/templates/${id}`, { token: token as string, orgId, method: 'DELETE' }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['message-templates', orgId] }),
   });
 }

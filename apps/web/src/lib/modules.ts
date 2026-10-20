@@ -61,7 +61,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
         path: 'inbox',
         label: 'Inbox',
         icon: IconInbox,
-        built: false,
+        built: true,
         design: 'D2',
         phase: 'Phase 2',
         summary:

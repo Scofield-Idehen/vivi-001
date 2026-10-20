@@ -156,6 +156,31 @@ What the import does is in `apps/worker/src/guesty/mapping.ts` (Guesty's words i
 functions) and `import.ts` (the database work), tested in `apps/worker/test/guesty.test.ts`
 against a stand-in for Guesty's API.
 
+## The Inbox and guest messages
+
+Every booking has a thread (`app.message_threads`, made by a trigger on `reservations`); messages
+in and out are `app.messages`. A reply from the team is inserted `queued`; the worker's
+`send-messages` loop (every minute, `apps/worker/src/inbox.ts`) sends it. Email goes through Resend
+once these are in `apps/worker/.env`:
+
+```bash
+RESEND_API_KEY=<key>
+MAIL_FROM=hello@example.com   # on a domain verified in Resend
+```
+
+Without them an email waits, with the reason on the message, and goes as soon as they are set. A
+text (`sms`) and the sites' chats (`airbnb`, `booking_com`, `vrbo`, `expedia`) wait the same way:
+texts until a texting service is chosen; the chats until messaging is connected through Channex,
+which is where a guest's own messages will come in from (`messages.direction = 'in'`, with the
+site's id in `external_id` so nothing is stored twice).
+
+Automatic messages are `app.message_templates` (four per workspace, made with it: confirmation,
+the day before arrival, the day of arrival, the day before check-out; `manual` ones are saved
+replies). The `automatic-messages` loop (every five minutes) writes each into the thread when its
+moment comes, where the operator is, once per template per thread (`messages_template_once`).
+`{{placeholders}}` are in `packages/shared/src/inbox.ts`; `APP_URL` makes the `{{stay_link}}`.
+Tests: `apps/api/test/inbox.test.ts`, `apps/worker/test/inbox.test.ts`.
+
 ## Supabase and Render
 
 Staging: Supabase project `v01-staging` (ref `nznzkjsbdkzujkoieemo`, Ireland, eu-west-1), created 19 Oct 2026 in

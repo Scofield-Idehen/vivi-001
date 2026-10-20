@@ -5,6 +5,7 @@ import {
   channexMappings,
   channexSetups,
   guests,
+  messageThreads,
   organisationSettings,
   properties,
   reservations,
@@ -304,6 +305,35 @@ export function todayRoutes(app: FastifyInstance, deps: { scope: RequestScope })
               title: `Couldn’t connect ${s.propertyName} to Channex`,
               detail: s.lastError,
               to: `/properties/${s.propertyId}`,
+            });
+          }
+        }
+
+        // Guests waiting on a reply: a warning after an hour, urgent after a day (the sites' response clocks).
+        if (can(ctx.role, 'inbox.read')) {
+          const [waiting] = await tx
+            .select({
+              count: sql<number>`count(*)::int`,
+              oldest: sql<string | null>`min(${messageThreads.awaitingSince})`,
+            })
+            .from(messageThreads)
+            .where(isNotNull(messageThreads.awaitingSince));
+          if (waiting && waiting.count > 0 && waiting.oldest) {
+            const hours = (Date.now() - Date.parse(toIso(waiting.oldest))) / 3_600_000;
+            attention.push({
+              id: 'inbox:awaiting',
+              severity: hours >= 24 ? 'urgent' : 'warning',
+              title:
+                waiting.count === 1
+                  ? 'A guest is waiting for a reply'
+                  : `${waiting.count} guests are waiting for a reply`,
+              detail:
+                hours >= 24
+                  ? `The longest for ${Math.floor(hours / 24)} ${Math.floor(hours / 24) === 1 ? 'day' : 'days'}.`
+                  : hours >= 1
+                    ? `The longest for ${Math.floor(hours)} ${Math.floor(hours) === 1 ? 'hour' : 'hours'}.`
+                    : 'Within the hour.',
+              to: '/inbox',
             });
           }
         }

@@ -126,9 +126,9 @@ describe('reaching the guest', () => {
     expect(contactRoutes(reservation({ guestPhone: null }))).toEqual([]);
   });
 
-  it('says where channel messages are until the Inbox', () => {
+  it('says what reaches a channel guest’s chat, and when', () => {
     expect(channelMessages('booking_com')).toBe(
-      "Messages with Booking.com guests stay on Booking.com until V-01's Inbox is ready.",
+      "What you write in the Inbox reaches the guest's Booking.com chat once it is connected through Channex; until then it waits there.",
     );
     expect(channelMessages('direct')).toBeNull();
   });

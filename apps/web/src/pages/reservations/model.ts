@@ -199,8 +199,10 @@ const CHANNEL_INBOX: Record<Channel, string | null> = {
   direct: null,
 };
 
-/** Where messages to the guest go until V-01's Inbox: the channel's own, for channel bookings. */
+/** For a channel booking: the guest's chat stays on the site until it is connected through Channex. */
 export function channelMessages(channel: Channel): string | null {
   const name = CHANNEL_INBOX[channel];
-  return name ? `Messages with ${name} guests stay on ${name} until V-01's Inbox is ready.` : null;
+  return name
+    ? `What you write in the Inbox reaches the guest's ${name} chat once it is connected through Channex; until then it waits there.`
+    : null;
 }

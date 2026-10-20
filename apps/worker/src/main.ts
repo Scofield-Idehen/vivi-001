@@ -2,9 +2,10 @@ import { processWebhooks, sweepBookingFeed } from './bookings.ts';
 import { makeCheckOutCleans, markDirtyAfterCheckOut } from './cleaning.ts';
 import { crossCheckAll } from './cross-check.ts';
 import { enqueueFullSync } from './full-sync.ts';
+import { makeAutomaticMessages, type Senders, sendQueuedMessages } from './inbox.ts';
 import { startJobs } from './jobs.ts';
 import { syncChannelLinks } from './links.ts';
-import { liveDeps } from './live-deps.ts';
+import { liveDeps, senders } from './live-deps.ts';
 import { processOutbox } from './outbox.ts';
 import { beginRun, checkAllAutoClose, recover } from './safety.ts';
 import { connectProperties } from './setup.ts';
@@ -31,7 +32,8 @@ function every(name: string, intervalMs: number, task: () => Promise<unknown>): 
   };
 }
 
-log.info({ provider: deps.provider.name }, 'Worker starting');
+const mail: Senders = senders(env);
+log.info({ provider: deps.provider.name, email: Boolean(mail.email) }, 'Worker starting');
 
 // Drain before push. While `holding` is true nothing goes out to the channel manager: the bookings
 // that arrived while V-01 was away are saved first (docs/runbooks/recovery.md, done by the worker).
@@ -58,6 +60,9 @@ const stops = [
     if (stats.connected || stats.activated || stats.linked || stats.unlinked || stats.failed)
       log.info(stats, 'Channel links synced');
   }),
+  // The Inbox: automatic messages when their moment comes, and whatever is queued goes out.
+  every('automatic-messages', 5 * 60_000, () => makeAutomaticMessages(deps, { appUrl: env.APP_URL })),
+  every('send-messages', 60_000, () => sendQueuedMessages(deps, mail)),
 ];
 
 if (holding) {

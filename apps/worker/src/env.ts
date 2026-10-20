@@ -22,6 +22,9 @@ const EnvSchema = z
     GUESTY_API_URL: z.url().optional(),
     /** The same key the API uses to seal secret custom fields; the import needs it for lock codes. */
     FIELD_SECRET_KEY: z.string().min(32).optional(),
+    /** Email to direct guests (the Inbox): a Resend key, and the one address V-01 sends from, on a verified domain. */
+    RESEND_API_KEY: z.string().min(1).optional(),
+    MAIL_FROM: z.email().optional(),
     /** Changes are batched per property every 30–60 seconds (playbook, Section 4). */
     OUTBOX_INTERVAL_MS: z.coerce.number().int().min(1000).default(30_000),
     WEBHOOK_INTERVAL_MS: z.coerce.number().int().min(500).default(5_000),

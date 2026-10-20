@@ -38,8 +38,15 @@ import {
   type GuestStay,
   isWebAddress,
   listingUrl,
+  longDay,
   type Me,
   type MemberRole,
+  type Message,
+  MessageSendSchema,
+  type MessageTemplate,
+  MessageTemplateCreateSchema,
+  MessageTemplateUpdateSchema,
+  type MessageVia,
   nightRules,
   nightsBetween,
   type Permission,
@@ -66,6 +73,7 @@ import {
   type ReservationSummary,
   ReservationUpdateSchema,
   RoomsUpdateSchema,
+  renderTemplate,
   SUPPORT_ROLE,
   SupportAccessStartSchema,
   type SupportGrant,
@@ -80,6 +88,11 @@ import {
   TaskTemplateUpdateSchema,
   TaskUpdateSchema,
   type TeamList,
+  type Thread,
+  type ThreadDetail,
+  type ThreadList,
+  ThreadListQuerySchema,
+  ThreadUpdateSchema,
   type Today,
   type TodayStay,
   todayIn,
@@ -178,10 +191,25 @@ interface DemoOperator {
   /** Tasks for the field team, and what each kind starts with. Missing in older saved states. */
   tasks?: Task[];
   taskTemplates?: TaskTemplate[];
+  /** The Inbox: a thread per booking, and the automatic messages and saved replies. Missing in older saved states. */
+  threads?: DemoThread[];
+  messageTemplates?: MessageTemplate[];
   /** The workspace's custom fields, in order. */
   fields: CustomField[];
   /** Values by property id, then field id. Secrets sit here as typed: the demo has no database. */
   fieldValues: Record<string, Record<string, string>>;
+}
+
+/** A booking's conversation, as the API keeps it; the counts are worked out from the messages. */
+interface DemoThread {
+  id: string;
+  reservationId: string;
+  status: 'open' | 'done';
+  /** Messages from the guest nobody has opened yet. */
+  unread: number;
+  /** The sample conversation for this guest has been laid in. */
+  seeded: boolean;
+  messages: Message[];
 }
 
 /** A booking as the API keeps it: what the calendar shows, and what the reservation page adds. */
@@ -2592,6 +2620,30 @@ function demoToday(operator: DemoOperator, role: WorkspaceRole): Today {
       );
     }
   }
+  if (can(role, 'inbox.read')) {
+    const waiting = settleThreads(operator)
+      .map((th) => threadView(operator, th))
+      .filter((t) => t.awaitingSince !== null);
+    if (waiting.length) {
+      const oldest = Math.min(...waiting.map((t) => Date.parse(t.awaitingSince as string)));
+      const hours = (Date.now() - oldest) / 3_600_000;
+      attention.push({
+        id: 'inbox:awaiting',
+        severity: hours >= 24 ? 'urgent' : 'warning',
+        title:
+          waiting.length === 1
+            ? 'A guest is waiting for a reply'
+            : `${waiting.length} guests are waiting for a reply`,
+        detail:
+          hours >= 24
+            ? `The longest for ${Math.floor(hours / 24)} ${Math.floor(hours / 24) === 1 ? 'day' : 'days'}.`
+            : hours >= 1
+              ? `The longest for ${Math.floor(hours)} ${Math.floor(hours) === 1 ? 'hour' : 'hours'}.`
+              : 'Within the hour.',
+        to: '/inbox',
+      });
+    }
+  }
   attention.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'urgent' ? -1 : 1));
   return {
     date: today,
@@ -3489,6 +3541,152 @@ export async function demoFetch<T>(
     return marked as T;
   }
 
+  // The Inbox ------------------------------------------------------------------------------------
+
+  if (method === 'GET' && (path === '/v1/inbox/threads' || path.startsWith('/v1/inbox/threads?'))) {
+    const { operator } = access(options.orgId, 'inbox.read');
+    const query = Object.fromEntries(new URLSearchParams(path.split('?')[1] ?? ''));
+    const parsed = ThreadListQuerySchema.safeParse(query);
+    if (!parsed.success) invalid(parsed.error.issues);
+    return demoThreadList(operator, parsed.data) as T;
+  }
+
+  if (method === 'GET' && path === '/v1/inbox/templates') {
+    const { operator } = access(options.orgId, 'inbox.read');
+    return { templates: messageTemplatesOf(operator) } as T;
+  }
+
+  if (method === 'POST' && path === '/v1/inbox/templates') {
+    const { operator } = access(options.orgId, 'inbox.manage');
+    const parsed = MessageTemplateCreateSchema.safeParse(options.body);
+    if (!parsed.success) invalid(parsed.error.issues);
+    const b = parsed.data;
+    const all = messageTemplatesOf(operator);
+    if (b.trigger !== 'manual' && all.some((t) => t.trigger === b.trigger))
+      throw new ApiError(409, 'trigger_taken', 'There is already an automatic message for that moment.');
+    const made: MessageTemplate = {
+      id: crypto.randomUUID(),
+      name: b.name,
+      trigger: b.trigger,
+      sendTime: b.trigger === 'manual' || b.trigger === 'booking_confirmed' ? null : (b.sendTime ?? '10:00'),
+      body: b.body,
+      enabled: b.enabled ?? true,
+      position: Math.max(0, ...all.map((t) => t.position)) + 1,
+    };
+    all.push(made);
+    save();
+    return made as T;
+  }
+
+  const messageTemplateMatch = /^\/v1\/inbox\/templates\/([0-9a-f-]{36})$/.exec(path);
+  if (messageTemplateMatch?.[1] && (method === 'PATCH' || method === 'DELETE')) {
+    const { operator } = access(options.orgId, 'inbox.manage');
+    const all = messageTemplatesOf(operator);
+    const tpl = all.find((t) => t.id === messageTemplateMatch[1]);
+    if (!tpl) throw new ApiError(404, 'template_not_found', 'That message does not exist here.');
+    if (method === 'DELETE') {
+      if (tpl.trigger !== 'manual')
+        throw new ApiError(400, 'standard_template', 'An automatic message is switched off, not removed.');
+      all.splice(all.indexOf(tpl), 1);
+      save();
+      return null as T;
+    }
+    const parsed = MessageTemplateUpdateSchema.safeParse(options.body);
+    if (!parsed.success) invalid(parsed.error.issues);
+    const b = parsed.data;
+    if (b.trigger !== undefined && b.trigger !== tpl.trigger && tpl.trigger !== 'manual')
+      throw new ApiError(
+        400,
+        'trigger_fixed',
+        'An automatic message keeps its moment; switch it off instead.',
+      );
+    if (b.name !== undefined) tpl.name = b.name;
+    if (b.trigger !== undefined) tpl.trigger = b.trigger;
+    if (b.sendTime !== undefined) tpl.sendTime = b.sendTime;
+    if (b.body !== undefined) tpl.body = b.body;
+    if (b.enabled !== undefined) tpl.enabled = b.enabled;
+    save();
+    return tpl as T;
+  }
+
+  const reservationThreadMatch = /^\/v1\/reservations\/([0-9a-f-]{36})\/thread$/.exec(path);
+  if (method === 'GET' && reservationThreadMatch?.[1]) {
+    const { operator } = access(options.orgId, 'inbox.read');
+    const th = settleThreads(operator).find((x) => x.reservationId === reservationThreadMatch[1]);
+    if (!th) throw new ApiError(404, 'thread_not_found', 'That booking has no conversation here.');
+    return threadView(operator, th) as T;
+  }
+
+  const threadMatch = /^\/v1\/inbox\/threads\/([0-9a-f-]{36})(?:\/(messages))?$/.exec(path);
+  if (threadMatch?.[1]) {
+    const threadId = threadMatch[1];
+    const notFound = () =>
+      new ApiError(404, 'thread_not_found', 'That conversation does not exist in this workspace.');
+    if (method === 'GET' && !threadMatch[2]) {
+      const { operator } = access(options.orgId, 'inbox.read');
+      const th = settleThreads(operator).find((x) => x.id === threadId);
+      if (!th) throw notFound();
+      return { thread: threadView(operator, th), messages: th.messages } satisfies ThreadDetail as T;
+    }
+    if (method === 'PATCH' && !threadMatch[2]) {
+      const { operator } = access(options.orgId, 'inbox.write');
+      const th = settleThreads(operator).find((x) => x.id === threadId);
+      if (!th) throw notFound();
+      const parsed = ThreadUpdateSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      if (parsed.data.status !== undefined) th.status = parsed.data.status;
+      if (parsed.data.read) th.unread = 0;
+      save();
+      return threadView(operator, th) as T;
+    }
+    if (method === 'POST' && threadMatch[2] === 'messages') {
+      const { operator } = access(options.orgId, 'inbox.write');
+      const th = settleThreads(operator).find((x) => x.id === threadId);
+      if (!th) throw notFound();
+      const parsed = MessageSendSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      const view = threadView(operator, th);
+      let via = view.via;
+      if (parsed.data.via && (view.via === 'email' || view.via === 'sms')) {
+        if (parsed.data.via === 'email' && !view.guestEmail)
+          throw new ApiError(400, 'no_email', 'There is no email for this guest. Add one on the booking.');
+        if (parsed.data.via === 'sms' && !view.guestPhone)
+          throw new ApiError(
+            400,
+            'no_phone',
+            'There is no phone number for this guest. Add one on the booking.',
+          );
+        via = parsed.data.via;
+      }
+      if (!via)
+        throw new ApiError(
+          400,
+          'no_way_to_reach',
+          'There is no email or phone number for this guest yet. Add one on the booking, then write again.',
+        );
+      const now = new Date().toISOString();
+      // The demo stands in for the worker: it goes at once.
+      th.messages.push({
+        id: crypto.randomUUID(),
+        threadId: th.id,
+        direction: 'out',
+        via,
+        body: parsed.data.body,
+        status: 'sent',
+        note: null,
+        sentBy: operator.team.find((m) => m.email === DEMO_USER.email)?.fullName ?? 'Demo user',
+        automatic: false,
+        templateName: null,
+        at: now,
+        sentAt: now,
+      });
+      th.unread = 0;
+      th.status = 'open';
+      save();
+      return { thread: threadView(operator, th), messages: th.messages } satisfies ThreadDetail as T;
+    }
+  }
+
   const guestLinkMatch = /^\/v1\/reservations\/([0-9a-f-]{36})\/guest-link$/.exec(path);
   if (method === 'GET' && guestLinkMatch?.[1]) {
     const { operator } = access(options.orgId, 'reservations.write');
@@ -3632,4 +3830,291 @@ export async function demoFetch<T>(
   }
 
   throw new ApiError(404, 'not_found', 'No such endpoint.');
+}
+
+// The Inbox: a thread per booking, with the automatic messages the worker would have sent ------------
+
+const SITE_CHATS = new Set(['airbnb', 'booking_com', 'vrbo', 'expedia']);
+
+function viaOf(stay: DemoStay): MessageVia | null {
+  if (SITE_CHATS.has(stay.channel)) return stay.channel as MessageVia;
+  if (stay.guestEmail) return 'email';
+  if (stay.guestPhone) return 'sms';
+  return null;
+}
+
+function standardMessageTemplates(): MessageTemplate[] {
+  return [
+    {
+      id: crypto.randomUUID(),
+      name: 'Booking confirmed',
+      trigger: 'booking_confirmed',
+      sendTime: null,
+      body: 'Hi {{guest_first_name}},\n\nThank you for booking {{property}}. We have you from {{check_in}} to {{check_out}}, {{nights}} nights.\n\nEverything you need for your stay is on your page, which fills in as the day comes: {{stay_link}}\n\nIf anything comes up before then, just reply here.\n\n{{operator}}',
+      enabled: true,
+      position: 1,
+    },
+    {
+      id: crypto.randomUUID(),
+      name: 'The day before arrival',
+      trigger: 'before_arrival',
+      sendTime: '10:00',
+      body: 'Hi {{guest_first_name}},\n\nYou arrive tomorrow. Check-in at {{property}} is from {{check_in_time}}. Your page has the address, how to get in, and the Wi-Fi; the door code appears there on the day: {{stay_link}}\n\nSafe travels,\n{{operator}}',
+      enabled: true,
+      position: 2,
+    },
+    {
+      id: crypto.randomUUID(),
+      name: 'Day of arrival',
+      trigger: 'arrival_day',
+      sendTime: '09:00',
+      body: 'Hi {{guest_first_name}},\n\nToday is the day. From {{check_in_time}} your door code is on your page: {{stay_link}}\n\nReply here if you need anything on the way.\n\n{{operator}}',
+      enabled: false,
+      position: 3,
+    },
+    {
+      id: crypto.randomUUID(),
+      name: 'The day before check-out',
+      trigger: 'before_departure',
+      sendTime: '17:00',
+      body: 'Hi {{guest_first_name}},\n\nA quick note that check-out tomorrow is by {{check_out_time}}. Leave the keys as you found them and pull the door closed behind you.\n\nThank you for staying with us.\n{{operator}}',
+      enabled: true,
+      position: 4,
+    },
+  ];
+}
+
+function messageTemplatesOf(operator: DemoOperator): MessageTemplate[] {
+  operator.messageTemplates ??= standardMessageTemplates();
+  return operator.messageTemplates;
+}
+
+/** The sample conversations, laid in once per guest: what a week in the Inbox looks like. */
+const SAMPLE_CONVERSATIONS: Record<
+  string,
+  { daysAgo: number; time: string; from: 'guest' | 'team'; body: string }[]
+> = {
+  'Priya Shah': [
+    {
+      daysAgo: 2,
+      time: '18:40',
+      from: 'guest',
+      body: 'Hi, we’ve arrived and the top lock code worked first time. Is the heating on a timer?',
+    },
+    {
+      daysAgo: 2,
+      time: '19:05',
+      from: 'team',
+      body: 'Welcome, Priya! Yes: it comes on 6 to 9 in the morning and 4 to 10 at night. The panel by the kitchen door overrides it if you want it warmer.',
+    },
+  ],
+  'Tom Becker': [
+    {
+      daysAgo: 0,
+      time: '-2h',
+      from: 'guest',
+      body: 'Thanks for this. We’ll be arriving around 13:00 tomorrow. Is an early check-in possible?',
+    },
+  ],
+  'Claire Dubois': [
+    { daysAgo: 1, time: '15:12', from: 'guest', body: 'Is there a cot we could use for our baby?' },
+    {
+      daysAgo: 1,
+      time: '15:40',
+      from: 'team',
+      body: 'There is a travel cot in the cupboard on the landing, with fresh sheets. Let us know if you need anything else.',
+    },
+  ],
+  'Leo Hartmann': [
+    {
+      daysAgo: 1,
+      time: '-26h',
+      from: 'guest',
+      body: 'Could we leave our bags somewhere until 2pm after check-out tomorrow? Our train is late afternoon.',
+    },
+  ],
+};
+
+function settleThreads(operator: DemoOperator): DemoThread[] {
+  operator.threads ??= [];
+  const threads = operator.threads;
+  const stays = operator.calendar.stays;
+  // Bookings laid out again get new ids; their old threads go.
+  for (let i = threads.length - 1; i >= 0; i--) {
+    if (!stays.some((s) => s.id === threads[i]?.reservationId)) threads.splice(i, 1);
+  }
+  const tz = operator.workspace.settings.timeZone;
+  const today = todayIn(tz);
+  const now = Date.now();
+  const templates = messageTemplatesOf(operator);
+  // Where the demo lives; a file opened from disk has no address, so a stand-in.
+  const base = `${window.location.origin.startsWith('http') ? window.location.origin : 'https://v01.example'}/stay/`;
+  let changed = false;
+  for (const stay of stays) {
+    let th = threads.find((x) => x.reservationId === stay.id);
+    if (!th) {
+      th = {
+        id: crypto.randomUUID(),
+        reservationId: stay.id,
+        status: 'open',
+        unread: 0,
+        seeded: false,
+        messages: [],
+      };
+      threads.push(th);
+      changed = true;
+    }
+    const via = viaOf(stay);
+    if (stay.status !== 'confirmed' || !via) continue;
+    const property = operator.properties.find((p) => p.id === stay.propertyId);
+    const first = stay.guestName?.trim().split(/\s+/)[0] ?? 'there';
+    if (!stay.guestKey) {
+      stay.guestKey = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) =>
+        b.toString(16).padStart(2, '0'),
+      ).join('');
+      changed = true;
+    }
+    const key = stay.guestKey;
+    const values = {
+      guest_first_name: first,
+      guest_name: stay.guestName ?? 'Guest',
+      property: property?.name ?? '',
+      check_in: longDay(stay.checkIn),
+      check_in_time: stay.checkInTime ?? property?.checkInTime?.slice(0, 5) ?? '15:00',
+      check_out: longDay(stay.checkOut),
+      check_out_time: stay.checkOutTime ?? property?.checkOutTime?.slice(0, 5) ?? '10:00',
+      nights: String(nightsBetween(stay.checkIn, stay.checkOut)),
+      stay_link: `${base}${key}`,
+      operator: operator.workspace.brand.displayName,
+    };
+    // The automatic messages whose moment has come, as the worker sends them.
+    for (const tpl of templates) {
+      if (!tpl.enabled || tpl.trigger === 'manual') continue;
+      if (th.messages.some((m) => m.automatic && m.templateName === tpl.name)) continue;
+      let at: Date | null = null;
+      if (tpl.trigger === 'booking_confirmed') at = new Date(stay.createdAt);
+      else if (tpl.trigger === 'before_arrival')
+        at = zonedInstant(addDays(stay.checkIn, -1), tpl.sendTime ?? '10:00', tz);
+      else if (tpl.trigger === 'arrival_day') at = zonedInstant(stay.checkIn, tpl.sendTime ?? '09:00', tz);
+      else if (tpl.trigger === 'before_departure')
+        at = zonedInstant(addDays(stay.checkOut, -1), tpl.sendTime ?? '17:00', tz);
+      if (!at || at.getTime() > now) continue;
+      // A booking made before the day-before note was due never gets it late; only moments since booking count.
+      if (tpl.trigger !== 'booking_confirmed' && at.getTime() < Date.parse(stay.createdAt)) continue;
+      th.messages.push({
+        id: crypto.randomUUID(),
+        threadId: th.id,
+        direction: 'out',
+        via,
+        body: renderTemplate(tpl.body, values),
+        status: 'sent',
+        note: null,
+        sentBy: null,
+        automatic: true,
+        templateName: tpl.name,
+        at: at.toISOString(),
+        sentAt: at.toISOString(),
+      });
+      changed = true;
+    }
+    // The sample conversation for this guest, once.
+    const sample = stay.guestName ? SAMPLE_CONVERSATIONS[stay.guestName] : undefined;
+    if (sample && !th.seeded) {
+      for (const line of sample) {
+        const at = line.time.startsWith('-')
+          ? new Date(now - Number(line.time.slice(1, -1)) * 3_600_000)
+          : zonedInstant(addDays(today, -line.daysAgo), line.time, tz);
+        th.messages.push({
+          id: crypto.randomUUID(),
+          threadId: th.id,
+          direction: line.from === 'guest' ? 'in' : 'out',
+          via,
+          body: line.body,
+          status: line.from === 'guest' ? 'received' : 'sent',
+          note: null,
+          sentBy: line.from === 'guest' ? null : (operator.team[0]?.fullName ?? 'Demo user'),
+          automatic: false,
+          templateName: null,
+          at: at.toISOString(),
+          sentAt: line.from === 'guest' ? null : at.toISOString(),
+        });
+      }
+      const last = sample[sample.length - 1];
+      th.unread = last?.from === 'guest' ? 1 : 0;
+      th.seeded = true;
+      changed = true;
+    }
+    th.messages.sort((a, b) => a.at.localeCompare(b.at));
+  }
+  if (changed) save();
+  return threads;
+}
+
+function threadView(operator: DemoOperator, th: DemoThread): Thread {
+  const stay = findStay(operator, th.reservationId);
+  const property = operator.properties.find((p) => p.id === stay.propertyId);
+  const last = th.messages[th.messages.length - 1] ?? null;
+  // The guest's last message with no reply after it.
+  let awaitingSince: string | null = null;
+  for (const m of th.messages) {
+    if (m.direction === 'in') awaitingSince ??= m.at;
+    else if (!m.automatic) awaitingSince = null;
+  }
+  return {
+    id: th.id,
+    reservationId: stay.id,
+    propertyId: stay.propertyId,
+    propertyName: property?.name ?? '',
+    guestName: stay.guestName,
+    guestEmail: stay.guestEmail,
+    guestPhone: stay.guestPhone,
+    channel: stay.channel,
+    reservationStatus: stay.status,
+    checkIn: stay.checkIn,
+    checkOut: stay.checkOut,
+    status: th.status,
+    via: viaOf(stay),
+    lastMessageAt: last?.at ?? null,
+    lastMessage: last
+      ? { direction: last.direction, body: last.body.replace(/\s+/g, ' ').slice(0, 140), at: last.at }
+      : null,
+    unread: th.unread,
+    awaitingSince,
+  };
+}
+
+function demoThreadList(
+  operator: DemoOperator,
+  query: { view: 'awaiting' | 'open' | 'all'; q?: string },
+): ThreadList {
+  const all = settleThreads(operator).map((th) => threadView(operator, th));
+  const q = query.q?.trim().toLowerCase();
+  const matches = (t: Thread) =>
+    !q ||
+    (t.guestName ?? '').toLowerCase().includes(q) ||
+    t.propertyName.toLowerCase().includes(q) ||
+    (operator.calendar.stays.find((s) => s.id === t.reservationId)?.channelReference ?? '')
+      .toLowerCase()
+      .includes(q);
+  const byView = (t: Thread) =>
+    query.view === 'awaiting'
+      ? t.awaitingSince !== null
+      : query.view === 'open'
+        ? t.status === 'open' && t.lastMessageAt !== null
+        : true;
+  const threads = all
+    .filter((t) => byView(t) && matches(t))
+    .sort((a, b) => {
+      if (a.lastMessageAt && b.lastMessageAt) return b.lastMessageAt.localeCompare(a.lastMessageAt);
+      if (a.lastMessageAt) return -1;
+      if (b.lastMessageAt) return 1;
+      return b.checkIn.localeCompare(a.checkIn);
+    });
+  return {
+    threads,
+    counts: {
+      awaiting: all.filter((t) => t.awaitingSince !== null).length,
+      open: all.filter((t) => t.status === 'open' && t.lastMessageAt !== null).length,
+    },
+  };
 }

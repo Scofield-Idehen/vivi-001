@@ -22,6 +22,7 @@ import { cleaningRoutes } from './routes/cleaning.ts';
 import { consoleRoutes } from './routes/console.ts';
 import { fieldRoutes } from './routes/fields.ts';
 import { guestRoutes } from './routes/guest.ts';
+import { inboxRoutes } from './routes/inbox.ts';
 import { meRoutes } from './routes/me.ts';
 import { propertyRoutes } from './routes/properties.ts';
 import { reservationRoutes } from './routes/reservations.ts';
@@ -131,6 +132,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   channelRoutes(app, { scope });
   todayRoutes(app, { scope });
   taskRoutes(app, { scope, photos, bucket: deps.env.PHOTO_BUCKET });
+  inboxRoutes(app, { scope });
   guestRoutes(app, { db: deps.db, scope, box, now: deps.now });
   consoleRoutes(app, { scope });
   await webhookRoutes(app, { db: deps.db, channexSecret: deps.env.CHANNEX_WEBHOOK_SECRET });

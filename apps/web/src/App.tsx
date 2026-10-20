@@ -16,6 +16,7 @@ import { ConsoleOperators } from './pages/console/Operators.tsx';
 import { ConsoleOverview } from './pages/console/Overview.tsx';
 import { ConsoleSupportLog } from './pages/console/SupportLog.tsx';
 import { ConsoleSync } from './pages/console/Sync.tsx';
+import { InboxPage } from './pages/inbox/InboxPage.tsx';
 import { About, ModuleToCome, NotFound, NoWorkspace } from './pages/misc.tsx';
 import { Properties } from './pages/Properties.tsx';
 import { NewPropertyPanel } from './pages/properties/NewPropertyPanel.tsx';
@@ -135,6 +136,7 @@ const routes = [
             children: [{ path: 'new', element: <NewPropertyPanel /> }],
           },
           { path: 'properties/:id', element: <PropertyPage /> },
+          { path: 'inbox', element: <InboxPage /> },
           { path: 'tasks', element: <TasksPage /> },
           { path: 'channels', element: <ChannelsPage /> },
           { path: 'workspace', element: <WorkspacePage /> },

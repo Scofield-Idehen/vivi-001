@@ -5,6 +5,24 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-20
 
+- **The Inbox (design roadmap, Phase 2, D2; Alpha, 20 Oct 2026: "messaging the guest should link up
+  with where they are booking from … it should sync with V-01's messaging page"; built the same
+  day).** One conversation per booking, whichever site the guest booked on; the guest keeps using
+  that site's chat and never notices. A guest on Airbnb, Booking.com, Vrbo or Expedia is reached
+  through their site's chat (Channex's messaging, once connected: until then what the team writes
+  waits in the thread, saying so, and goes the moment it is connected); a direct guest by email
+  (Resend, once a key and a sending address are set) or, later, text. The list shows who is
+  waiting for a reply and for how long (the response timer the sites judge hosts on): amber within
+  the day, red after it; Today says "N guests are waiting for a reply". Opening a thread marks it
+  read; Done hides it until the guest writes again. Automatic messages (templates): booking
+  confirmed, the day before arrival at 10:00, the day of arrival at 09:00 (off until the team
+  wants it), the day before check-out at 17:00; each switched on or off, its words and time
+  changed, in Automatic messages; an automatic message is not a reply, so the guest still counts
+  as waiting. Saved replies are the team's own answers, picked while writing. Message guest on a
+  booking opens its thread first; email, call and text from this device stay as they were. Roles:
+  everyone in the office reads; admins, operations and guest comms write and keep the templates;
+  V-01 support reads only. Migration 0028.
+
 - **Dates are picked from a calendar (design roadmap core component "date-range picker"; built
   20 Oct 2026).** Every date field (`DateField`) is a button showing the day as people read it,
   "Thu, 5 Nov 2026", that opens a month under it: Monday first, arrows for the months, Today, days

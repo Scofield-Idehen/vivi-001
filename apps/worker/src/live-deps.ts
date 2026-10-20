@@ -5,10 +5,11 @@ import {
   FakeChannelProvider,
 } from '@v01/channels';
 import { WorkerDatabase } from '@v01/db';
-import { type AlertSink, AppAlerts, LogSink, SlackWebhookSink } from '@v01/integrations';
+import { type AlertSink, AppAlerts, LogSink, ResendSender, SlackWebhookSink } from '@v01/integrations';
 import { type Logger, pino } from 'pino';
 import type { WorkerDeps } from './deps.ts';
 import { loadEnv, type WorkerEnv } from './env.ts';
+import type { Senders } from './inbox.ts';
 
 /** The worker's real dependencies from its environment, for the worker itself and for hand-run jobs. */
 export function liveDeps(
@@ -47,4 +48,10 @@ export function liveDeps(
     log,
   };
   return { env, deps, log };
+}
+
+/** What the worker sends guest messages with: email through Resend once its key and the address are set. */
+export function senders(env: WorkerEnv): Senders {
+  if (!env.RESEND_API_KEY || !env.MAIL_FROM) return {};
+  return { email: new ResendSender(env.RESEND_API_KEY), from: env.MAIL_FROM };
 }

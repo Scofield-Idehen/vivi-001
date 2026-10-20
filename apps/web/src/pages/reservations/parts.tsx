@@ -1,4 +1,4 @@
-import { IconMail, IconMessage, IconMessageCircle, IconPhone } from '@tabler/icons-react';
+import { IconInbox, IconMail, IconMessage, IconMessageCircle, IconPhone } from '@tabler/icons-react';
 import {
   CHANNEL_LABELS,
   type Channel,
@@ -8,6 +8,7 @@ import {
   type ReservationStatus,
 } from '@v01/shared';
 import { type FormEvent, useState } from 'react';
+import { Link } from 'react-router';
 import { TextArea, TextField } from '../../components/fields.tsx';
 import { Popover } from '../../components/Popover.tsx';
 import { Button, Field, Notice, StatusDot } from '../../components/ui.tsx';
@@ -46,7 +47,7 @@ const ROUTE_ICONS: Record<ContactRoute['kind'], typeof IconMail> = {
   text: IconMessageCircle,
 };
 
-/** The ways to reach the guest now: an email, a call or a text, and where channel messages are. */
+/** The ways to reach the guest: the Inbox first, then an email, a call or a text from this device. */
 export function MessageGuest({ reservation, routes }: { reservation: Reservation; routes: ContactRoute[] }) {
   const first = reservation.guestName?.trim().split(/\s+/)[0] ?? 'the guest';
   const note = channelMessages(reservation.channel);
@@ -57,6 +58,18 @@ export function MessageGuest({ reservation, routes }: { reservation: Reservation
       icon={<IconMessage size={16} stroke={1.75} aria-hidden className="shrink-0 text-slate" />}
       panelClassName="w-[300px] p-2"
     >
+      <Link
+        to={`/inbox?booking=${reservation.id}`}
+        className="mb-1 flex items-center gap-3 rounded-md border-b border-hairline px-2.5 py-2 pb-3 text-[13.5px] text-ink transition-colors hover:bg-linen"
+      >
+        <IconInbox size={17} stroke={1.75} aria-hidden className="shrink-0 text-slate" />
+        <span className="min-w-0">
+          <span className="block font-medium">Write in the Inbox</span>
+          <span className="block truncate text-[12.5px] text-slate">
+            The conversation for this booking, kept in V-01.
+          </span>
+        </span>
+      </Link>
       {routes.length ? (
         <ul className="flex flex-col">
           {routes.map((route) => {

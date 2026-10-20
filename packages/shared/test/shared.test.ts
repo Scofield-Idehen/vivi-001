@@ -15,6 +15,7 @@ import {
   isoWeekday,
   isWeekendNight,
   listingChecklist,
+  longDay,
   minorToMajorString,
   nightRules,
   nightsBetween,
@@ -23,11 +24,13 @@ import {
   PropertyUpdateSchema,
   parseMajorToMinor,
   ReservationUpdateSchema,
+  renderTemplate,
   SupportAccessStartSchema,
   selectedNights,
   staysOverlap,
   suggestPropertyCode,
   todayIn,
+  unknownPlaceholders,
 } from '../src/index.ts';
 
 describe('money', () => {
@@ -356,5 +359,26 @@ describe('changing a booking', () => {
     expect(ReservationUpdateSchema.safeParse({ checkInTime: '3pm' }).success).toBe(false);
     expect(ReservationUpdateSchema.safeParse({ notes: 'x'.repeat(4001) }).success).toBe(false);
     expect(ReservationUpdateSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('message templates', () => {
+  it('fills each placeholder and leaves an unknown one as written', () => {
+    const body = 'Hi {{guest_first_name}}, {{property}} from {{check_in}} ({{ nights }} nights). {{ oops }}';
+    const text = renderTemplate(body, {
+      guest_first_name: 'Mia',
+      guest_name: 'Mia Direct',
+      property: 'Harbour View Lodge',
+      check_in: longDay('2026-11-05'),
+      check_in_time: '15:00',
+      check_out: longDay('2026-11-08'),
+      check_out_time: '10:00',
+      nights: '3',
+      stay_link: 'https://app.example/stay/abc',
+      operator: 'Northwind Stays',
+    });
+    expect(text).toBe('Hi Mia, Harbour View Lodge from Thursday 5 November (3 nights). {{ oops }}');
+    expect(unknownPlaceholders(body)).toEqual(['oops']);
+    expect(unknownPlaceholders('{{stay_link}} and {{operator}}')).toEqual([]);
   });
 });
