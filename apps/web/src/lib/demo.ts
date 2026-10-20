@@ -59,6 +59,7 @@ import {
   PropertyUpdateSchema,
   RESERVATION_LIST_LIMIT,
   type Reservation,
+  ReservationCreateSchema,
   type ReservationList,
   ReservationListQuerySchema,
   type ReservationStatus,
@@ -3501,6 +3502,61 @@ export async function demoFetch<T>(
   const stayMatch = /^\/v1\/stay\/([0-9a-f]{32})$/.exec(path);
   if (method === 'GET' && stayMatch?.[1]) {
     return demoGuestStay(s, stayMatch[1]) as T;
+  }
+
+  if (method === 'POST' && path === '/v1/reservations') {
+    const { operator } = access(options.orgId, 'reservations.write');
+    const parsed = ReservationCreateSchema.safeParse(options.body);
+    if (!parsed.success) invalid(parsed.error.issues);
+    const b = parsed.data;
+    const property = findProperty(operator, b.propertyId);
+    const taken =
+      operator.calendar.stays.some(
+        (x) =>
+          x.propertyId === property.id &&
+          x.status === 'confirmed' &&
+          x.checkIn < b.checkOut &&
+          b.checkIn < x.checkOut,
+      ) ||
+      operator.calendar.blocks.some(
+        (bl) => bl.propertyId === property.id && bl.startsOn < b.checkOut && b.checkIn < bl.endsOn,
+      );
+    if (taken) {
+      throw new ApiError(
+        409,
+        'nights_taken',
+        `${property.name} is not free for ${b.checkIn} to ${b.checkOut}: another booking or a block holds those nights.`,
+      );
+    }
+    const now = new Date().toISOString();
+    const stay: DemoStay = {
+      id: crypto.randomUUID(),
+      propertyId: property.id,
+      checkIn: b.checkIn,
+      checkOut: b.checkOut,
+      status: 'confirmed',
+      channel: 'direct',
+      channelReference: null,
+      guestName: b.guestName,
+      guests: b.adults + b.children,
+      adults: b.adults,
+      children: b.children,
+      infants: b.infants,
+      guestEmail: b.guestEmail?.toLowerCase() || null,
+      guestPhone: b.guestPhone || null,
+      currency: operator.workspace.settings.currency,
+      totalMinor: b.totalMinor ?? null,
+      payoutMinor: null,
+      checkInTime: b.checkInTime ?? null,
+      checkOutTime: b.checkOutTime ?? null,
+      notes: b.notes || null,
+      createdAt: now,
+      updatedAt: now,
+      cancelledAt: null,
+    };
+    operator.calendar.stays.push(stay);
+    save();
+    return toReservation(operator, stay) as T;
   }
 
   const reservationMatch = RESERVATION_PATH.exec(path);

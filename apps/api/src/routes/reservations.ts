@@ -2,6 +2,7 @@ import { guests, organisationSettings, properties, reservations, type Tx } from 
 import {
   RESERVATION_LIST_LIMIT,
   type Reservation,
+  ReservationCreateSchema,
   type ReservationList,
   ReservationListQuerySchema,
   ReservationListSchema,
@@ -13,7 +14,7 @@ import { and, asc, desc, eq, gte, ilike, lt, ne, or, type SQL, sql } from 'drizz
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { type RequestScope, toIso } from '../context.ts';
+import { pgConstraint, type RequestScope, toIso } from '../context.ts';
 import { HttpError } from '../errors.ts';
 
 const ReservationParams = z.object({ id: z.uuid() });
@@ -135,6 +136,69 @@ export function reservationRoutes(app: FastifyInstance, deps: { scope: RequestSc
             .map((row) => ({ ...row, createdAt: toIso(row.createdAt) })),
           more: rows.length > RESERVATION_LIST_LIMIT,
         };
+      }),
+  );
+
+  /** A booking made by the team: a direct or repeat guest. Holds the nights like any other booking. */
+  typed.post(
+    '/v1/reservations',
+    { schema: { body: ReservationCreateSchema, response: { 201: ReservationSchema } } },
+    async (req, reply) =>
+      deps.scope.inOrg(req, 'reservations.write', async (tx, ctx) => {
+        const b = req.body;
+        const [property] = await tx
+          .select({ id: properties.id, name: properties.name })
+          .from(properties)
+          .where(and(eq(properties.id, b.propertyId), sql`${properties.archivedAt} is null`));
+        if (!property) throw new HttpError(404, 'property_not_found', 'That property does not exist here.');
+        const [settings] = await tx
+          .select({ currency: organisationSettings.currency })
+          .from(organisationSettings);
+        const [guest] = await tx
+          .insert(guests)
+          .values({
+            organisationId: ctx.orgId,
+            fullName: b.guestName,
+            email: b.guestEmail?.toLowerCase() || null,
+            phone: b.guestPhone || null,
+          })
+          .returning({ id: guests.id });
+        let row: { id: string } | undefined;
+        try {
+          [row] = await tx
+            .insert(reservations)
+            .values({
+              organisationId: ctx.orgId,
+              propertyId: property.id,
+              channel: 'direct',
+              channelReference: null,
+              status: 'confirmed',
+              checkIn: b.checkIn,
+              checkOut: b.checkOut,
+              adults: b.adults,
+              children: b.children,
+              infants: b.infants,
+              currency: settings?.currency ?? 'GBP',
+              totalMinor: b.totalMinor ?? null,
+              checkInTime: b.checkInTime ?? null,
+              checkOutTime: b.checkOutTime ?? null,
+              notes: b.notes || null,
+              guestId: guest?.id ?? null,
+            })
+            .returning({ id: reservations.id });
+        } catch (error) {
+          // The nights are taken: a booking or a block already holds them. Say so; make nothing.
+          if (pgConstraint(error) === 'occupancies_no_overlap') {
+            throw new HttpError(
+              409,
+              'nights_taken',
+              `${property.name} is not free for ${b.checkIn} to ${b.checkOut}: another booking or a block holds those nights.`,
+            );
+          }
+          throw error;
+        }
+        if (!row) throw new Error('Inserting the booking returned nothing.');
+        return reply.code(201).send(await loadReservation(tx, row.id));
       }),
   );
 

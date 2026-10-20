@@ -114,3 +114,42 @@ export const ReservationUpdateSchema = z
   })
   .refine((u) => Object.values(u).some((v) => v !== undefined), 'Nothing to change');
 export type ReservationUpdate = z.input<typeof ReservationUpdateSchema>;
+
+const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'A date like 2026-11-05');
+
+/**
+ * A booking made by the team: a direct or repeat guest, a friend of the owner, a stay that came by
+ * phone. It holds the nights like any other booking (and sends them to the channels once the
+ * property runs through V-01). The price is for the record; nothing is charged yet.
+ */
+export const ReservationCreateSchema = z
+  .object({
+    propertyId: z.uuid(),
+    checkIn: Day,
+    checkOut: Day,
+    guestName: z.string().trim().min(1).max(GUEST_NAME_MAX),
+    guestEmail: z
+      .string()
+      .trim()
+      .max(254)
+      .refine((v) => v === '' || isEmail(v), 'Enter an email address, such as name@example.com')
+      .optional(),
+    guestPhone: z
+      .string()
+      .trim()
+      .refine((v) => v === '' || isPhone(v), 'Enter a phone number, such as +44 7700 900123')
+      .optional(),
+    adults: z.number().int().min(1).max(50).default(2),
+    children: z.number().int().min(0).max(50).default(0),
+    infants: z.number().int().min(0).max(20).default(0),
+    /** In minor units of the workspace's currency; optional, for the record. */
+    totalMinor: z.number().int().min(0).max(100_000_000).optional(),
+    checkInTime: ClockTime.optional(),
+    checkOutTime: ClockTime.optional(),
+    notes: z.string().trim().max(NOTES_MAX).optional(),
+  })
+  .refine((b) => b.checkOut > b.checkIn, {
+    message: 'Check-out has to be after check-in.',
+    path: ['checkOut'],
+  });
+export type ReservationCreate = z.input<typeof ReservationCreateSchema>;

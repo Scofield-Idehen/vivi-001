@@ -5,6 +5,14 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-20
 
+- **A booking made by the team (built 20 Oct 2026):** New booking on the Reservations page, for a
+  direct or repeat guest or a stay that came by phone: property, dates, the guest's name and
+  contact, party, an arrival time, a price for the record (nothing is charged yet), notes. It is a
+  confirmed direct booking that holds the nights like any other (and goes to the channels once the
+  property runs through V-01); the nights are refused when a booking or block already holds them.
+  Roles that may change bookings may make one. Built now so the guest's page can be tried on
+  staging, where nothing has arrived from Channex or Guesty yet.
+
 - **The guest's page for their stay (design roadmap: guests "get check-in details"; built 20 Oct
   2026).** Every confirmed booking has a private link, `/stay/{key}` (128 random bits, made with
   the booking; migration 0027), with no sign-in: the home's photo and title, the dates, check-in

@@ -34,6 +34,7 @@ import type {
   PropertyList,
   PropertyUpdate,
   Reservation,
+  ReservationCreate,
   ReservationList,
   ReservationUpdate,
   ReservationView,
@@ -467,6 +468,25 @@ export function useReservation(orgId: string | null, id: string | null) {
 }
 
 /** Contact details, agreed times and notes. The calendar and lists show the new guest name too. */
+/** A booking made by the team: a direct or repeat guest. */
+export function useCreateReservation(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ReservationCreate) =>
+      apiFetch<Reservation>('/v1/reservations', { token: token as string, orgId, method: 'POST', body }),
+    onSuccess: async (reservation) => {
+      queryClient.setQueryData(['reservation', orgId, reservation.id], reservation);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['reservations', orgId] }),
+        queryClient.invalidateQueries({ queryKey: ['calendar', orgId] }),
+        queryClient.invalidateQueries({ queryKey: ['today', orgId] }),
+        queryClient.invalidateQueries({ queryKey: ['tasks', orgId] }),
+      ]);
+    },
+  });
+}
+
 export function useUpdateReservation(orgId: string | null, id: string) {
   const token = useToken();
   const queryClient = useQueryClient();

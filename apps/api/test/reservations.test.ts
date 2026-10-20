@@ -489,3 +489,73 @@ describe('Today', () => {
 });
 
 const idsOf = () => ids;
+
+describe('a booking made by the team', () => {
+  it('holds the nights, makes the guest, and comes back as a confirmed direct booking', async () => {
+    const { status, body } = await call('POST', '/v1/reservations', {
+      as: as('comms'),
+      body: {
+        propertyId: lodge,
+        checkIn: day(40),
+        checkOut: day(43),
+        guestName: 'Mia Direct',
+        guestEmail: 'Mia@Guest.Example',
+        guestPhone: '+44 7700 900900',
+        adults: 2,
+        children: 1,
+        totalMinor: 45000,
+        checkInTime: '17:00',
+        notes: 'Repeat guest; knows the house.',
+      },
+    });
+    expect(status).toBe(201);
+    expect(body).toMatchObject({
+      status: 'confirmed',
+      channel: 'direct',
+      channelReference: null,
+      guestName: 'Mia Direct',
+      guestEmail: 'mia@guest.example',
+      guestPhone: '+44 7700 900900',
+      checkIn: day(40),
+      checkOut: day(43),
+      adults: 2,
+      children: 1,
+      totalMinor: 45000,
+      currency: 'GBP',
+      checkInTime: '17:00',
+      notes: 'Repeat guest; knows the house.',
+    });
+    // The nights are held: a second booking over them is refused, and nothing is made.
+    const clash = await call('POST', '/v1/reservations', {
+      as: asA(),
+      body: { propertyId: lodge, checkIn: day(42), checkOut: day(45), guestName: 'Someone Else' },
+    });
+    expect(clash.status).toBe(409);
+    expect(clash.body.error.code).toBe('nights_taken');
+    expect(await owner('select id from app.guests where full_name = $1', ['Someone Else'])).toEqual([]);
+  });
+
+  it('checks the dates and who may make one', async () => {
+    const backwards = await call('POST', '/v1/reservations', {
+      as: asA(),
+      body: { propertyId: lodge, checkIn: day(50), checkOut: day(50), guestName: 'No Nights' },
+    });
+    expect(backwards.status).toBe(400);
+    expect(
+      (
+        await call('POST', '/v1/reservations', {
+          as: as('accounts'),
+          body: { propertyId: lodge, checkIn: day(60), checkOut: day(62), guestName: 'Not Allowed' },
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await call('POST', '/v1/reservations', {
+          as: asB(),
+          body: { propertyId: lodge, checkIn: day(60), checkOut: day(62), guestName: 'Other Operator' },
+        })
+      ).status,
+    ).toBe(404);
+  });
+});

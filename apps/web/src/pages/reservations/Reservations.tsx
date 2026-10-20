@@ -1,12 +1,13 @@
 import { IconChevronRight, IconSearch, IconX } from '@tabler/icons-react';
-import { formatMoney, nightsBetween, type ReservationSummary, type ReservationView } from '@v01/shared';
+import { can, formatMoney, nightsBetween, type ReservationSummary, type ReservationView } from '@v01/shared';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { PageLoading } from '../../components/Spinner.tsx';
-import { EmptyState, Notice, PageHeader } from '../../components/ui.tsx';
+import { Button, EmptyState, Notice, PageHeader } from '../../components/ui.tsx';
 import { ApiError, useReservations, useWorkspace } from '../../lib/api.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
 import { datesLabel, partyLabel, whenLabel } from './model.ts';
+import { NewBookingSheet } from './NewBookingSheet.tsx';
 import { ChannelName, StatusLabel } from './parts.tsx';
 
 function cx(...classes: (string | false | null | undefined)[]): string {
@@ -38,7 +39,9 @@ function useSettled<T>(value: T, ms = 250): T {
  * and what was cancelled. A search finds a guest, a channel's code or a property.
  */
 export function Reservations() {
-  const { orgId } = useCurrentWorkspace();
+  const { orgId, entry } = useCurrentWorkspace();
+  const canAdd = can(entry.role, 'reservations.write');
+  const [adding, setAdding] = useState(false);
   const workspace = useWorkspace(orgId);
   const locale = workspace.data?.settings.locale ?? 'en-GB';
   const navigate = useNavigate();
@@ -61,7 +64,20 @@ export function Reservations() {
       <PageHeader
         title="Reservations"
         description="Every booking from every channel. Open one for its guest, times and notes."
+        action={
+          canAdd ? (
+            <Button variant="primary" onClick={() => setAdding(true)}>
+              New booking
+            </Button>
+          ) : undefined
+        }
       />
+      {adding ? (
+        <NewBookingSheet
+          today={today || new Date().toISOString().slice(0, 10)}
+          onClose={() => setAdding(false)}
+        />
+      ) : null}
 
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <fieldset className="flex rounded-lg border border-hairline bg-paper p-0.5">
