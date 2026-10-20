@@ -5,6 +5,16 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-20
 
+- **Staging on Firebase Hosting and Cloud Run (Alpha, 20 Oct 2026: "we need to host this on
+  Firebase so that the team can see and test it while we build").** One Google project: the web
+  app on Firebase Hosting, the API and worker as Cloud Run services in `europe-west1` (next to
+  the database in Ireland), one instance each always on. Hosting forwards `/v1`, `/webhooks` and
+  `/health` to the API, so the team has one address and the browser never crosses sites. Every
+  push to `main` deploys (`.github/workflows/deploy.yml`); settings come from two GitHub secrets
+  holding each service's `.env`; migrations stay a by-hand action. The worker answers `/health`
+  on `PORT` for the host. Set-up, once, in `docs/runbooks/hosting.md`. Render's blueprint stays
+  in the repo as the fallback.
+
 - **Sign-ins last two days, and a stale token never signs anyone out (Alpha, 20 Oct 2026: "I always get
   signed out very fast … we need a longer threshold like 12 to 24 hrs or even 48 hrs, then they have
   to revalidate").** Supabase's access token lasts an hour and the app refreshes it silently for as

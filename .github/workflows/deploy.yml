@@ -1,0 +1,105 @@
+name: Deploy
+
+# Every push to main goes to staging, so the team always has the latest build to try:
+# the web app on Firebase Hosting, the API and worker on Cloud Run, all in the one Google project.
+# Migrations are not run here (the "Migrate" action does that, by hand, before a deploy that
+# needs one). Set-up, once, is in docs/runbooks/hosting.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  REGION: europe-west1
+
+jobs:
+  web:
+    name: Web app to Firebase Hosting
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build
+        env:
+          # Empty on purpose: Firebase Hosting forwards /v1 to the API, so the app calls its own address.
+          VITE_API_URL: ''
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: pnpm --filter @v01/web build
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          projectId: ${{ vars.GCP_PROJECT_ID }}
+          channelId: live
+
+  services:
+    name: API and worker to Cloud Run
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Sign in to the image registry
+        run: gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+      - name: Build and push the images
+        env:
+          REPO: ${{ env.REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/v01
+        run: |
+          docker build -f apps/api/Dockerfile -t "$REPO/api:${GITHUB_SHA}" .
+          docker build -f apps/worker/Dockerfile -t "$REPO/worker:${GITHUB_SHA}" .
+          docker push "$REPO/api:${GITHUB_SHA}"
+          docker push "$REPO/worker:${GITHUB_SHA}"
+      # Each service's settings come from one GitHub secret holding its .env (KEY=VALUE lines),
+      # turned into the YAML Cloud Run takes. Nothing secret is ever in this file or the image.
+      - name: Write the services' settings
+        env:
+          API_ENV: ${{ secrets.API_ENV }}
+          WORKER_ENV: ${{ secrets.WORKER_ENV }}
+        run: |
+          to_yaml() {
+            printf '%s\n' "$1" | grep -v '^\s*#' | grep '=' | while IFS= read -r line; do
+              key="${line%%=*}"; value="${line#*=}"
+              printf '%s: "%s"\n' "$key" "$(printf '%s' "$value" | sed 's/"/\\"/g')"
+            done
+          }
+          to_yaml "$API_ENV" > api.env.yaml
+          to_yaml "$WORKER_ENV" > worker.env.yaml
+          test -s api.env.yaml || { echo "The API_ENV secret is empty."; exit 1; }
+          test -s worker.env.yaml || { echo "The WORKER_ENV secret is empty."; exit 1; }
+      - name: Deploy the API
+        env:
+          REPO: ${{ env.REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/v01
+        run: |
+          gcloud run deploy v01-api \
+            --image "$REPO/api:${GITHUB_SHA}" \
+            --region "$REGION" --platform managed --allow-unauthenticated \
+            --port 8080 --cpu 1 --memory 1Gi --min-instances 1 --max-instances 3 \
+            --env-vars-file api.env.yaml --quiet
+      - name: Deploy the worker
+        env:
+          REPO: ${{ env.REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/v01
+        run: |
+          gcloud run deploy v01-worker \
+            --image "$REPO/worker:${GITHUB_SHA}" \
+            --region "$REGION" --platform managed --no-allow-unauthenticated \
+            --port 8080 --cpu 1 --memory 1Gi --min-instances 1 --max-instances 1 --no-cpu-throttling \
+            --env-vars-file worker.env.yaml --quiet
+      - name: Where it is
+        run: gcloud run services describe v01-api --region "$REGION" --format 'value(status.url)'

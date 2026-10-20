@@ -5,6 +5,8 @@ const EnvSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+    /** Set by a container host (Cloud Run): the worker answers /health on it. Unset: nothing listens. */
+    PORT: z.coerce.number().int().positive().optional(),
     /** Connects as app_worker. Use the session pooler or the direct connection, not transaction mode. */
     DATABASE_URL: z.string().min(1),
     /** Connects as app_jobs for pg-boss. Without it, scheduled jobs (feed sweep, nightly sync) do not run. */

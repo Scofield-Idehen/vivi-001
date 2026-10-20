@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import { processWebhooks, sweepBookingFeed } from './bookings.ts';
 import { makeCheckOutCleans, markDirtyAfterCheckOut } from './cleaning.ts';
 import { crossCheckAll } from './cross-check.ts';
@@ -90,11 +91,27 @@ const boss = env.JOBS_DATABASE_URL
     })
   : null;
 
+// A host that expects a web server (Cloud Run) gets one: /health says the worker is alive and
+// which run this is. Nothing else is served. Without PORT (a plain process), nothing listens.
+const startedAt = new Date().toISOString();
+const health = env.PORT
+  ? createServer((req, res) => {
+      if (req.url === '/health' || req.url === '/') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', runId: run.runId, startedAt, holding }));
+      } else {
+        res.writeHead(404);
+        res.end();
+      }
+    }).listen(env.PORT, '0.0.0.0', () => log.info({ port: env.PORT }, 'Health endpoint listening'))
+  : null;
+
 let closing = false;
 async function shutdown(signal: string) {
   if (closing) return;
   closing = true;
   log.info({ signal }, 'Worker stopping');
+  health?.close();
   await Promise.all(stops.map((stop) => stop()));
   await boss?.stop({ graceful: true });
   await deps.db.close();
