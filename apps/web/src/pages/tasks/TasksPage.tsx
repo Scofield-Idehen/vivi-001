@@ -10,10 +10,13 @@ import {
 } from '@tabler/icons-react';
 import {
   can,
+  PHOTO_STAGE_LABELS,
+  type PhotoStage,
   TASK_KIND_LABELS,
   TASK_KINDS,
   type Task,
   type TaskKind,
+  type TaskPhoto,
   type TaskView,
   type TeamMember,
 } from '@v01/shared';
@@ -28,6 +31,7 @@ import {
   ApiError,
   useAddTaskPhotos,
   useCreateTask,
+  useMe,
   useProperties,
   useRemoveTaskPhoto,
   useReportDamage,
@@ -38,8 +42,8 @@ import {
   useUpdateTask,
   useUpdateTaskTemplate,
 } from '../../lib/api.ts';
-import { plural, shortDate } from '../../lib/format.ts';
-import { PHOTO_ACCEPT } from '../../lib/images.ts';
+import { dateTime, plural, shortDate } from '../../lib/format.ts';
+import { currentPosition, PHOTO_ACCEPT, type PhotoStamp } from '../../lib/images.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
 
 function cx(...classes: (string | false | null | undefined)[]): string {
@@ -338,39 +342,107 @@ function TaskSheet({
 function TaskPhotos({ t, orgId, live }: { t: Task; orgId: string; live: boolean }) {
   const add = useAddTaskPhotos(orgId, t.id);
   const remove = useRemoveTaskPhoto(orgId, t.id);
+  const me = useMe();
   const input = useRef<HTMLInputElement>(null);
+  const [stage, setStage] = useState<PhotoStage>('found');
   const [problems, setProblems] = useState<string[]>([]);
+  const [open, setOpen] = useState<TaskPhoto | null>(null);
+  const clean = t.kind === 'cleaning';
+  const stages: PhotoStage[] = clean ? ['before', 'after', 'found'] : ['found'];
+  const groups = stages.map((st) => ({ stage: st, photos: t.photos.filter((p) => p.stage === st) }));
+
+  const pick = (st: PhotoStage) => {
+    setStage(st);
+    input.current?.click();
+  };
+  const onFiles = async (files: File[]) => {
+    const now = new Date();
+    const when = `${new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(now)}, ${new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' }).format(now)}`;
+    const stamp: PhotoStamp = {
+      when,
+      where: [t.propertyName, t.propertyAddress].filter(Boolean).join(' · '),
+      who: me.data?.user.fullName ?? me.data?.user.email ?? '',
+      position: await currentPosition(),
+    };
+    add.mutate({ files, stage, stamp }, { onSuccess: (r) => setProblems(r.problems) });
+  };
+
+  const addButton = (st: PhotoStage, label: string) => (
+    <button
+      key={st}
+      type="button"
+      disabled={add.isPending}
+      onClick={() => pick(st)}
+      className="inline-flex size-24 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-hairline text-[12.5px] text-slate hover:bg-linen disabled:opacity-50"
+    >
+      {add.isPending && stage === st ? (
+        <Spinner size={18} />
+      ) : (
+        <IconCamera size={22} stroke={1.5} aria-hidden />
+      )}
+      {add.isPending && stage === st ? 'Adding' : label}
+    </button>
+  );
+
   return (
     <section>
       <h3 className="mb-2 text-[13px] text-slate">Photos{t.photos.length ? ` · ${t.photos.length}` : ''}</h3>
-      <div className="flex flex-wrap gap-2">
-        {t.photos.map((p) => (
-          <figure key={p.id} className="relative size-24 overflow-hidden rounded-xl bg-paper">
-            <img src={p.url} alt="" className="size-full object-cover" />
-            {live ? (
-              <button
-                type="button"
-                aria-label="Remove photo"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate(p.id)}
-                className="absolute top-1 right-1 inline-flex size-7 items-center justify-center rounded-full bg-ink/70 text-canvas hover:bg-ink"
-              >
-                <IconX size={14} stroke={2} />
-              </button>
-            ) : null}
-          </figure>
-        ))}
-        {live ? (
-          <button
-            type="button"
-            disabled={add.isPending}
-            onClick={() => input.current?.click()}
-            className="inline-flex size-24 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-hairline text-[12.5px] text-slate hover:bg-linen disabled:opacity-50"
-          >
-            {add.isPending ? <Spinner size={18} /> : <IconCamera size={22} stroke={1.5} aria-hidden />}
-            {add.isPending ? 'Adding' : 'Add photo'}
-          </button>
-        ) : null}
+      {clean ? (
+        <p className="mb-3 text-[12.5px] leading-snug text-mist">
+          Before you start and when you finish, so the office and the owner can see the difference. Each photo
+          carries the time, the place and your name.
+        </p>
+      ) : null}
+      <div className="flex flex-col gap-4">
+        {groups.map((g) =>
+          g.stage === 'found' && !live && g.photos.length === 0 ? null : (
+            <div key={g.stage}>
+              {clean ? (
+                <p className="mb-1.5 text-[12.5px] font-medium text-ink">
+                  {PHOTO_STAGE_LABELS[g.stage]}
+                  {g.photos.length ? (
+                    <span className="font-normal text-mist"> · {g.photos.length}</span>
+                  ) : null}
+                </p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {g.photos.map((p) => (
+                  <figure key={p.id} className="relative size-24 overflow-hidden rounded-xl bg-paper">
+                    <button
+                      type="button"
+                      onClick={() => setOpen(p)}
+                      className="block size-full"
+                      aria-label="See the photo"
+                    >
+                      <img src={p.url} alt="" className="size-full object-cover" />
+                    </button>
+                    {live ? (
+                      <button
+                        type="button"
+                        aria-label="Remove photo"
+                        disabled={remove.isPending}
+                        onClick={() => remove.mutate(p.id)}
+                        className="absolute top-1 right-1 inline-flex size-7 items-center justify-center rounded-full bg-ink/70 text-canvas hover:bg-ink"
+                      >
+                        <IconX size={14} stroke={2} />
+                      </button>
+                    ) : null}
+                  </figure>
+                ))}
+                {live
+                  ? addButton(
+                      g.stage,
+                      clean
+                        ? g.stage === 'found'
+                          ? 'Something found'
+                          : `${PHOTO_STAGE_LABELS[g.stage]} photo`
+                        : 'Add photo',
+                    )
+                  : null}
+              </div>
+            </div>
+          ),
+        )}
       </div>
       <input
         ref={input}
@@ -382,13 +454,27 @@ function TaskPhotos({ t, orgId, live }: { t: Task; orgId: string; live: boolean 
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           e.target.value = '';
-          if (files.length) add.mutate(files, { onSuccess: (r) => setProblems(r.problems) });
+          if (files.length) void onFiles(files);
         }}
       />
       {problems.length ? (
         <p role="alert" className="mt-2 text-[12.5px] text-urgent">
           {problems.join(' ')}
         </p>
+      ) : null}
+      {open ? (
+        <Sheet
+          title={PHOTO_STAGE_LABELS[open.stage]}
+          subtitle={open.stamp ?? undefined}
+          onClose={() => setOpen(null)}
+          width="md:w-[720px]"
+        >
+          <img src={open.url} alt="" className="w-full rounded-xl" />
+          <p className="mt-3 text-[13px] text-slate">
+            {open.takenBy ? `${open.takenBy} · ` : ''}
+            {dateTime(open.at)}
+          </p>
+        </Sheet>
       ) : null}
     </section>
   );

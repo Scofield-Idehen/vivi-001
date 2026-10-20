@@ -112,6 +112,8 @@ export const properties = app.table(
     cleaningChangedBy: uuid('cleaning_changed_by').references(() => appUsers.id, { onDelete: 'set null' }),
     /** Who usually cleans it: the check-out clean is assigned to them. */
     cleanerUserId: uuid('cleaner_user_id').references(() => appUsers.id, { onDelete: 'set null' }),
+    /** Who maintenance tasks at this property go to unless someone else is chosen. */
+    maintainerUserId: uuid('maintainer_user_id').references(() => appUsers.id, { onDelete: 'set null' }),
     archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'string' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

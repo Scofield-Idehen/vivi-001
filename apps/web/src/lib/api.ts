@@ -37,6 +37,7 @@ import type {
   MessageTemplateList,
   MessageTemplateUpdate,
   PaymentCreate,
+  PhotoStage,
   PhotoUploadTicket,
   PropertyCreate,
   PropertyDetail,
@@ -78,7 +79,14 @@ import type {
 import { config } from './config.ts';
 import { demoAddPhoto, demoAddTaskPhoto, demoFetch } from './demo.ts';
 import { ApiError } from './errors.ts';
-import { PhotoError, type PreparedPhoto, preparePhoto } from './images.ts';
+import {
+  PhotoError,
+  type PhotoStamp,
+  type PreparedPhoto,
+  preparePhoto,
+  stampPhoto,
+  stampText,
+} from './images.ts';
 import { refreshedToken, signOut, useSession } from './session.tsx';
 
 export { ApiError };
@@ -893,14 +901,23 @@ export function useUpdateTask(orgId: string | null) {
 }
 
 /** One photo onto a task: the ticket, the upload, the register. */
+export interface TaskPhotoUpload {
+  files: File[];
+  stage: PhotoStage;
+  /** The words to burn into each picture; the same words are kept with the photo. */
+  stamp: PhotoStamp;
+}
+
 async function uploadTaskPhoto(
   token: string,
   orgId: string | null,
   taskId: string,
   file: File,
+  stage: PhotoStage,
+  stamp: PhotoStamp,
 ): Promise<Task> {
-  const photo = await preparePhoto(file, config.demo ? 1600 : 2048);
-  if (config.demo) return demoAddTaskPhoto(orgId, taskId, photo);
+  const photo = await stampPhoto(await preparePhoto(file, config.demo ? 1600 : 2048), stamp);
+  if (config.demo) return demoAddTaskPhoto(orgId, taskId, photo, stage, stampText(stamp));
   const ticket = await apiFetch<PhotoUploadTicket>(`/v1/tasks/${taskId}/photos/uploads`, {
     token,
     orgId,
@@ -923,7 +940,7 @@ async function uploadTaskPhoto(
     token,
     orgId,
     method: 'POST',
-    body: { path: ticket.path, width: photo.width, height: photo.height },
+    body: { path: ticket.path, width: photo.width, height: photo.height, stage, stamp: stampText(stamp) },
   });
 }
 
@@ -931,12 +948,12 @@ export function useAddTaskPhotos(orgId: string | null, taskId: string) {
   const token = useToken();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (files: File[]) => {
+    mutationFn: async ({ files, stage, stamp }: TaskPhotoUpload) => {
       const problems: string[] = [];
       let task: Task | null = null;
       for (const file of files) {
         try {
-          task = await uploadTaskPhoto(token as string, orgId, taskId, file);
+          task = await uploadTaskPhoto(token as string, orgId, taskId, file, stage, stamp);
           queryClient.setQueryData(['task', orgId, taskId], task);
         } catch (error) {
           problems.push(

@@ -156,6 +156,15 @@ What the import does is in `apps/worker/src/guesty/mapping.ts` (Guesty's words i
 functions) and `import.ts` (the database work), tested in `apps/worker/test/guesty.test.ts`
 against a stand-in for Guesty's API.
 
+## The field team's photos
+
+Task photos go to a **private** bucket (`TASK_PHOTO_BUCKET`, `task-photos`; make it in Supabase
+Storage with "public" off), separate from listing photos. The browser stamps each picture
+(`stampPhoto` in `apps/web/src/lib/images.ts`: time, property and address, who, position) before
+upload and sends the same words as `stamp`; the API serves them on signed addresses
+(`PhotoStore.viewUrls`, two hours). Each photo has a `stage`: `before`/`after` for cleans, `found`
+otherwise.
+
 ## Sign-in and sessions
 
 Supabase Auth signs people in (email link); the app never touches the database directly. The

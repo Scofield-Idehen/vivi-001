@@ -306,11 +306,25 @@ describe('making and working tasks', () => {
     photos.files.add(ticket.body.path);
     const added = await call('POST', `/v1/tasks/${fixId}/photos`, {
       as: crew,
-      body: { path: ticket.body.path, width: 1600, height: 1200 },
+      body: {
+        path: ticket.body.path,
+        width: 1600,
+        height: 1200,
+        stage: 'before',
+        stamp: 'Tue 20 Oct 2026, 14:32 · Harbour View Lodge · Sam Cleaner',
+      },
     });
     expect(added.status).toBe(201);
     expect(added.body.photos).toEqual([
-      expect.objectContaining({ width: 1600, height: 1200, takenBy: 'Sam Cleaner' }),
+      expect.objectContaining({
+        width: 1600,
+        height: 1200,
+        takenBy: 'Sam Cleaner',
+        stage: 'before',
+        stamp: 'Tue 20 Oct 2026, 14:32 · Harbour View Lodge · Sam Cleaner',
+        // Private: a signed address, not the public one.
+        url: `https://photos.test/signed/${ticket.body.path}`,
+      }),
     ]);
     const photoId = added.body.photos[0].id as string;
     // Jo can't see the job, so can't touch its photo; the office can.
@@ -322,6 +336,13 @@ describe('making and working tasks', () => {
   });
 
   it('lets the crew report damage from a job: a maintenance task for the office, on the same property', async () => {
+    // The lodge's usual maintenance person gets it straight away.
+    const set = await call('PATCH', `/v1/properties/${lodge}`, {
+      as: asA(),
+      body: { maintainerUserId: crew2.userId },
+    });
+    expect(set.status).toBe(200);
+    expect(set.body.maintainer).toEqual({ id: crew2.userId, name: 'Jo Cleaner' });
     const report = await call('POST', `/v1/tasks/${fixId}/report`, {
       as: crew,
       body: { what: 'The shower screen is cracked along the bottom edge.' },
@@ -333,8 +354,8 @@ describe('making and working tasks', () => {
       title: 'Damage reported',
       notes: 'The shower screen is cracked along the bottom edge.',
       propertyId: lodge,
+      assignee: { id: crew2.userId, name: 'Jo Cleaner' },
       status: 'open',
-      assignee: null,
     });
     // It shows in the office's open list, unassigned, for them to give to someone.
     const open = await call('GET', '/v1/tasks?view=open', { as: asA() });

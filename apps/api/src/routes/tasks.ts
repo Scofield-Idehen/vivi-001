@@ -14,7 +14,6 @@ import {
   addDays,
   can,
   DamageReportSchema,
-  PhotoRegisterSchema,
   PhotoUploadRequestSchema,
   PhotoUploadTicketSchema,
   type Task,
@@ -22,6 +21,7 @@ import {
   type TaskList,
   TaskListQuerySchema,
   TaskListSchema,
+  TaskPhotoRegisterSchema,
   TaskSchema,
   type TaskTemplate,
   TaskTemplateListSchema,
@@ -75,11 +75,15 @@ async function loadTasks(
   tx: Tx,
   where: ReturnType<typeof and>,
   order: 'asc' | 'desc' = 'asc',
+  photoStore?: PhotoStore,
 ): Promise<Task[]> {
   const rows = await tx
     .select({
       task: tasks,
       propertyName: properties.name,
+      propertyAddress: sql<
+        string | null
+      >`nullif(concat_ws(', ', ${properties.addressLine1}, ${properties.city}, ${properties.postcode}), '')`,
       propertyCheckOut: properties.checkOutTime,
       propertyCheckIn: properties.checkInTime,
       assigneeName: personName,
@@ -122,9 +126,12 @@ async function loadTasks(
       id: taskPhotos.id,
       taskId: taskPhotos.taskId,
       url: taskPhotos.url,
+      storagePath: taskPhotos.storagePath,
       width: taskPhotos.width,
       height: taskPhotos.height,
       takenBy: taskPhotos.takenBy,
+      stage: taskPhotos.stage,
+      stamp: taskPhotos.stamp,
       at: taskPhotos.createdAt,
     })
     .from(taskPhotos)
@@ -152,6 +159,9 @@ async function loadTasks(
     for (const p of found) names.set(p.id, p.name);
   }
   const doneNames = names;
+  // Task photos are private: each gets an address that works for a while.
+  const viewUrls = photoStore ? await photoStore.viewUrls(photoRows.map((p) => p.storagePath)) : null;
+  const urlOf = new Map(photoRows.map((p, i) => [p.id, viewUrls?.[i] ?? p.url]));
 
   return rows.map((r) => {
     const t = r.task;
@@ -161,6 +171,7 @@ async function loadTasks(
       id: t.id,
       propertyId: t.propertyId,
       propertyName: r.propertyName,
+      propertyAddress: r.propertyAddress,
       reservationId: t.reservationId,
       kind: t.kind,
       source: t.source as 'check_out' | 'manual' | 'report',
@@ -175,10 +186,12 @@ async function loadTasks(
         .filter((p) => p.taskId === t.id)
         .map((p) => ({
           id: p.id,
-          url: p.url,
+          url: urlOf.get(p.id) ?? p.url,
           width: p.width,
           height: p.height,
           takenBy: p.takenBy ? (names.get(p.takenBy) ?? null) : null,
+          stage: p.stage as 'before' | 'after' | 'found',
+          stamp: p.stamp,
           at: toIso(p.at),
         })),
       guestLeavesAt:
@@ -225,7 +238,7 @@ export function taskRoutes(
           q.assigneeId ? eq(tasks.assigneeUserId, q.assigneeId) : undefined,
           crewOnly ? or(eq(tasks.assigneeUserId, ctx.userId), isNull(tasks.assigneeUserId)) : undefined,
         );
-        const list = await loadTasks(tx, where, q.view === 'done' ? 'desc' : 'asc');
+        const list = await loadTasks(tx, where, q.view === 'done' ? 'desc' : 'asc', deps.photos);
         const [counts] = await tx
           .select({
             today: sql<number>`(count(*) filter (where ${tasks.dueOn} <= ${today}))::int`,
@@ -249,7 +262,7 @@ export function taskRoutes(
 
   typed.get('/v1/tasks/:id', { schema: { params: TaskParams, response: { 200: TaskSchema } } }, async (req) =>
     deps.scope.inOrg(req, 'tasks.read', async (tx, ctx) => {
-      const [task] = await loadTasks(tx, eq(tasks.id, req.params.id));
+      const [task] = await loadTasks(tx, eq(tasks.id, req.params.id), 'asc', deps.photos);
       if (!task) throw new HttpError(404, 'task_not_found', 'That task does not exist in this workspace.');
       if (ctx.role === 'field' && task.assignee && task.assignee.id !== ctx.userId) {
         throw new HttpError(404, 'task_not_found', 'That task does not exist in this workspace.');
@@ -264,11 +277,22 @@ export function taskRoutes(
     async (req, reply) =>
       deps.scope.inOrg(req, 'tasks.manage', async (tx, ctx) => {
         const [property] = await tx
-          .select({ id: properties.id })
+          .select({
+            id: properties.id,
+            cleaner: properties.cleanerUserId,
+            maintainer: properties.maintainerUserId,
+          })
           .from(properties)
           .where(and(eq(properties.id, req.body.propertyId), isNull(properties.archivedAt)));
         if (!property) throw new HttpError(404, 'property_not_found', 'That property does not exist here.');
         if (req.body.assigneeId) await assertMember(tx, ctx.orgId, req.body.assigneeId);
+        // Unassigned, it goes to the property's usual person for that kind of job.
+        const usual =
+          req.body.kind === 'cleaning'
+            ? property.cleaner
+            : req.body.kind === 'maintenance'
+              ? property.maintainer
+              : null;
         const [template] = await tx.select().from(taskTemplates).where(eq(taskTemplates.kind, req.body.kind));
         const checklist = (req.body.checklist ?? template?.checklist ?? []).map((text) => ({
           text,
@@ -285,13 +309,13 @@ export function taskRoutes(
             notes: req.body.notes || null,
             dueOn: req.body.dueOn,
             dueTime: req.body.dueTime ?? null,
-            assigneeUserId: req.body.assigneeId ?? null,
+            assigneeUserId: req.body.assigneeId ?? usual ?? null,
             checklist,
             createdBy: ctx.userId,
           })
           .returning({ id: tasks.id });
         if (!row) throw new Error('Inserting the task returned nothing.');
-        const [task] = await loadTasks(tx, eq(tasks.id, row.id));
+        const [task] = await loadTasks(tx, eq(tasks.id, row.id), 'asc', deps.photos);
         if (!task) throw new Error('The task was not found after insert.');
         return reply.code(201).send(task);
       }),
@@ -353,7 +377,7 @@ export function taskRoutes(
             .set({ cleaningStatus: 'clean', cleaningChangedAt: sql`now()`, cleaningChangedBy: ctx.userId })
             .where(eq(properties.id, current.propertyId));
         }
-        const [task] = await loadTasks(tx, eq(tasks.id, current.id));
+        const [task] = await loadTasks(tx, eq(tasks.id, current.id), 'asc', deps.photos);
         if (!task) throw new Error('The task was not found after update.');
         return task;
       }),
@@ -367,6 +391,10 @@ export function taskRoutes(
       deps.scope.inOrg(req, 'tasks.write', async (tx, ctx) => {
         const from = await ownTask(tx, ctx, req.params.id);
         const [template] = await tx.select().from(taskTemplates).where(eq(taskTemplates.kind, 'maintenance'));
+        const [property] = await tx
+          .select({ maintainer: properties.maintainerUserId })
+          .from(properties)
+          .where(eq(properties.id, from.propertyId));
         const [row] = await tx
           .insert(tasks)
           .values({
@@ -377,12 +405,13 @@ export function taskRoutes(
             title: 'Damage reported',
             notes: req.body.what,
             dueOn: from.dueOn,
+            assigneeUserId: property?.maintainer ?? null,
             checklist: (template?.checklist ?? []).map((text) => ({ text, done: false })),
             createdBy: ctx.userId,
           })
           .returning({ id: tasks.id });
         if (!row) throw new Error('Inserting the report returned nothing.');
-        const [task] = await loadTasks(tx, eq(tasks.id, row.id));
+        const [task] = await loadTasks(tx, eq(tasks.id, row.id), 'asc', deps.photos);
         if (!task) throw new Error('The report was not found after insert.');
         return reply.code(201).send(task);
       }),
@@ -427,7 +456,7 @@ export function taskRoutes(
           throw new HttpError(
             503,
             'photo_storage_refused',
-            `Photo storage refused the upload: ${reason}. Check the bucket is named "${deps.bucket}" and is public, and that the API has the service role key.`,
+            `Photo storage refused the upload: ${reason}. Check a private bucket named "${deps.bucket}" exists, and that the API has the service role key.`,
           );
         }
       }),
@@ -435,7 +464,7 @@ export function taskRoutes(
 
   typed.post(
     '/v1/tasks/:id/photos',
-    { schema: { params: TaskParams, body: PhotoRegisterSchema, response: { 201: TaskSchema } } },
+    { schema: { params: TaskParams, body: TaskPhotoRegisterSchema, response: { 201: TaskSchema } } },
     async (req, reply) =>
       deps.scope.inOrg(req, 'tasks.write', async (tx, ctx) => {
         const task = await ownTask(tx, ctx, req.params.id);
@@ -454,8 +483,10 @@ export function taskRoutes(
           width: req.body.width,
           height: req.body.height,
           takenBy: ctx.userId,
+          stage: req.body.stage,
+          stamp: req.body.stamp || null,
         });
-        const [full] = await loadTasks(tx, eq(tasks.id, task.id));
+        const [full] = await loadTasks(tx, eq(tasks.id, task.id), 'asc', deps.photos);
         if (!full) throw new Error('The task was not found after adding the photo.');
         return reply.code(201).send(full);
       }),
@@ -482,7 +513,7 @@ export function taskRoutes(
         }
         await tx.delete(taskPhotos).where(eq(taskPhotos.id, photo.id));
         await deps.photos.remove(photo.storagePath).catch(() => {});
-        const [full] = await loadTasks(tx, eq(tasks.id, task.id));
+        const [full] = await loadTasks(tx, eq(tasks.id, task.id), 'asc', deps.photos);
         if (!full) throw new Error('The task was not found after removing the photo.');
         return full;
       }),

@@ -69,10 +69,27 @@ export function SettingsSection({
             ]}
             hint="The clean made at every check-out is assigned to them."
           />
+        ) : null}
+        {canEdit ? (
+          <div className="mt-4">
+            <SelectField
+              label="Usual maintenance person"
+              value={d.maintainer?.id ?? ''}
+              onChange={(v) => update.mutate({ maintainerUserId: v || null })}
+              options={[
+                { value: '', label: 'Nobody yet' },
+                ...people.map((m) => ({ value: m.id, label: m.name })),
+              ]}
+              hint="Maintenance jobs here, and damage the cleaners report, go to them."
+            />
+          </div>
         ) : (
           <dl className="m-0">
             <Fact label="Usual cleaner">
               {d.cleaner?.name ?? <span className="text-mist">Nobody yet</span>}
+            </Fact>
+            <Fact label="Usual maintenance person">
+              {d.maintainer?.name ?? <span className="text-mist">Nobody yet</span>}
             </Fact>
           </dl>
         )}

@@ -211,6 +211,13 @@
       "when": 1792487474837,
       "tag": "0029_reservation_money",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792509371359,
+      "tag": "0030_field_team_photos",
+      "breakpoints": true
     }
   ]
 }

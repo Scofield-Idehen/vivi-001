@@ -60,6 +60,7 @@ import {
   type Permission,
   PHOTO_MAX_COUNT,
   PhotoOrderSchema,
+  type PhotoStage,
   PhotoUpdateSchema,
   type Property,
   PropertyCreateSchema,
@@ -351,6 +352,7 @@ function listingDefaults(): Omit<PropertyDetail, keyof Property | 'updatedAt'> {
     fields: [],
     links: [],
     cleaner: null,
+    maintainer: null,
   };
 }
 
@@ -1291,6 +1293,14 @@ function templatesOf(operator: DemoOperator): TaskTemplate[] {
  * sample workspace is opened it also gets yesterday's finished clean and one maintenance job, so
  * the page has a history.
  */
+/** The address on one line, for the stamp on photos. */
+function addressOf(
+  p: { addressLine1?: string | null; city?: string | null; postcode?: string | null } | undefined,
+): string | null {
+  const parts = [p?.addressLine1, p?.city, p?.postcode].filter((x): x is string => Boolean(x));
+  return parts.length ? parts.join(', ') : null;
+}
+
 function settleTasks(operator: DemoOperator): Task[] {
   const first = !operator.tasks;
   operator.tasks ??= [];
@@ -1321,6 +1331,7 @@ function settleTasks(operator: DemoOperator): Task[] {
         id: crypto.randomUUID(),
         propertyId: property.id,
         propertyName: property.name,
+        propertyAddress: addressOf(property),
         reservationId: stay.id,
         kind: 'cleaning',
         source: 'check_out',
@@ -1351,6 +1362,7 @@ function settleTasks(operator: DemoOperator): Task[] {
         id: crypto.randomUUID(),
         propertyId: p0.id,
         propertyName: p0.name,
+        propertyAddress: addressOf(p0),
         reservationId: null,
         kind: 'cleaning',
         source: 'check_out',
@@ -1376,6 +1388,7 @@ function settleTasks(operator: DemoOperator): Task[] {
         id: crypto.randomUUID(),
         propertyId: p1.id,
         propertyName: p1.name,
+        propertyAddress: addressOf(p1),
         reservationId: null,
         kind: 'maintenance',
         source: 'report',
@@ -1467,6 +1480,8 @@ export async function demoAddTaskPhoto(
   orgId: string | null,
   taskId: string,
   photo: { blob: Blob; width: number; height: number },
+  stage: PhotoStage = 'found',
+  stamp: string | null = null,
 ): Promise<Task> {
   const { operator, role } = access(orgId, 'tasks.write');
   const task = findTask(operator, role, taskId);
@@ -1480,6 +1495,8 @@ export async function demoAddTaskPhoto(
     width: photo.width,
     height: photo.height,
     takenBy: 'Demo user',
+    stage,
+    stamp,
     at: new Date().toISOString(),
   });
   save();
@@ -2974,6 +2991,13 @@ export async function demoFetch<T>(
         delete changes.cleanerUserId;
         changes.cleaner = cleaner;
       }
+      if ('maintainerUserId' in changes) {
+        const maintainer = memberName(operator, changes.maintainerUserId as string | null);
+        if (changes.maintainerUserId && !maintainer)
+          throw new ApiError(400, 'not_a_member', 'That person has to be a member of this workspace.');
+        delete changes.maintainerUserId;
+        changes.maintainer = maintainer;
+      }
       const next = { ...property, ...changes } as PropertyDetail;
       checkListing(next);
       Object.assign(property, changes, { updatedAt: new Date().toISOString() });
@@ -3209,6 +3233,7 @@ export async function demoFetch<T>(
       id: crypto.randomUUID(),
       propertyId: property.id,
       propertyName: property.name,
+      propertyAddress: addressOf(property),
       reservationId: null,
       kind: b.kind,
       source: 'manual',
@@ -3217,7 +3242,9 @@ export async function demoFetch<T>(
       status: 'open',
       dueOn: b.dueOn,
       dueTime: b.dueTime ?? null,
-      assignee: memberName(operator, b.assigneeId ?? null),
+      assignee:
+        memberName(operator, b.assigneeId ?? null) ??
+        (b.kind === 'cleaning' ? property.cleaner : b.kind === 'maintenance' ? property.maintainer : null),
       checklist: (b.checklist ?? tpl?.checklist ?? []).map((text) => ({ text, done: false })),
       photos: [],
       guestLeavesAt: null,
@@ -3290,10 +3317,12 @@ export async function demoFetch<T>(
       const parsed = DamageReportSchema.safeParse(options.body);
       if (!parsed.success) invalid(parsed.error.issues);
       const tpl = templatesOf(operator).find((t) => t.kind === 'maintenance');
+      const maintainer = operator.properties.find((p) => p.id === from.propertyId)?.maintainer ?? null;
       const task: Task = {
         id: crypto.randomUUID(),
         propertyId: from.propertyId,
         propertyName: from.propertyName,
+        propertyAddress: from.propertyAddress,
         reservationId: null,
         kind: 'maintenance',
         source: 'report',
@@ -3302,7 +3331,7 @@ export async function demoFetch<T>(
         status: 'open',
         dueOn: from.dueOn,
         dueTime: null,
-        assignee: null,
+        assignee: maintainer,
         checklist: (tpl?.checklist ?? []).map((text) => ({ text, done: false })),
         photos: [],
         guestLeavesAt: null,

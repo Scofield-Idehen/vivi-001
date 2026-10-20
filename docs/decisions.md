@@ -5,6 +5,18 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-20
 
+- **The field team's photos stand on their own, and maintenance has a usual person (Alpha, 20 Oct
+  2026: "once a booking has ended it should trigger … this task is supposed to be assigned … send
+  images which are stored like Timemark does"; built the same day).** Every photo the crew takes
+  has the facts burned into the picture before it leaves the phone: the time, the property and its
+  address, who took it, and the phone's position when allowed; the same words are kept with the
+  photo. A clean asks for photos **before** and **after**, kept apart, with "something found" for
+  the rest; other jobs just have photos. The photos live in a private bucket (`task-photos`),
+  never public, shown through addresses that work for two hours. Each property has a **usual
+  maintenance person** beside the usual cleaner: maintenance tasks made by the office and damage
+  the cleaners report go to them by themselves; the clean at every check-out already went to the
+  cleaner. Migration 0030; a private `task-photos` bucket in Supabase Storage.
+
 - **Money on a booking, for the record, and cancelling one (built 20 Oct 2026).** A booking's
   page shows the channel's total, the team's extra charges (a late check-out, a pet; a minus is a
   discount), payments received (bank transfer, cash, card taken elsewhere, or collected by the

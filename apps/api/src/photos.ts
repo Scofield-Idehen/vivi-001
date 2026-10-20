@@ -16,8 +16,16 @@ export interface PhotoStore {
   /** True when the file can be fetched without a key, as guests and channels will fetch it. */
   isPublic(path: string): Promise<boolean>;
   publicUrl(path: string): string;
+  /**
+   * Addresses that work for a while without a key, for files in a private bucket (task photos).
+   * One per path, in the same order; a path that can't be signed gets its public address.
+   */
+  viewUrls(paths: string[], expiresSeconds?: number): Promise<string[]>;
   remove(path: string): Promise<void>;
 }
+
+/** How long a private photo's address works: long enough to look through a day's jobs. */
+export const VIEW_URL_SECONDS = 2 * 3600;
 
 const EXTENSIONS: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -106,6 +114,22 @@ export class SupabasePhotoStore implements PhotoStore {
     return `${this.base}/object/public/${this.options.bucket}/${path}`;
   }
 
+  async viewUrls(paths: string[], expiresSeconds = VIEW_URL_SECONDS): Promise<string[]> {
+    if (paths.length === 0) return [];
+    const response = await this.request(`/object/sign/${this.options.bucket}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ expiresIn: expiresSeconds, paths }),
+    });
+    if (!response.ok) return paths.map((p) => this.publicUrl(p));
+    const body = (await response.json()) as { path?: string; signedURL?: string | null }[];
+    const byPath = new Map(body.map((b) => [b.path, b.signedURL]));
+    return paths.map((p) => {
+      const signed = byPath.get(p);
+      return signed ? `${this.base}${signed}` : this.publicUrl(p);
+    });
+  }
+
   async remove(path: string): Promise<void> {
     await this.request(`/object/${this.options.bucket}/${path}`, { method: 'DELETE' });
   }
@@ -137,6 +161,10 @@ export class MemoryPhotoStore implements PhotoStore {
     return `https://photos.test/${path}`;
   }
 
+  async viewUrls(paths: string[]): Promise<string[]> {
+    return paths.map((p) => `https://photos.test/signed/${p}`);
+  }
+
   async remove(path: string): Promise<void> {
     this.files.delete(path);
   }
@@ -149,5 +177,6 @@ export const NO_PHOTO_STORE: PhotoStore = {
   exists: async () => false,
   isPublic: async () => false,
   publicUrl: (path) => path,
+  viewUrls: async (paths) => paths,
   remove: async () => {},
 };

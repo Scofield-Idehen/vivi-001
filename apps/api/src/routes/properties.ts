@@ -178,6 +178,7 @@ async function loadDetail(tx: Tx, id: string, viewer: Viewer): Promise<PropertyD
     securityDepositMinor: row.securityDepositMinor,
     licenceNumber: row.licenceNumber,
     cleaner: await cleanerOf(tx, row.cleanerUserId),
+    maintainer: await cleanerOf(tx, row.maintainerUserId),
     rooms: rooms.map(toRoom),
     amenities: amenities.map((a) => a.code),
     photos: photos.map(toPhoto),
@@ -413,15 +414,14 @@ export function propertyRoutes(
         await findProperty(tx, req.params.id);
         const changes = cleaned(req.body);
         if (changes.name === null) throw new HttpError(400, 'invalid_request', 'A property needs a name.');
-        if (changes.cleanerUserId) {
+        for (const who of [changes.cleanerUserId, changes.maintainerUserId]) {
+          if (!who) continue;
           const [member] = await tx
             .select({ id: memberships.userId })
             .from(memberships)
-            .where(
-              and(eq(memberships.organisationId, ctx.orgId), eq(memberships.userId, changes.cleanerUserId)),
-            );
+            .where(and(eq(memberships.organisationId, ctx.orgId), eq(memberships.userId, who)));
           if (!member)
-            throw new HttpError(400, 'not_a_member', 'The cleaner has to be a member of this workspace.');
+            throw new HttpError(400, 'not_a_member', 'That person has to be a member of this workspace.');
         }
         await tx
           .update(properties)

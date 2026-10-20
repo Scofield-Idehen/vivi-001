@@ -115,10 +115,16 @@ export const taskPhotos = app.table(
     width: integer('width'),
     height: integer('height'),
     takenBy: uuid('taken_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    /** `before` and `after` a clean; `found` for anything else (damage, a repair). */
+    stage: text('stage').notNull().default('found'),
+    /** The words burned into the picture: when, where, who. Kept so the record reads without the file. */
+    stamp: text('stamp'),
     createdAt: createdAt(),
   },
   (t) => [
     index('task_photos_task_idx').on(t.taskId),
     unique('task_photos_storage_path_key').on(t.storagePath),
+    check('task_photos_stage', sql`${t.stage} in ('before', 'after', 'found')`),
+    check('task_photos_stamp_length', sql`${t.stamp} is null or char_length(${t.stamp}) <= 300`),
   ],
 );

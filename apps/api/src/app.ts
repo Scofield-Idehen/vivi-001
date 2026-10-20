@@ -39,18 +39,20 @@ export interface AppDeps {
   verifyToken: TokenVerifier;
   /** Defaults to Supabase Storage when it is configured. */
   photos?: PhotoStore;
+  /** The field team's photos: a private bucket. Defaults to `photos` in tests. */
+  taskPhotos?: PhotoStore;
   /** Defaults to Supabase Auth's invitation email when the service key is configured. */
   mailer?: InviteMailer;
   /** The clock, so tests can fix today for the guest page. */
   now?: () => Date;
 }
 
-function photoStoreFrom(env: Env): PhotoStore {
+function photoStoreFrom(env: Env, bucket: string): PhotoStore {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return NO_PHOTO_STORE;
   return new SupabasePhotoStore({
     supabaseUrl: env.SUPABASE_URL,
     serviceKey: env.SUPABASE_SERVICE_ROLE_KEY,
-    bucket: env.PHOTO_BUCKET,
+    bucket,
   });
 }
 
@@ -121,7 +123,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const box = deps.env.FIELD_SECRET_KEY ? new SecretBox(deps.env.FIELD_SECRET_KEY) : undefined;
   meRoutes(app, { db: deps.db, scope });
   workspaceRoutes(app, { scope });
-  const photos = deps.photos ?? photoStoreFrom(deps.env);
+  const photos = deps.photos ?? photoStoreFrom(deps.env, deps.env.PHOTO_BUCKET);
+  const taskPhotos = deps.taskPhotos ?? deps.photos ?? photoStoreFrom(deps.env, deps.env.TASK_PHOTO_BUCKET);
   propertyRoutes(app, {
     scope,
     photos,
@@ -135,7 +138,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   channexRoutes(app, { scope });
   channelRoutes(app, { scope });
   todayRoutes(app, { scope });
-  taskRoutes(app, { scope, photos, bucket: deps.env.PHOTO_BUCKET });
+  taskRoutes(app, { scope, photos: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET });
   inboxRoutes(app, { scope });
   memberRoutes(app, {
     scope,
