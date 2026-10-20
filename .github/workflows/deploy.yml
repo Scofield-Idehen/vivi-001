@@ -90,19 +90,37 @@ jobs:
         env:
           API_ENV: ${{ secrets.API_ENV }}
           WORKER_ENV: ${{ secrets.WORKER_ENV }}
+          DEPLOY_WORKER: ${{ vars.DEPLOY_WORKER }}
+        shell: python3 {0}
         run: |
-          to_yaml() {
-            printf '%s\n' "$1" | tr -d '\r' | grep -v '^\s*#' | grep '=' | while IFS= read -r line; do
-              key="${line%%=*}"; value="${line#*=}"
-              printf '%s: "%s"\n' "$key" "$(printf '%s' "$value" | sed 's/"/\\"/g')"
-            done
-          }
-          to_yaml "$API_ENV" > api.env.yaml
-          to_yaml "$WORKER_ENV" > worker.env.yaml
-          test -s api.env.yaml || { echo "The API_ENV secret is empty."; exit 1; }
-          if [ "${{ vars.DEPLOY_WORKER }}" = "true" ]; then
-            test -s worker.env.yaml || { echo "The WORKER_ENV secret is empty."; exit 1; }
-          fi
+          import json, os, sys
+          def to_yaml(text, out):
+              lines = []
+              for raw in (text or '').replace('\r', '').split('\n'):
+                  line = raw.strip()
+                  if not line or line.startswith('#') or '=' not in line:
+                      continue
+                  if line.startswith('export '):
+                      line = line[7:].strip()
+                  key, value = line.split('=', 1)
+                  key, value = key.strip(), value.strip()
+                  if len(value) >= 2 and value[0] == value[-1] and value[0] in '"\'':
+                      value = value[1:-1]
+                  if key in ('PORT', 'HOST'):
+                      continue
+                  lines.append(f'{key}: {json.dumps(value)}')
+              with open(out, 'w') as f:
+                  f.write('\n'.join(lines) + '\n')
+              return len(lines)
+          n = to_yaml(os.environ.get('API_ENV'), 'api.env.yaml')
+          if n == 0:
+              sys.exit('The API_ENV secret is empty.')
+          print(f'API: {n} settings')
+          if os.environ.get('DEPLOY_WORKER') == 'true':
+              m = to_yaml(os.environ.get('WORKER_ENV'), 'worker.env.yaml')
+              if m == 0:
+                  sys.exit('The WORKER_ENV secret is empty.')
+              print(f'Worker: {m} settings')
       - name: Deploy the API
         id: api
         env:
