@@ -5,6 +5,15 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-20
 
+- **Dates are picked from a calendar (design roadmap core component "date-range picker"; built
+  20 Oct 2026).** Every date field (`DateField`) is a button showing the day as people read it,
+  "Thu, 5 Nov 2026", that opens a month under it: Monday first, arrows for the months, Today, days
+  before the earliest allowed greyed out, a dot under today. For a stay, the check-out calendar
+  shows the check-in and shades the nights between it and the day under the mouse, so the pick
+  reads as a stay. Typing a date is gone: it was the first thing Alpha noticed on New booking, and
+  the same field serves a task's day. The calendar sits on the Popover, so Escape, a click
+  elsewhere or tabbing away closes it.
+
 - **A booking made by the team (built 20 Oct 2026):** New booking on the Reservations page, for a
   direct or repeat guest or a stay that came by phone: property, dates, the guest's name and
   contact, party, an arrival time, a price for the record (nothing is charged yet), notes. It is a

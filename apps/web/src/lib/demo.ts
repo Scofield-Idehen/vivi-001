@@ -1187,7 +1187,10 @@ function memberId(email: string): string {
   if (email === DEMO_USER.email) return DEMO_USER.id;
   let h = 0x811c9dc5;
   for (const ch of email) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
-  const hex = (n: number) => (h = Math.imul(h ^ n, 0x01000193) >>> 0).toString(16).padStart(8, '0');
+  const hex = (n: number) => {
+    h = Math.imul(h ^ n, 0x01000193) >>> 0;
+    return h.toString(16).padStart(8, '0');
+  };
   const a = hex(1);
   const b = hex(2);
   const c = hex(3);
@@ -1245,7 +1248,8 @@ function templatesOf(operator: DemoOperator): TaskTemplate[] {
  */
 function settleTasks(operator: DemoOperator): Task[] {
   const first = !operator.tasks;
-  const tasks = (operator.tasks ??= []);
+  operator.tasks ??= [];
+  const tasks = operator.tasks;
   const templates = templatesOf(operator);
   const clean = templates.find((t) => t.kind === 'cleaning');
   const today = todayIn(operator.workspace.settings.timeZone);
@@ -1356,7 +1360,7 @@ function settleTasks(operator: DemoOperator): Task[] {
     if (t.source !== 'check_out' || !t.reservationId || t.status === 'done' || t.status === 'cancelled')
       continue;
     const stay = operator.calendar.stays.find((x) => x.id === t.reservationId);
-    if (!stay || stay.status !== 'confirmed' || stay.checkOut !== t.dueOn) {
+    if (stay?.status !== 'confirmed' || stay.checkOut !== t.dueOn) {
       t.status = 'cancelled';
       changed = true;
     }
@@ -2659,8 +2663,7 @@ function demoGuestStay(s: DemoState, key: string): GuestStay {
         quietHoursStart: property.quietHoursStart,
         quietHoursEnd: property.quietHoursEnd,
         maxGuests: property.maxGuests,
-        photoUrl:
-          photo && photo.startsWith('sample-photo:') ? (SAMPLE_PHOTOS[photo.slice(13)] ?? null) : photo,
+        photoUrl: photo?.startsWith('sample-photo:') ? (SAMPLE_PHOTOS[photo.slice(13)] ?? null) : photo,
       },
       brand: {
         displayName: operator.workspace.brand.displayName,

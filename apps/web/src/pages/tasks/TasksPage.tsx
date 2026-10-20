@@ -19,6 +19,7 @@ import {
 } from '@v01/shared';
 import { useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { DateField } from '../../components/DateField.tsx';
 import { SelectField, TextArea, TextField, Toggle } from '../../components/fields.tsx';
 import { Sheet } from '../../components/Sheet.tsx';
 import { Spinner } from '../../components/Spinner.tsx';
@@ -298,10 +299,11 @@ function TaskSheet({
 
           {office ? (
             <section className="grid gap-4 sm:grid-cols-2">
-              <TextField
+              <DateField
                 label="Day"
                 value={t.dueOn}
-                onChange={(v) => /^\d{4}-\d{2}-\d{2}$/.test(v) && patch({ dueOn: v })}
+                today={new Date().toISOString().slice(0, 10)}
+                onChange={(day) => patch({ dueOn: day })}
               />
               <TextField
                 label="By (time)"
@@ -540,7 +542,7 @@ function NewTaskSheet({
           hint="Left empty, the kind's usual title is used."
         />
         <div className="grid gap-4 sm:grid-cols-2">
-          <TextField label="Day" value={dueOn} onChange={setDueOn} hint="2026-11-05" />
+          <DateField label="Day" value={dueOn} today={today} onChange={setDueOn} />
           <TextField
             label="By (time)"
             value={dueTime}

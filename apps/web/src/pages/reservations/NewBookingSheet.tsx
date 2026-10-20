@@ -1,6 +1,7 @@
 import { addDays, formatMoney, nightsBetween, parseMajorToMinor } from '@v01/shared';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { DateField } from '../../components/DateField.tsx';
 import { SelectField, TextArea, TextField } from '../../components/fields.tsx';
 import { Sheet } from '../../components/Sheet.tsx';
 import { Button, Notice } from '../../components/ui.tsx';
@@ -101,14 +102,25 @@ export function NewBookingSheet({ today, onClose }: { today: string; onClose(): 
           options={list.map((p) => ({ value: p.id, label: p.name }))}
         />
         <div className="grid gap-4 sm:grid-cols-2">
-          <TextField label="Check-in" value={checkIn} onChange={setCheckIn} hint="2026-11-05" />
-          <TextField
+          <DateField
+            label="Check-in"
+            value={checkIn}
+            today={today}
+            onChange={(day) => {
+              setCheckIn(day);
+              if (!DAY.test(checkOut) || checkOut <= day) setCheckOut(addDays(day, Math.max(1, nights || 2)));
+            }}
+          />
+          <DateField
             label="Check-out"
             value={checkOut}
+            today={today}
+            min={DAY.test(checkIn) ? addDays(checkIn, 1) : undefined}
+            rangeFrom={DAY.test(checkIn) ? checkIn : null}
             onChange={setCheckOut}
-            hint={datesOk ? `${nights} ${nights === 1 ? 'night' : 'nights'}` : 'After check-in'}
+            hint={datesOk ? `${nights} ${nights === 1 ? 'night' : 'nights'}` : undefined}
             error={
-              checkIn && checkOut && DAY.test(checkIn) && DAY.test(checkOut) && checkOut <= checkIn
+              DAY.test(checkIn) && DAY.test(checkOut) && checkOut <= checkIn
                 ? 'Check-out has to be after check-in.'
                 : undefined
             }
