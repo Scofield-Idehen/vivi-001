@@ -8,6 +8,7 @@ import {
   IconX,
   type TablerIcon,
 } from '@tabler/icons-react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   can,
   PHOTO_STAGE_LABELS,
@@ -42,6 +43,8 @@ import {
   useUpdateTask,
   useUpdateTaskTemplate,
 } from '../../lib/api.ts';
+import { config } from '../../lib/config.ts';
+import { setDemoRole } from '../../lib/demo.ts';
 import { dateTime, plural, shortDate } from '../../lib/format.ts';
 import { currentPosition, PHOTO_ACCEPT, type PhotoStamp } from '../../lib/images.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
@@ -356,10 +359,9 @@ function TaskPhotos({ t, orgId, live }: { t: Task; orgId: string; live: boolean 
     input.current?.click();
   };
   const onFiles = async (files: File[]) => {
-    const now = new Date();
-    const when = `${new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(now)}, ${new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' }).format(now)}`;
+    // The time comes from each photo's camera data as it uploads; this is the rest of the stamp.
     const stamp: PhotoStamp = {
-      when,
+      when: '',
       where: [t.propertyName, t.propertyAddress].filter(Boolean).join(' · '),
       who: me.data?.user.fullName ?? me.data?.user.email ?? '',
       position: await currentPosition(),
@@ -754,6 +756,7 @@ const VIEWS: { id: TaskView; label: string }[] = [
  */
 export function TasksPage() {
   const { orgId, entry } = useCurrentWorkspace();
+  const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
   const crew = entry.role === 'field';
   const office = can(entry.role, 'tasks.manage');
@@ -790,7 +793,18 @@ export function TasksPage() {
         }
         action={
           office ? (
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              {config.demo ? (
+                <Button
+                  variant="quiet"
+                  onClick={() => {
+                    setDemoRole(orgId, 'field');
+                    void queryClient.invalidateQueries();
+                  }}
+                >
+                  See it as a cleaner (demo)
+                </Button>
+              ) : null}
               <Button variant="quiet" onClick={() => setParam('panel', 'settings')}>
                 Task settings
               </Button>

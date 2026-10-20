@@ -87,6 +87,8 @@ import {
   preparePhoto,
   stampPhoto,
   stampText,
+  stampWhen,
+  takenAt,
 } from './images.ts';
 import { refreshedToken, signOut, useSession } from './session.tsx';
 
@@ -917,6 +919,9 @@ async function uploadTaskPhoto(
   stage: PhotoStage,
   stamp: PhotoStamp,
 ): Promise<Task> {
+  // The camera's own time, not the upload's: an old photo from the gallery says when it was taken.
+  const own: PhotoStamp = { ...stamp, when: stampWhen(await takenAt(file), new Date()) };
+  stamp = own;
   const photo = await stampPhoto(await preparePhoto(file, config.demo ? 1600 : 2048), stamp);
   if (config.demo) return demoAddTaskPhoto(orgId, taskId, photo, stage, stampText(stamp));
   const ticket = await apiFetch<PhotoUploadTicket>(`/v1/tasks/${taskId}/photos/uploads`, {

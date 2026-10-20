@@ -188,6 +188,8 @@ interface DemoOperator {
   workspace: Omit<Workspace, 'role'>;
   /** The demo user's own role here; null where they can only get in with support access. */
   role: MemberRole | null;
+  /** Demo only: the role before "see it as the field team" was switched on. */
+  originalRole?: MemberRole;
   /** Full listings. Photo addresses are "demo-photo:{id}", resolved from this browser's storage. */
   properties: PropertyDetail[];
   createdAt: string;
@@ -1754,6 +1756,22 @@ function save(): void {
 }
 
 /** Puts the sample data back the way it started. */
+/**
+ * Demo only: look at a workspace as the field team would, and back. The demo user's role changes,
+ * and with it everything the API stand-in lets them see. Their jobs are the unassigned ones.
+ */
+export function setDemoRole(orgId: string, role: MemberRole): void {
+  const operator = findOperator(orgId);
+  if (!operator?.role) return;
+  operator.originalRole ??= operator.role;
+  operator.role = role;
+  save();
+}
+
+export function demoOriginalRole(orgId: string): MemberRole | null {
+  return findOperator(orgId)?.originalRole ?? null;
+}
+
 export function resetDemoData(): void {
   state = seed();
   save();

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router';
 import { useEndSupportAccess, useMe, useWorkspace } from '../lib/api.ts';
 import { config } from '../lib/config.ts';
-import { resetDemoData } from '../lib/demo.ts';
+import { demoOriginalRole, resetDemoData, setDemoRole } from '../lib/demo.ts';
 import { clockTime, useNow } from '../lib/format.ts';
 import { MODULE_GROUPS } from '../lib/modules.ts';
 import { signOut, useSession } from '../lib/session.tsx';
@@ -227,10 +227,58 @@ function WorkspaceFrame() {
   );
 }
 
+/**
+ * The field team's own screen: a phone with their jobs on it and nothing else. No menu of office
+ * pages they can't use; any other address brings them back to their jobs.
+ */
+function FieldFrame() {
+  const location = useLocation();
+  const { entry } = useCurrentWorkspace();
+  const me = useMe();
+  const queryClient = useQueryClient();
+  const officeRole = config.demo ? demoOriginalRole(entry.organisationId) : null;
+  const workspace = useWorkspace(entry.organisationId);
+  const name = me.data?.user.fullName ?? me.data?.user.email ?? '';
+  if (!location.pathname.startsWith('/tasks') && location.pathname !== '/about') {
+    return <Navigate to="/tasks" replace />;
+  }
+  return (
+    <div className="min-h-dvh bg-canvas">
+      <header className="gutter sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-hairline bg-paper py-3">
+        <div className="min-w-0">
+          <OperatorMark name={workspace.data?.brand.displayName ?? entry.organisationName} />
+          <p className="mt-0.5 truncate text-[12.5px] text-slate">{name}</p>
+        </div>
+        {officeRole ? (
+          <button
+            type="button"
+            onClick={() => {
+              setDemoRole(entry.organisationId, officeRole);
+              void queryClient.invalidateQueries();
+            }}
+            className="action shrink-0"
+          >
+            Back to the office view (demo)
+          </button>
+        ) : (
+          <button type="button" onClick={() => void signOut()} className="action shrink-0">
+            <IconLogout size={16} stroke={1.75} aria-hidden />
+            Sign out
+          </button>
+        )}
+      </header>
+      <main key={location.pathname} className="gutter mx-auto w-full max-w-[720px] py-6">
+        <Outlet />
+      </main>
+    </div>
+  );
+}
+
 /** An operator's workspace. V-01 staff with no workspace open go back to the console. */
 export function AppShell() {
   const { current } = useWorkspaces();
   const me = useMe();
+  if (current?.entry.role === 'field') return <FieldFrame />;
   if (current) return <WorkspaceFrame />;
   if (me.data?.platformRole) return <Navigate to="/console" replace />;
   return <NoWorkspace />;

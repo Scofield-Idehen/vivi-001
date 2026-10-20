@@ -122,3 +122,91 @@ export function currentPosition(timeoutMs = 4000): Promise<string | null> {
     );
   });
 }
+
+/**
+ * When the camera says it took the photo: the EXIF DateTimeOriginal inside a JPEG, read as local
+ * time on the phone. Null for photos without one (screenshots, edited or stripped images).
+ */
+export async function takenAt(file: Blob): Promise<Date | null> {
+  if (file.type !== 'image/jpeg') return null;
+  const buffer = await file.slice(0, 256 * 1024).arrayBuffer();
+  const view = new DataView(buffer);
+  if (view.byteLength < 4 || view.getUint16(0) !== 0xffd8) return null;
+  let offset = 2;
+  while (offset + 4 <= view.byteLength) {
+    const marker = view.getUint16(offset);
+    const size = view.getUint16(offset + 2);
+    if (marker === 0xffe1 && offset + 10 <= view.byteLength && view.getUint32(offset + 4) === 0x45786966) {
+      return readExifDate(view, offset + 10);
+    }
+    if ((marker & 0xff00) !== 0xff00 || size < 2) return null;
+    offset += 2 + size;
+  }
+  return null;
+}
+
+function readExifDate(view: DataView, tiff: number): Date | null {
+  if (tiff + 8 > view.byteLength) return null;
+  const little = view.getUint16(tiff) === 0x4949;
+  const u16 = (o: number) => view.getUint16(o, little);
+  const u32 = (o: number) => view.getUint32(o, little);
+  const entries = (ifd: number): { tag: number; at: number }[] => {
+    if (ifd + 2 > view.byteLength) return [];
+    const n = u16(ifd);
+    const out: { tag: number; at: number }[] = [];
+    for (let i = 0; i < n; i++) {
+      const at = ifd + 2 + i * 12;
+      if (at + 12 > view.byteLength) break;
+      out.push({ tag: u16(at), at });
+    }
+    return out;
+  };
+  const text = (entryAt: number): string | null => {
+    const count = u32(entryAt + 4);
+    const start = count > 4 ? tiff + u32(entryAt + 8) : entryAt + 8;
+    if (start + count > view.byteLength) return null;
+    let s = '';
+    for (let i = 0; i < count - 1; i++) s += String.fromCharCode(view.getUint8(start + i));
+    return s;
+  };
+  const ifd0 = tiff + u32(tiff + 4);
+  const exifPointer = entries(ifd0).find((e) => e.tag === 0x8769);
+  const fromIfd = (ifd: number, tag: number) => {
+    const e = entries(ifd).find((x) => x.tag === tag);
+    return e ? text(e.at) : null;
+  };
+  const raw = (exifPointer ? fromIfd(tiff + u32(exifPointer.at + 8), 0x9003) : null) ?? fromIfd(ifd0, 0x0132);
+  const m = raw ? /^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/.exec(raw) : null;
+  if (!m) return null;
+  const [, y, mo, d, h, mi, se] = m.map(Number) as number[];
+  const date = new Date(y as number, (mo as number) - 1, d, h, mi, se);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** How long before adding a photo still counts as "just taken". */
+export const FRESH_PHOTO_MINUTES = 60;
+
+const STAMP_DAY = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+const STAMP_TIME = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+/** "Tue 20 Oct 2026, 14:32". */
+export function stampTime(d: Date): string {
+  return `${STAMP_DAY.format(d)}, ${STAMP_TIME.format(d)}`;
+}
+
+/**
+ * The time line of a stamp: when the camera took it, and when it was added if that was over an
+ * hour later; a photo without a camera time says it was added, not taken.
+ */
+export function stampWhen(taken: Date | null, added: Date): string {
+  if (!taken) return `Added ${stampTime(added)} (no camera time)`;
+  if (added.getTime() - taken.getTime() > FRESH_PHOTO_MINUTES * 60_000) {
+    return `Taken ${stampTime(taken)} · added ${stampTime(added)}`;
+  }
+  return stampTime(taken);
+}

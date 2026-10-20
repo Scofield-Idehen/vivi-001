@@ -5,6 +5,17 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-20
 
+- **Cleaners and maintenance get their own screen; photo times come from the camera (Alpha, 20
+  Oct 2026: "the cleaner dashboard should be different and should only show what they need to see
+  … how do they snap images with timestamp").** The field team no longer gets the office's menu:
+  they sign in to a phone screen with their name, "My jobs" and Sign out, and any other address
+  brings them back to their jobs. The add-photo buttons open the camera. Each photo's time is the
+  one the camera wrote into it, not the upload's; a photo taken more than an hour before it was
+  added says so on the picture ("Taken 14:50 · added 17:51"), and one with no camera time says
+  "no camera time", so an old photo from the gallery can't pass as a new one. People are shown by
+  name: invitations ask for it, admins correct it in Team, everyone can set their own (migration
+  0031). The demo has "See it as a cleaner" on the Tasks page.
+
 - **The field team's photos stand on their own, and maintenance has a usual person (Alpha, 20 Oct
   2026: "once a booking has ended it should trigger … this task is supposed to be assigned … send
   images which are stored like Timemark does"; built the same day).** Every photo the crew takes
