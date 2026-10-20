@@ -2,8 +2,8 @@ name: Deploy
 
 # Every push to main goes to staging, so the team always has the latest build to try:
 # the web app on Firebase Hosting, the API and worker on Cloud Run, all in the one Google project.
-# Migrations are not run here (the "Migrate" action does that, by hand, before a deploy that
-# needs one). Set-up, once, is in docs/runbooks/hosting.md.
+# Migrations run first, then the API and worker, then the web app. Set-up, once, is in
+# docs/runbooks/hosting.md.
 
 on:
   push:
@@ -20,6 +20,31 @@ env:
   PROJECT: ${{ secrets.GCP_PROJECT_ID || vars.GCP_PROJECT_ID }}
 
 jobs:
+  # The database first: the new API may read columns this push adds, so it never goes out ahead of
+  # them. Migrations only add; an older API keeps working on the newer database while it rolls over.
+  migrate:
+    name: Database migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply migrations
+        env:
+          DATABASE_OWNER_URL: ${{ secrets.DATABASE_OWNER_URL }}
+        run: |
+          if [ -z "$DATABASE_OWNER_URL" ]; then
+            echo "DATABASE_OWNER_URL is not set in the staging environment: migrations can't run, so nothing is deployed."
+            exit 1
+          fi
+          pnpm db:migrate
+
   web:
     name: Web app to Firebase Hosting
     # Hosting forwards /v1 to the API, so the API has to exist before the site is published.
@@ -57,6 +82,7 @@ jobs:
 
   services:
     name: API and worker to Cloud Run
+    needs: migrate
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: staging

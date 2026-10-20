@@ -71,9 +71,9 @@ and `firebase` command-line tools, and the values from your laptop's `.env` file
 
 ## Day to day
 
-- Push to `main`: a few minutes later the team has it. If the push added a migration, run
-  **Migrate** (staging) first; the API refuses nothing, but a page needing the new table fails
-  until it is applied.
+- Push to `main`: a few minutes later the team has it. The Deploy workflow applies any new
+  migrations first (with `DATABASE_OWNER_URL` from the staging environment), so the API never goes
+  out ahead of the database. The Migrate action is still there for running them by hand.
 - The worker's health: `https://<project-id>.web.app` doesn't expose it; in the Cloud Run console
   the `v01-worker` service shows its logs, and Sync health in the console shows its heartbeat.
 - Rolling back: Cloud Run keeps every revision; in the console, route traffic to the previous one.

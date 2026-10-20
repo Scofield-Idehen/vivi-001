@@ -239,7 +239,8 @@ function TaskSheet({
         <span className="inline-flex items-center gap-2 text-[14px] text-slate">
           <Spinner size={16} /> Loading
         </span>
-      ) : task.error || !t ? (
+      ) : !t ? (
+        // Only when there is nothing to show: a failed background refresh keeps the job on screen.
         <Notice tone="urgent">{explain(task.error)}</Notice>
       ) : (
         <div className="flex flex-col gap-6">
