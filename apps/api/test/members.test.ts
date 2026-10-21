@@ -129,8 +129,8 @@ describe('inviting a colleague', () => {
     expect(
       team.body.members.map((m: { name: string; email: string; role: string }) => [m.name, m.email, m.role]),
     ).toEqual([
-      ['Sam Okoro', 'sam.ops@example.test', 'operations'],
       ['admin-a@example.test', 'admin-a@example.test', 'admin'],
+      ['Sam Okoro', 'sam.ops@example.test', 'operations'],
     ]);
     // People name themselves; admins correct a colleague's.
     expect(

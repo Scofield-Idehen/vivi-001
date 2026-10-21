@@ -595,7 +595,7 @@ export function taskRoutes(
         .from(memberships)
         .innerJoin(appUsers, eq(appUsers.id, memberships.userId))
         .where(eq(memberships.organisationId, ctx.orgId))
-        .orderBy(asc(personName));
+        .orderBy(sql`lower(${personName}) collate "C"`);
       // Email addresses are for the office; the crew and support see names.
       const hide = !can(ctx.role, 'members.manage') && ctx.role !== 'operations';
       return { members: rows.map((r) => ({ ...r, email: hide ? '' : r.email })) };

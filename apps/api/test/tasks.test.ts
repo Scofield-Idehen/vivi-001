@@ -123,8 +123,8 @@ describe('the team list', () => {
       name: string;
       email: string;
     }[];
-    expect(office.map((m) => m.name)).toEqual(['Jo Cleaner', 'Sam Cleaner', 'admin-a@example.test']);
-    expect(office[0]?.email).toBe('jo@example.test');
+    expect(office.map((m) => m.name)).toEqual(['admin-a@example.test', 'Jo Cleaner', 'Sam Cleaner']);
+    expect(office[1]?.email).toBe('jo@example.test');
     const field = (await call('GET', '/v1/team', { as: crew })).body.members as { email: string }[];
     expect(field.every((m) => m.email === '')).toBe(true);
   });
