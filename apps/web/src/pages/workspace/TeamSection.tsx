@@ -213,6 +213,14 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
           <div className="mt-6 flex max-w-[560px] flex-col gap-4 rounded-2xl border border-hairline bg-canvas p-4">
             <h3 className="font-serif text-[20px] text-ink">Invite a colleague</h3>
             <TextField
+              label="Name"
+              value={name}
+              onChange={setName}
+              placeholder="Alessio Failla"
+              autoComplete="off"
+              hint="Shown everywhere instead of their email."
+            />
+            <TextField
               label="Email"
               value={email}
               onChange={setEmail}
