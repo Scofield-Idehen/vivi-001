@@ -17,8 +17,11 @@ Guesty stays on for a long time, so we build almost everything first and come ba
   Never connect Vivistays' live Airbnb, Booking.com or Vrbo accounts to Channex staging.
 - **Guesty import.** Bring Vivistays' real properties and bookings across from Guesty. Needs the
   Guesty credentials, which go only into the worker's `.env` or GitHub secrets, never chat.
-- **Invitation emails.** Supabase's own mail server refuses most addresses. Fix: in Supabase,
-  Authentication → Emails → SMTP settings, use Gmail (smtp.gmail.com, port 465, an app password)
-  and raise the email rate limit. Free; Alpha's step.
+- **Email through Resend (important; needs the boss's go-ahead for the domain).** One Resend
+  account sends both the Inbox's guest emails and Supabase's invitation and sign-in emails (Resend's
+  SMTP, smtp.resend.com, port 465, user `resend`, the API key as password), from Vivistays' own
+  domain. Needs DNS records added to that domain to verify it. Free plan: 3,000 emails a month,
+  100 a day; Pro is $20 a month for 50,000. Then `RESEND_API_KEY` and `MAIL_FROM` go into
+  `WORKER_ENV` and the worker's `.env`. Replaces the Gmail SMTP plan.
 - **Before anything real: rotate every secret pasted in chat during set-up** (Supabase database
   password, role passwords, `FIELD_SECRET_KEY`, the Channex key).
