@@ -2,12 +2,15 @@ import type {
   GuestyCalendarDay,
   GuestyIntegration,
   GuestyListing,
+  GuestyPost,
   GuestyReservation,
 } from '@v01/integrations';
 import {
   AMENITIES,
   addDays,
   type Channel,
+  MESSAGE_MAX,
+  type MessageVia,
   minorDigits,
   type PropertyType,
   type ReservationStatus,
@@ -544,4 +547,62 @@ export function calendarChanges(
     }
   }
   return { blocks, nights };
+}
+
+export interface MappedMessage {
+  externalId: string;
+  direction: 'in' | 'out';
+  via: MessageVia;
+  body: string;
+  at: string;
+  automatic: boolean;
+}
+
+/** An email's HTML as plain text: tags off, breaks kept, entities read, blank runs closed up. */
+export function plainText(html: string): string {
+  return html
+    .replace(/<\s*(br|\/p|\/div|\/li|\/tr|\/h\d)\b[^>]*>/gi, '\n')
+    .replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * One message from Guesty's Inbox as a V-01 message, or null for what isn't a conversation: Guesty's
+ * own log lines and the team's private notes. Where the message came by isn't always said, so the
+ * booking's channel stands in (a direct booking's falls back to email).
+ */
+export function messageFromPost(post: GuestyPost, bookingVia: MessageVia): MappedMessage | null {
+  const id = post._id ?? post.postId;
+  const module = (post.module ?? '').toLowerCase();
+  if (!id || module === 'log' || module === 'note' || module === 'notes') return null;
+  const raw = post.body ?? '';
+  const text = /<[a-z][\s\S]*>/i.test(raw) ? plainText(raw) : raw.trim();
+  if (!text) return null;
+  const type = (post.type ?? '').toLowerCase();
+  const direction = type === 'fromhost' || type === 'fromguesty' ? 'out' : 'in';
+  const viaOfModule: MessageVia | null =
+    module.includes('sms') || module.includes('whatsapp')
+      ? 'sms'
+      : module.includes('email')
+        ? 'email'
+        : (channelOf(module) as MessageVia | null);
+  const at = post.createdAt ?? post.sentAt;
+  if (!at || Number.isNaN(Date.parse(at))) return null;
+  return {
+    externalId: `guesty:${id}`,
+    direction,
+    via: viaOfModule ?? bookingVia,
+    body: text.length > MESSAGE_MAX ? `${text.slice(0, MESSAGE_MAX - 1)}…` : text,
+    at: new Date(at).toISOString(),
+    automatic: post.isAutomatic === true,
+  };
 }

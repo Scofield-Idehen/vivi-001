@@ -159,6 +159,12 @@ that didn't reach a lock, and batteries under 25%.
 
 ## Importing from Guesty
 
+The import also brings each booking's guest conversation from Guesty's Inbox (bookings that ended
+in the last 90 days and every later one; `--messages-days-back 0` leaves them out) into the
+booking's V-01 thread, oldest first, each message once by Guesty's id, marked read and not waiting.
+Guesty's log lines and private notes stay behind. It can also run from GitHub: Actions → Guesty
+import → Run workflow (rehearses by default), using the `WORKER_ENV` secret.
+
 Put the Open API credentials (Guesty → Settings → Integrations → Open API → create an application)
 in `apps/worker/.env`, with the same `FIELD_SECRET_KEY` the API uses, so lock codes land sealed:
 

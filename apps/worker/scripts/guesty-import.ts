@@ -4,6 +4,7 @@ import { liveDeps } from '../src/live-deps.ts';
 
 /**
  * pnpm guesty:import --org <slug> [--dry-run] [--bookings-days-back 365] [--calendar-days 730]
+ *                     [--messages-days-back 90]   (0 leaves the guest conversations out)
  *
  * Brings an operator's Guesty account into V-01: listings as properties Guesty still runs, with
  * photos, amenities, custom fields, tags, nightly prices and blocks; bookings with their guests;
@@ -25,6 +26,7 @@ if (!slug) {
 const dryRun = args.includes('--dry-run');
 const daysBack = value('--bookings-days-back');
 const calendarDays = value('--calendar-days');
+const messagesBack = value('--messages-days-back');
 
 // A query that hasn't answered in two minutes has lost its connection: stop rather than hang.
 const { env, deps, log } = liveDeps(undefined, {
@@ -68,6 +70,7 @@ try {
     dryRun,
     bookingsDaysBack: daysBack ? Number(daysBack) : undefined,
     calendarDaysAhead: calendarDays ? Number(calendarDays) : undefined,
+    messagesDaysBack: messagesBack !== undefined ? Number(messagesBack) : undefined,
     onProgress: (message) => console.log(`  ${new Date().toLocaleTimeString('en-GB')}  ${message}`),
   });
   console.log(report(summary, org.name));
@@ -99,6 +102,9 @@ function report(s: ImportSummary, orgName: string): string {
   );
   for (const sk of s.reservations.skipped.slice(0, 20)) lines.push(`  skipped ${sk}`);
   if (s.reservations.skipped.length > 20) lines.push(`  …and ${s.reservations.skipped.length - 20} more`);
+  lines.push(
+    `Guest conversations: ${s.messages.conversations} into the Inbox, ${s.messages.imported} messages${s.messages.skipped ? ` (${s.messages.skipped} log lines and notes left in Guesty)` : ''}${s.messages.failed ? `; ${s.messages.failed} couldn't be read` : ''}.`,
+  );
   const warned = Object.entries(s.warnings);
   if (warned.length) {
     lines.push('');

@@ -11,6 +11,7 @@ import {
   calendarChanges,
   channelOf,
   countryCodeOf,
+  messageFromPost,
   propertyFromListing,
   propertyTypeOf,
   reservationFrom,
@@ -163,6 +164,70 @@ function stubGuesty(options: { listings?: GuestyListing[]; reservations?: Guesty
         headers: { 'x-ratelimit-remaining-day': '4' },
       });
     }
+    if (url.pathname === '/v1/communication/conversations') {
+      const wanted = JSON.parse(url.searchParams.get('filters') ?? '[]')[0]?.value ?? [];
+      const all = [
+        { _id: 'C1', meta: { reservations: [{ _id: 'R1' }] } },
+        { _id: 'C3', reservation: { _id: 'R3' } },
+      ].filter((c) => wanted.includes(c.meta?.reservations?.[0]?._id ?? c.reservation?._id));
+      return Response.json({ status: 200, data: { conversations: all, cursor: { after: null } } });
+    }
+    if (url.pathname === '/v1/communication/conversations/C1/posts') {
+      // Two pages, to follow the cursor.
+      if (!url.searchParams.get('cursorAfter')) {
+        return Response.json({
+          data: {
+            posts: [
+              {
+                _id: 'P1',
+                module: 'airbnb2',
+                type: 'fromGuest',
+                body: 'Hi! Can we arrive at 2?',
+                createdAt: `${day(-3)}T09:00:00Z`,
+              },
+              {
+                _id: 'P2',
+                module: 'log',
+                type: 'fromGuesty',
+                body: 'Reservation confirmed',
+                createdAt: `${day(-3)}T09:01:00Z`,
+              },
+            ],
+            cursor: { after: 'next' },
+          },
+        });
+      }
+      return Response.json({
+        data: {
+          posts: [
+            {
+              _id: 'P3',
+              module: 'airbnb2',
+              type: 'fromHost',
+              body: '<p>Of course &amp; welcome!</p>',
+              createdAt: `${day(-3)}T10:00:00Z`,
+              isAutomatic: false,
+            },
+          ],
+          cursor: { after: null },
+        },
+      });
+    }
+    if (url.pathname === '/v1/communication/conversations/C3/posts') {
+      return Response.json({
+        data: {
+          posts: [
+            {
+              _id: 'P9',
+              module: 'email',
+              type: 'fromGuest',
+              body: 'Is there parking?',
+              createdAt: `${day(-1)}T08:00:00Z`,
+            },
+          ],
+        },
+      });
+    }
     if (url.pathname === '/v1/listings') return Response.json(page(listings, url));
     if (url.pathname === '/v1/reservations') return Response.json(page(reservations, url));
     if (url.pathname === '/v1/properties-api/custom-fields/L1') {
@@ -198,6 +263,49 @@ function stubGuesty(options: { listings?: GuestyListing[]; reservations?: Guesty
 }
 
 describe('Guesty words into V-01 words', () => {
+  it('reads a Guesty message: who wrote it, by what, as plain text; leaves log lines and notes', () => {
+    expect(
+      messageFromPost(
+        {
+          _id: 'p1',
+          module: 'email',
+          type: 'fromHost',
+          body: '<div>Hi Sam,<br>See you <b>Friday</b> &amp; thanks</div>',
+          createdAt: '2026-10-01T10:00:00Z',
+        },
+        'airbnb',
+      ),
+    ).toEqual({
+      externalId: 'guesty:p1',
+      direction: 'out',
+      via: 'email',
+      body: 'Hi Sam,\nSee you Friday & thanks',
+      at: '2026-10-01T10:00:00.000Z',
+      automatic: false,
+    });
+    expect(
+      messageFromPost(
+        { _id: 'p2', type: 'fromGuest', body: 'Hello', createdAt: '2026-10-01T10:00:00Z' },
+        'booking_com',
+      ),
+    ).toMatchObject({
+      direction: 'in',
+      via: 'booking_com',
+    });
+    expect(
+      messageFromPost(
+        { _id: 'p3', module: 'log', body: 'Status changed', createdAt: '2026-10-01T10:00:00Z' },
+        'email',
+      ),
+    ).toBeNull();
+    expect(
+      messageFromPost(
+        { _id: 'p4', module: 'sms', type: 'fromGuest', body: '   ', createdAt: '2026-10-01T10:00:00Z' },
+        'email',
+      ),
+    ).toBeNull();
+  });
+
   it('maps channels, countries, property types and booking statuses', () => {
     expect(channelOf('airbnb2')).toBe('airbnb');
     expect(channelOf('bookingCom')).toBe('booking_com');
@@ -568,6 +676,38 @@ describe('importing an account', () => {
     });
   });
 
+  it('brings each booking’s guest conversation into its Inbox thread, read and not waiting', async () => {
+    const rows = await owner<{ ref: string; direction: string; via: string; body: string; status: string }>(
+      `select r.channel_reference as ref, m.direction, m.via, m.body, m.status
+         from app.messages m join app.message_threads th on th.id = m.thread_id
+         join app.reservations r on r.id = th.reservation_id
+        where m.organisation_id = $1 order by m.created_at`,
+      [op.orgId],
+    );
+    expect(rows).toEqual([
+      {
+        ref: 'HMGUESTY01',
+        direction: 'in',
+        via: 'airbnb',
+        body: 'Hi! Can we arrive at 2?',
+        status: 'received',
+      },
+      { ref: 'HMGUESTY01', direction: 'out', via: 'airbnb', body: 'Of course & welcome!', status: 'sent' },
+      { ref: 'guesty:R3', direction: 'in', via: 'email', body: 'Is there parking?', status: 'received' },
+    ]);
+    const threads = await owner<{ unread_count: number; awaiting: boolean }>(
+      `select unread_count, awaiting_since is not null as awaiting from app.message_threads th
+         join app.messages m on m.thread_id = th.id where th.organisation_id = $1 group by th.id`,
+      [op.orgId],
+    );
+    expect(threads.every((t) => t.unread_count === 0 && !t.awaiting)).toBe(true);
+    const [run] = await owner<{ summary: { messages: unknown } }>(
+      'select summary from app.guesty_imports where organisation_id = $1 and not dry_run order by started_at desc limit 1',
+      [op.orgId],
+    );
+    expect(run?.summary.messages).toEqual({ conversations: 2, imported: 3, skipped: 1, failed: 0 });
+  });
+
   it('run again, updates rather than doubles, and follows a listing going inactive', async () => {
     const { client } = stubGuesty({
       listings: [{ ...HARBOUR, nickname: 'Harbour House (renamed)', active: false }, MILL, PARENT],
@@ -596,5 +736,6 @@ describe('importing an account', () => {
     expect(
       await owner("select id from app.property_photos where storage_path like 'guesty/L1/%'"),
     ).toHaveLength(2);
+    expect(await owner('select id from app.messages where organisation_id = $1', [op.orgId])).toHaveLength(3);
   });
 });

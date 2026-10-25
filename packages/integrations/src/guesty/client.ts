@@ -228,6 +228,50 @@ export class GuestyClient {
     });
   }
 
+  /**
+   * Guest conversations for these bookings (Guesty's Inbox), up to 25 bookings a request. Guesty
+   * pages these with a cursor, not skip; the answer's shape varies, so it is read loosely.
+   */
+  async *conversations(reservationIds: string[]): AsyncGenerator<GuestyConversation, void, void> {
+    const filters = JSON.stringify([{ field: 'reservation._id', operator: '$in', value: reservationIds }]);
+    yield* this.cursorPages<GuestyConversation>('/v1/communication/conversations', ['conversations'], {
+      filters,
+      limit: 100,
+    });
+  }
+
+  /** Every message in one conversation, oldest first. */
+  async *posts(conversationId: string): AsyncGenerator<GuestyPost, void, void> {
+    yield* this.cursorPages<GuestyPost>(
+      `/v1/communication/conversations/${encodeURIComponent(conversationId)}/posts`,
+      ['posts', 'thread'],
+      { limit: 100, sort: 'createdAt' },
+    );
+  }
+
+  private async *cursorPages<T>(
+    path: string,
+    keys: string[],
+    query: Record<string, string | number | undefined>,
+  ): AsyncGenerator<T, void, void> {
+    let after: string | undefined;
+    for (let page = 0; page < 200; page++) {
+      const answer = await this.get<Record<string, unknown>>(path, { ...query, cursorAfter: after });
+      const body = (answer.data && typeof answer.data === 'object' ? answer.data : answer) as Record<
+        string,
+        unknown
+      >;
+      let items: unknown = Array.isArray(body) ? body : undefined;
+      for (const key of [...keys, 'results', 'items'])
+        if (!items && Array.isArray(body[key])) items = body[key];
+      const list = (Array.isArray(items) ? items : []) as T[];
+      for (const item of list) yield item;
+      const cursor = (body.cursor ?? answer.cursor) as { after?: string | null } | undefined;
+      after = cursor?.after || undefined;
+      if (!after || list.length === 0) return;
+    }
+  }
+
   /** A listing's calendar, night by night, across [from, to]. */
   async calendar(listingId: string, from: string, to: string): Promise<GuestyCalendarDay[]> {
     const answer = await this.get<{ data?: { days?: GuestyCalendarDay[] } } | { days?: GuestyCalendarDay[] }>(
@@ -435,4 +479,24 @@ export interface GuestyCustomField {
   title?: string | null;
   value?: unknown;
   [key: string]: unknown;
+}
+
+export interface GuestyConversation {
+  _id: string;
+  integration?: { platform?: string | null } | null;
+  meta?: { reservations?: { _id?: string | null }[] | null } | null;
+  reservation?: { _id?: string | null } | null;
+}
+
+/** One message. `type`: fromGuest, fromHost, fromGuesty, fromThirdParty or channel; `module`: email, sms, airbnb2, log… */
+export interface GuestyPost {
+  _id?: string;
+  postId?: string;
+  module?: string | null;
+  type?: string | null;
+  body?: string | null;
+  subject?: string | null;
+  createdAt?: string | null;
+  sentAt?: string | null;
+  isAutomatic?: boolean | null;
 }

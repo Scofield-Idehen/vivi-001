@@ -17,8 +17,16 @@ import {
   reservations,
   type Tx,
 } from '@v01/db';
-import type { GuestyClient, GuestyListing, SecretBox } from '@v01/integrations';
-import { addDays, CHANNEL_LABELS, type Channel, LINKABLE_CHANNELS, todayIn } from '@v01/shared';
+import type { GuestyClient, GuestyConversation, GuestyListing, SecretBox } from '@v01/integrations';
+import {
+  addDays,
+  CHANNEL_LABELS,
+  type Channel,
+  LINKABLE_CHANNELS,
+  MESSAGE_VIAS,
+  type MessageVia,
+  todayIn,
+} from '@v01/shared';
 import { and, eq, gte, like, sql } from 'drizzle-orm';
 import type { WorkerDeps } from '../deps.ts';
 import {
@@ -26,6 +34,7 @@ import {
   calendarChanges,
   channelOf,
   externalListingIdOf,
+  messageFromPost,
   type OrgDefaults,
   propertyFromListing,
   reservationFrom,
@@ -52,6 +61,8 @@ export interface ImportOptions {
   bookingsDaysBack?: number;
   /** How far ahead to read calendars (730). */
   calendarDaysAhead?: number;
+  /** Guest conversations for bookings that ended this many days ago or later (90); 0 leaves them out. */
+  messagesDaysBack?: number;
   now?: Date;
   /** Told what the import is doing as it goes, so a long run shows it is moving. */
   onProgress?: (message: string) => void;
@@ -67,6 +78,8 @@ export interface ImportSummary {
   channelListings: number;
   calendar: { blocks: number; nights: number; blocksRefused: number };
   reservations: { seen: number; created: number; updated: number; conflicts: number; skipped: string[] };
+  /** Guest conversations brought into the Inbox, and how many of their messages. */
+  messages: { conversations: number; imported: number; skipped: number; failed: number };
   /** Per property, by name: what to look at. */
   warnings: Record<string, string[]>;
   /** The Guesty token budget, as the service last said. */
@@ -74,6 +87,11 @@ export interface ImportSummary {
 }
 
 class RolledBack extends Error {}
+
+/** A booking's channel as the way its messages go: the site's chat, or email for a direct booking. */
+function viaOfChannel(channel: string): MessageVia {
+  return (MESSAGE_VIAS as readonly string[]).includes(channel) ? (channel as MessageVia) : 'email';
+}
 
 const GUESTY_BLOCK = 'Blocked in Guesty';
 
@@ -101,6 +119,7 @@ function emptySummary(dryRun: boolean): ImportSummary {
     channelListings: 0,
     calendar: { blocks: 0, nights: 0, blocksRefused: 0 },
     reservations: { seen: 0, created: 0, updated: 0, conflicts: 0, skipped: [] },
+    messages: { conversations: 0, imported: 0, skipped: 0, failed: 0 },
     warnings: {},
     tokensRemainingToday: null,
   };
@@ -137,6 +156,8 @@ export async function importFromGuesty(
       const importer = new Importer(tx, options, org, today, now, summary);
       await importer.listings();
       await importer.reservations(addDays(today, -(options.bookingsDaysBack ?? 365)));
+      const messagesBack = options.messagesDaysBack ?? 90;
+      if (messagesBack > 0) await importer.conversations(addDays(today, -messagesBack));
       summary.tokensRemainingToday = options.guesty.tokensRemainingToday;
 
       if (run) {
@@ -529,6 +550,95 @@ class Importer {
         .values(changes.nights.map((n) => ({ organisationId: this.options.orgId, propertyId, ...n })));
     }
     this.summary.calendar.nights += changes.nights.length;
+  }
+
+  /**
+   * Each booking's conversation from Guesty's Inbox, as history in its V-01 thread: oldest first,
+   * each message once (by Guesty's id), marked read and not waiting, because the team answered
+   * these in Guesty. Guesty's log lines and private notes stay behind.
+   */
+  async conversations(from: string): Promise<void> {
+    const rows = (
+      await this.tx.execute<{ guesty_id: string; thread_id: string; channel: string }>(sql`
+        select gr.guesty_reservation_id as guesty_id, th.id as thread_id, r.channel
+          from app.guesty_reservations gr
+          join app.reservations r on r.id = gr.reservation_id
+          join app.message_threads th on th.reservation_id = r.id
+         where r.check_out >= ${from}::date
+         order by r.check_in`)
+    ).rows;
+    if (rows.length === 0) return;
+    const byGuesty = new Map(rows.map((r) => [r.guesty_id, r]));
+    const ids = [...byGuesty.keys()];
+    this.options.onProgress?.(`Reading guest conversations for ${ids.length} bookings…`);
+    const seen = new Set<string>();
+    for (let i = 0; i < ids.length; i += 25) {
+      const batch = ids.slice(i, i + 25);
+      let conversations: GuestyConversation[] = [];
+      try {
+        for await (const c of this.options.guesty.conversations(batch)) conversations.push(c);
+      } catch (error) {
+        this.summary.messages.failed += batch.length;
+        this.warn(
+          'Guest conversations',
+          `Guesty wouldn't list them: ${error instanceof Error ? error.message : error}`,
+        );
+        conversations = [];
+      }
+      for (const c of conversations) {
+        if (seen.has(c._id)) continue;
+        seen.add(c._id);
+        const linked = [c.reservation?._id, ...(c.meta?.reservations ?? []).map((r) => r._id)]
+          .filter((x): x is string => Boolean(x))
+          .map((x) => byGuesty.get(x))
+          .find(Boolean);
+        if (!linked) continue;
+        await this.conversation(c._id, linked.thread_id, viaOfChannel(linked.channel));
+      }
+      this.options.onProgress?.(
+        `Conversations: ${this.summary.messages.conversations} read, ${this.summary.messages.imported} messages`,
+      );
+    }
+  }
+
+  private async conversation(
+    conversationId: string,
+    threadId: string,
+    bookingVia: MessageVia,
+  ): Promise<void> {
+    let added = 0;
+    try {
+      for await (const post of this.options.guesty.posts(conversationId)) {
+        const m = messageFromPost(post, bookingVia);
+        if (!m) {
+          this.summary.messages.skipped += 1;
+          continue;
+        }
+        const inserted = await this.tx.execute(sql`
+          insert into app.messages (organisation_id, thread_id, direction, via, body, status, automatic, external_id, sent_at, created_at)
+          values (${this.options.orgId}, ${threadId}, ${m.direction}, ${m.via}, ${m.body},
+                  ${m.direction === 'in' ? 'received' : 'sent'}, ${m.automatic}, ${m.externalId}, ${m.at}, ${m.at})
+          on conflict (organisation_id, via, external_id) do nothing
+          returning id`);
+        added += inserted.rows.length;
+      }
+    } catch (error) {
+      this.summary.messages.failed += 1;
+      this.warn(
+        'Guest conversations',
+        `One conversation couldn't be read: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+    this.summary.messages.conversations += 1;
+    this.summary.messages.imported += added;
+    if (added) {
+      // History, answered in Guesty: nothing here is unread or waiting on V-01.
+      await this.tx.execute(sql`
+        update app.message_threads
+           set unread_count = 0, awaiting_since = null,
+               last_message_at = (select max(created_at) from app.messages where thread_id = ${threadId})
+         where id = ${threadId}`);
+    }
   }
 
   async reservations(from: string): Promise<void> {
