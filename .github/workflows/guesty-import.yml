@@ -1,0 +1,65 @@
+name: Guesty import
+
+# Brings an operator's Guesty account into V-01 from GitHub's servers, so a slow or patchy office
+# connection doesn't matter. Run it from Actions → Guesty import → Run workflow. "Rehearse" (the
+# default) does everything and keeps nothing; untick it to import for real. Uses the worker's
+# settings from the WORKER_ENV secret (the worker's .env: DATABASE_URL, GUESTY_CLIENT_ID,
+# GUESTY_CLIENT_SECRET, FIELD_SECRET_KEY). Guesty allows five sign-ins a day, so run it sparingly.
+
+on:
+  workflow_dispatch:
+    inputs:
+      org:
+        description: The operator's slug in V-01
+        default: vivistays
+        required: true
+      rehearse:
+        description: Rehearse only (nothing is kept)
+        type: boolean
+        default: true
+
+concurrency:
+  group: guesty-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    name: Guesty import
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Write the worker's settings
+        env:
+          WORKER_ENV: ${{ secrets.WORKER_ENV }}
+        run: |
+          if [ -z "$WORKER_ENV" ]; then
+            echo "::error::The WORKER_ENV secret is empty. Paste the worker's .env into it (Settings → Environments → staging)."
+            exit 1
+          fi
+          printf '%s\n' "$WORKER_ENV" | tr -d '\r' > apps/worker/.env
+          for key in DATABASE_URL GUESTY_CLIENT_ID GUESTY_CLIENT_SECRET; do
+            grep -q "^${key}=." apps/worker/.env || { echo "::error::WORKER_ENV has no ${key}."; exit 1; }
+          done
+          grep -q "^FIELD_SECRET_KEY=." apps/worker/.env || echo "::warning::No FIELD_SECRET_KEY: lock codes and Wi-Fi passwords will be reported, not stored."
+      - name: Run the import
+        working-directory: apps/worker
+        env:
+          ORG: ${{ inputs.org }}
+          REHEARSE: ${{ inputs.rehearse }}
+        run: |
+          if [ "$REHEARSE" = "true" ]; then
+            pnpm guesty:import --org "$ORG" --dry-run
+          else
+            pnpm guesty:import --org "$ORG"
+          fi
+      - name: Remove the settings file
+        if: always()
+        run: rm -f apps/worker/.env
