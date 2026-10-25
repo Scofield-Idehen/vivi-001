@@ -232,6 +232,13 @@
       "when": 1792518064659,
       "tag": "0032_crew_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792941556142,
+      "tag": "0033_locks",
+      "breakpoints": true
     }
   ]
 }

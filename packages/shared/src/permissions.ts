@@ -21,6 +21,8 @@ export const PERMISSIONS = {
   // Lock codes, key-safe codes and Wi-Fi passwords: never accounts, never V-01 support.
   'secrets.read': ['admin', 'operations', 'guest_comms'],
   'fields.manage': ['admin'],
+  /** Connecting the lock account and putting locks on properties. */
+  'locks.manage': ['admin', 'operations'],
   /** Tasks for the field team: everyone sees them; the crew ticks their own off; the office makes and assigns. */
   'tasks.read': ['admin', 'operations', 'guest_comms', 'accounts', 'field', 'v01_support'],
   'tasks.write': ['admin', 'operations', 'field'],

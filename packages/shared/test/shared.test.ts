@@ -16,6 +16,7 @@ import {
   isWeekendNight,
   listingChecklist,
   longDay,
+  makeDoorCode,
   minorToMajorString,
   nightRules,
   nightsBetween,
@@ -362,6 +363,19 @@ describe('changing a booking', () => {
   });
 });
 
+describe('door codes', () => {
+  it('makes six digits that are not easy to guess', () => {
+    for (let i = 0; i < 200; i++) {
+      const code = makeDoorCode();
+      expect(code).toMatch(/^[1-9]\d{5}$/);
+      expect(code).not.toMatch(/(\d)\1{3}/);
+    }
+    // A run of the same digit is drawn again.
+    const draws = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.5, 0.2, 0.7, 0.3, 0.9, 0.4];
+    expect(makeDoorCode(() => draws.shift() ?? 0.5)).toBe('527394');
+  });
+});
+
 describe('message templates', () => {
   it('fills each placeholder and leaves an unknown one as written', () => {
     const body = 'Hi {{guest_first_name}}, {{property}} from {{check_in}} ({{ nights }} nights). {{ oops }}';
@@ -376,6 +390,7 @@ describe('message templates', () => {
       nights: '3',
       stay_link: 'https://app.example/stay/abc',
       operator: 'Northwind Stays',
+      door_code: '482915',
     });
     expect(text).toBe('Hi Mia, Harbour View Lodge from Thursday 5 November (3 nights). {{ oops }}');
     expect(unknownPlaceholders(body)).toEqual(['oops']);

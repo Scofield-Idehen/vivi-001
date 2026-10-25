@@ -134,6 +134,29 @@ against what Channex holds for the next 90 nights (`--days 500` for the whole ho
 nights are sent again through the outbox and logged; the Today page lists them. Set `APP_URL` in the
 worker's `.env` so alerts link to the page that fixes them.
 
+## Door locks (TTLock)
+
+V-01 has one TTLock developer application (euopen.ttlock.com). Its Client ID and Secret go in the
+API's and the worker's settings as `TTLOCK_CLIENT_ID` and `TTLOCK_CLIENT_SECRET` (in `API_ENV` and
+`WORKER_ENV` on GitHub, and the worker's `.env` on a laptop); `TTLOCK_API_URL` defaults to
+`https://euapi.ttlock.com`. Both also need `FIELD_SECRET_KEY`, which seals the token and the codes.
+
+An admin or operations person connects the operator's TTLock **app** account in Workspace → Door
+locks. The password goes to TTLock once (as its MD5, which is what TTLock asks for) and is dropped;
+only the token is kept, sealed, in `lock_accounts`. Each lock is then put on a home and "V-01 makes
+the codes" turned on. It stays off by default so V-01 never fights Guesty's Locks Manager over a
+lock: turn it on only for locks Guesty no longer codes.
+
+The worker (`apps/worker/src/locks.ts`, every 5 minutes) gives every confirmed stay up to 14 days
+ahead one six-digit code on every coding lock of the home, from the check-in time to 30 minutes
+after check-out; every job a code for its day, 07:00 to 22:00; changes windows when dates move,
+takes codes off for cancelled stays and jobs, and retries refusals (at once for five tries, then
+hourly). Commands go one at a time through the gateway. Battery and gateways are listed hourly.
+A code shows to anyone only once the lock holds it: on the booking (digits for roles that may read
+secrets), on the guest's page from arrival to departure, in the job's Getting in box on its day,
+and as `{{door_code}}` in messages. Today warns about a lost sign-in, an offline gateway, codes
+that didn't reach a lock, and batteries under 25%.
+
 ## Importing from Guesty
 
 Put the Open API credentials (Guesty → Settings → Integrations → Open API → create an application)

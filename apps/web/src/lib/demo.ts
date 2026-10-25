@@ -42,6 +42,9 @@ import {
   type Invitation,
   InviteSchema,
   isWebAddress,
+  LOW_BATTERY,
+  LockConnectSchema,
+  LockUpdateSchema,
   listingUrl,
   longDay,
   type Me,
@@ -110,6 +113,15 @@ import {
   type Workspace,
   type WorkspaceRole,
 } from '@v01/shared';
+import {
+  connectDemoLocks,
+  type DemoLocks,
+  demoDoorCode,
+  demoJobCode,
+  demoLocksView,
+  demoStayCodes,
+  emptyLocks,
+} from './demo-locks.ts';
 import { clearDemoPhotos, deleteDemoPhoto, demoPhotoUrl, putDemoPhoto } from './demo-photos.ts';
 import { ApiError } from './errors.ts';
 import { SAMPLE_PHOTOS } from './sample-photos.ts';
@@ -213,6 +225,18 @@ interface DemoOperator {
   fields: CustomField[];
   /** Values by property id, then field id. Secrets sit here as typed: the demo has no database. */
   fieldValues: Record<string, Record<string, string>>;
+  /** The pretend TTLock account and its locks. Missing in older saved states. */
+  locks?: DemoLocks;
+}
+
+const locksOf = (operator: DemoOperator): DemoLocks => (operator.locks ??= emptyLocks());
+
+/** A stay's door codes in the demo, as the worker would have them on the locks by now. */
+function stayCodes(operator: DemoOperator, stay: DemoStay, reveal: boolean) {
+  const property = operator.properties.find((p) => p.id === stay.propertyId);
+  if (!property) return [];
+  const tz = operator.workspace.settings.timeZone;
+  return demoStayCodes(locksOf(operator), stay, property, tz, todayIn(tz), reveal);
 }
 
 /** A booking's conversation, as the API keeps it; the counts are worked out from the messages. */
@@ -2719,6 +2743,20 @@ function demoToday(operator: DemoOperator, role: WorkspaceRole): Today {
       });
     }
   }
+  if (seesProperties) {
+    const locks = locksOf(operator);
+    for (const l of locks.locks.filter(
+      (x) => x.propertyId && x.battery !== null && x.battery < LOW_BATTERY,
+    )) {
+      attention.push({
+        id: `locks:battery:${l.id}`,
+        severity: (l.battery ?? 0) < 10 ? 'urgent' : 'warning',
+        title: `${nameOf(l.propertyId as string)}: ${l.name} battery at ${l.battery}%`,
+        detail: 'Change the batteries before it runs out and locks a guest out.',
+        to: '/workspace#locks',
+      });
+    }
+  }
   attention.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'urgent' ? -1 : 1));
 
   // At a glance, worked out the way the API does.
@@ -2824,6 +2862,7 @@ function demoGuestStay(s: DemoState, key: string): GuestStay {
       timeZone: operator.workspace.settings.timeZone,
       phase,
       codesFrom: phase === 'before' ? stay.checkIn : null,
+      doorCode: phase === 'during' && stayCodes(operator, stay, true).length ? demoDoorCode(stay.id) : null,
       property: {
         name: property.name,
         title: property.title,
@@ -3278,6 +3317,70 @@ export async function demoFetch<T>(
     } as T;
   }
 
+  // Door locks: the pretend TTLock.
+  if (path === '/v1/locks' || path.startsWith('/v1/locks/')) {
+    const homes = () => {
+      const { operator } = access(options.orgId, 'properties.read');
+      return operator.properties.map((p) => ({ id: p.id, name: p.name }));
+    };
+    if (method === 'GET' && path === '/v1/locks') {
+      const { operator } = access(options.orgId, 'properties.read');
+      return demoLocksView(locksOf(operator), homes()) as T;
+    }
+    const { operator } = access(options.orgId, 'locks.manage');
+    if (method === 'POST' && path === '/v1/locks/connect') {
+      const parsed = LockConnectSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      try {
+        operator.locks = connectDemoLocks(
+          locksOf(operator),
+          parsed.data.username,
+          parsed.data.password,
+          homes(),
+        );
+      } catch (error) {
+        throw new ApiError(
+          400,
+          'lock_sign_in_refused',
+          `TTLock refused the sign-in: ${(error as Error).message}. Use the TTLock app’s account, not the developer one.`,
+        );
+      }
+    } else if (method === 'POST' && path === '/v1/locks/refresh') {
+      const state = locksOf(operator);
+      if (!state.account)
+        throw new ApiError(404, 'lock_account_missing', 'Connect the TTLock account first.');
+      state.account.syncedAt = new Date().toISOString();
+    } else if (method === 'DELETE' && path === '/v1/locks/account') {
+      operator.locks = emptyLocks();
+    } else if (method === 'PATCH') {
+      const lock = locksOf(operator).locks.find((l) => l.id === path.split('/')[3]);
+      if (!lock) throw new ApiError(404, 'lock_not_found', 'That lock is not in this workspace.');
+      const parsed = LockUpdateSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      const propertyId = parsed.data.propertyId === undefined ? lock.propertyId : parsed.data.propertyId;
+      const makesCodes = parsed.data.makesCodes ?? (propertyId ? lock.makesCodes : false);
+      if (makesCodes && !propertyId)
+        throw new ApiError(400, 'lock_needs_property', 'Put the lock on a property before turning codes on.');
+      if (makesCodes && !lock.hasGateway)
+        throw new ApiError(
+          400,
+          'lock_needs_gateway',
+          'This lock isn’t on a gateway, so codes can’t be sent to it. Pair it with a gateway in the TTLock app.',
+        );
+      lock.propertyId = propertyId;
+      lock.makesCodes = makesCodes;
+    }
+    save();
+    return demoLocksView(locksOf(operator), homes()) as T;
+  }
+
+  const doorCodesMatch = /^\/v1\/reservations\/([0-9a-f-]{36})\/door-codes$/.exec(path);
+  if (method === 'GET' && doorCodesMatch) {
+    const { operator, role } = access(options.orgId, 'reservations.read');
+    const stay = findStay(operator, doorCodesMatch[1] as string);
+    return { codes: stayCodes(operator, stay, can(role, 'secrets.read')) } as T;
+  }
+
   if (method === 'GET' && path === '/v1/team') {
     const { operator, role } = access(options.orgId, 'workspace.read');
     const hide = !can(role, 'members.manage') && role !== 'operations';
@@ -3368,13 +3471,20 @@ export async function demoFetch<T>(
       const open = task.status !== 'done' && task.status !== 'cancelled' && task.dueOn <= today;
       const allowed = role === 'field' || can(role, 'secrets.read');
       const values = operator.fieldValues[task.propertyId] ?? {};
+      const door =
+        open && allowed
+          ? demoJobCode(locksOf(operator), task, operator.workspace.settings.timeZone, today)
+          : null;
       return {
         ...task,
         access:
           open && allowed
-            ? operator.fields
-                .filter((f) => f.crewVisible)
-                .map((f) => ({ name: f.name, kind: f.kind, value: values[f.id] ?? null }))
+            ? [
+                ...(door ? [door] : []),
+                ...operator.fields
+                  .filter((f) => f.crewVisible)
+                  .map((f) => ({ name: f.name, kind: f.kind, value: values[f.id] ?? null })),
+              ]
             : [],
       } as T;
     }
@@ -4310,6 +4420,9 @@ function settleThreads(operator: DemoOperator): DemoThread[] {
       nights: String(nightsBetween(stay.checkIn, stay.checkOut)),
       stay_link: `${base}${key}`,
       operator: operator.workspace.brand.displayName,
+      door_code: stayCodes(operator, stay, true).length
+        ? demoDoorCode(stay.id)
+        : `on your page from the day you arrive: ${base}${key}`,
     };
     // The automatic messages whose moment has come, as the worker sends them.
     for (const tpl of templates) {

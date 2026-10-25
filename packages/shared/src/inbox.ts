@@ -154,6 +154,7 @@ export const TEMPLATE_PLACEHOLDERS = [
   { key: 'check_out_time', label: 'Check-out by, "10:00"' },
   { key: 'nights', label: 'How many nights' },
   { key: 'stay_link', label: "The guest's private page for their stay" },
+  { key: 'door_code', label: 'The stay\u2019s door code, once the smart lock has it' },
   { key: 'operator', label: 'Your name, as guests see it' },
 ] as const;
 export type TemplatePlaceholder = (typeof TEMPLATE_PLACEHOLDERS)[number]['key'];

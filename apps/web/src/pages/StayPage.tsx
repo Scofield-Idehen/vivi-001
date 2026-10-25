@@ -154,6 +154,7 @@ export function StayPage() {
             {p.checkInMethod ? ` ${CHECK_IN_METHOD_LABELS[p.checkInMethod]}.` : ''}
           </p>
           {p.guestAccess ? <p className="whitespace-pre-line text-slate">{p.guestAccess}</p> : null}
+          {s.doorCode ? <Code label="Your door code" value={s.doorCode} from={s.codesFrom} /> : null}
           {codes.map((f) => (
             <Code key={f.name} label={f.name} value={f.value} from={s.codesFrom} />
           ))}

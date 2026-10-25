@@ -11,8 +11,15 @@ import { Link, useParams } from 'react-router';
 import { TextArea } from '../../components/fields.tsx';
 import { Sheet } from '../../components/Sheet.tsx';
 import { PageLoading } from '../../components/Spinner.tsx';
-import { Button, EmptyState, Notice } from '../../components/ui.tsx';
-import { ApiError, useCancelReservation, useGuestLink, useReservation, useWorkspace } from '../../lib/api.ts';
+import { Button, EmptyState, Notice, StatusDot } from '../../components/ui.tsx';
+import {
+  ApiError,
+  useCancelReservation,
+  useDoorCodes,
+  useGuestLink,
+  useReservation,
+  useWorkspace,
+} from '../../lib/api.ts';
 import { config } from '../../lib/config.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
 import { Facts, Missing } from '../properties/Section.tsx';
@@ -102,6 +109,75 @@ function GuestPage({ orgId, reservationId }: { orgId: string; reservationId: str
             </a>
           )}
         </div>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * The stay's door code from the smart locks: the digits once a lock holds them (for people who may
+ * read codes), which locks, and from when to when. Nothing shows when no lock makes codes here.
+ */
+function DoorCodes({
+  orgId,
+  reservationId,
+  timeZone,
+}: {
+  orgId: string;
+  reservationId: string;
+  timeZone: string;
+}) {
+  const codes = useDoorCodes(orgId, reservationId);
+  const list = codes.data?.codes ?? [];
+  if (list.length === 0) return null;
+  const digits = list.find((c) => c.code)?.code ?? null;
+  const when = (iso: string) =>
+    new Intl.DateTimeFormat('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone,
+    }).format(new Date(iso));
+  const first = list[0];
+  const failed = list.filter((c) => c.status === 'failed');
+  const waiting = list.filter((c) => c.status === 'pending');
+  return (
+    <section className="rounded-xl bg-paper px-4 py-3.5 text-[13.5px]">
+      <p className="font-medium text-ink">Door code</p>
+      {digits ? (
+        <p className="mt-1 font-serif text-[30px] leading-none tracking-[0.08em] text-ink tnum">{digits}</p>
+      ) : (
+        <p className="mt-1 text-slate">
+          {list.some((c) => c.status === 'set')
+            ? 'On the locks. Only some roles see the digits.'
+            : 'Not on the locks yet.'}
+        </p>
+      )}
+      {first ? (
+        <p className="mt-1 text-slate">
+          {when(first.startsAt)} to {when(first.endsAt)}
+        </p>
+      ) : null}
+      <ul className="mt-2 flex flex-col gap-1">
+        {list.map((c) => (
+          <li key={c.lockName}>
+            <StatusDot status={c.status === 'set' ? 'done' : c.status === 'failed' ? 'urgent' : 'pending'}>
+              {c.lockName}
+              <span className="text-slate">
+                {c.status === 'set'
+                  ? ' · on the lock'
+                  : c.status === 'failed'
+                    ? ` · not sent: ${c.error ?? 'refused'}`
+                    : ' · on its way'}
+              </span>
+            </StatusDot>
+          </li>
+        ))}
+      </ul>
+      {failed.length || waiting.length ? (
+        <p className="mt-2 text-[12.5px] text-mist">Tried again every few minutes while the worker runs.</p>
       ) : null}
     </section>
   );
@@ -349,6 +425,9 @@ export function ReservationPage() {
 
         <aside className="flex flex-col gap-4 lg:sticky lg:top-8 lg:self-start">
           <Money orgId={orgId} r={r} locale={locale} timeZone={timeZone} canWrite={canMoney} />
+          {r.status === 'confirmed' ? (
+            <DoorCodes orgId={orgId} reservationId={r.id} timeZone={timeZone} />
+          ) : null}
           {canEdit && r.status === 'confirmed' ? <GuestPage orgId={orgId} reservationId={r.id} /> : null}
           <Link
             to={`/calendar?from=${r.checkIn}`}

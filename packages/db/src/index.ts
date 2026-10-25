@@ -8,4 +8,5 @@ export {
   type Tx,
   WorkerDatabase,
 } from './client.ts';
+export { saveLockList } from './locks.ts';
 export * from './schema/index.ts';

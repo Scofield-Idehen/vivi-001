@@ -59,6 +59,8 @@ export const GuestStaySchema = z.object({
     email: z.string().nullable(),
   }),
   fields: z.array(GuestFieldSchema),
+  /** The stay's own door code, from the smart lock; shown on the same days as the other codes. */
+  doorCode: z.string().nullable(),
 });
 export type GuestStay = z.infer<typeof GuestStaySchema>;
 

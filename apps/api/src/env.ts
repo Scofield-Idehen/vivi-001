@@ -35,6 +35,10 @@ const EnvSchema = z
      * kept in the secret manager and never rotated without re-encrypting first.
      */
     FIELD_SECRET_KEY: z.string().min(32).optional(),
+    /** V-01's TTLock developer application (euopen.ttlock.com), for connecting an operator's locks. */
+    TTLOCK_CLIENT_ID: z.string().min(1).optional(),
+    TTLOCK_CLIENT_SECRET: z.string().min(1).optional(),
+    TTLOCK_API_URL: z.url().optional(),
   })
   .refine((env) => env.SUPABASE_URL || env.SUPABASE_JWT_SECRET, {
     message: 'Set SUPABASE_URL (recommended) or SUPABASE_JWT_SECRET so sign-in tokens can be verified',

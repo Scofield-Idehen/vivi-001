@@ -1,4 +1,4 @@
-import type { EmailSender } from '@v01/integrations';
+import type { EmailSender, SecretBox } from '@v01/integrations';
 import { addDays, longDay, MESSAGE_VIA_LABELS, type MessageVia, renderTemplate, todayIn } from '@v01/shared';
 import { sql } from 'drizzle-orm';
 import type { WorkerDeps } from './deps.ts';
@@ -47,13 +47,14 @@ type Due = {
   guest_key: string;
   body: string;
   operator: string;
+  door_code: Buffer | null;
 };
 
 const clock = (t: string) => t.slice(0, 5);
 
 export async function makeAutomaticMessages(
   deps: Pick<WorkerDeps, 'db' | 'log' | 'now'>,
-  options: { appUrl?: string } = {},
+  options: { appUrl?: string; box?: SecretBox } = {},
 ): Promise<number> {
   const now = deps.now?.() ?? new Date();
   const at = now.toISOString();
@@ -83,7 +84,10 @@ export async function makeAutomaticMessages(
                  r.check_in::text, r.check_out::text,
                  to_char(coalesce(r.check_in_time, p.check_in_time), 'HH24:MI') as check_in_time,
                  to_char(coalesce(r.check_out_time, p.check_out_time), 'HH24:MI') as check_out_time,
-                 r.guest_key, t.body, ${settings.operator} as operator
+                 r.guest_key, t.body, ${settings.operator} as operator,
+                 (select c.code_sealed from app.lock_codes c
+                   where c.reservation_id = r.id and c.kind = 'guest' and c.status = 'set'
+                   order by c.created_at limit 1) as door_code
             from app.message_templates t
             cross join app.reservations r
             join app.message_threads th on th.reservation_id = r.id
@@ -127,6 +131,10 @@ export async function makeAutomaticMessages(
           ),
           stay_link: `${base}/stay/${d.guest_key}`,
           operator: d.operator,
+          // Only when the lock holds it; otherwise the guest is pointed at their page, where it appears.
+          door_code:
+            (d.door_code && options.box?.open(Buffer.from(d.door_code))) ||
+            `on your page from the day you arrive: ${base}/stay/${d.guest_key}`,
         });
         const inserted = await tx.execute(sql`
           insert into app.messages (organisation_id, thread_id, direction, via, body, status, template_id, automatic)

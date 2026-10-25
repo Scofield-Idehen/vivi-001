@@ -1,9 +1,11 @@
 import { can, ROLE_LABELS } from '@v01/shared';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
+import { useLocation } from 'react-router';
 import { Button, Notice, PageHeader, SectionHeading, StatusDot } from '../components/ui.tsx';
 import { ApiError, useMe, useSupportVisits, useUpdateBrand, useUpdateMe, useWorkspace } from '../lib/api.ts';
 import { dateTime, duration, useNow } from '../lib/format.ts';
 import { useCurrentWorkspace } from '../lib/workspace.tsx';
+import { LocksSection } from './workspace/LocksSection.tsx';
 import { TeamSection } from './workspace/TeamSection.tsx';
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -20,6 +22,16 @@ export function WorkspacePage() {
   const workspace = useWorkspace(orgId);
   const me = useMe();
   const data = workspace.data;
+  const { hash } = useLocation();
+  // Today's lock alerts link to #locks: scroll there once the page has drawn.
+  useEffect(() => {
+    if (!data || !hash) return;
+    const t = setTimeout(
+      () => document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' }),
+      300,
+    );
+    return () => clearTimeout(t);
+  }, [data, hash]);
 
   return (
     <>
@@ -85,6 +97,7 @@ export function WorkspacePage() {
             support to change them.
           </p>
           <TeamSection orgId={orgId} role={entry.role} selfId={me.data?.user.id ?? ''} />
+          {can(entry.role, 'properties.read') ? <LocksSection orgId={orgId} role={entry.role} /> : null}
         </div>
       ) : null}
       <SupportVisits orgId={orgId} />

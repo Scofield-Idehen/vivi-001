@@ -3,7 +3,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import { appBrand } from '@v01/brand';
 import type { ApiDatabase } from '@v01/db';
-import { SecretBox } from '@v01/integrations';
+import { type LockProvider, SecretBox, TTLockProvider } from '@v01/integrations';
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import {
   hasZodFastifySchemaValidationErrors,
@@ -24,6 +24,7 @@ import { consoleRoutes } from './routes/console.ts';
 import { fieldRoutes } from './routes/fields.ts';
 import { guestRoutes } from './routes/guest.ts';
 import { inboxRoutes } from './routes/inbox.ts';
+import { lockRoutes } from './routes/locks.ts';
 import { meRoutes } from './routes/me.ts';
 import { memberRoutes } from './routes/members.ts';
 import { propertyRoutes } from './routes/properties.ts';
@@ -45,6 +46,8 @@ export interface AppDeps {
   mailer?: InviteMailer;
   /** The clock, so tests can fix today for the guest page. */
   now?: () => Date;
+  /** Defaults to TTLock when V-01's TTLock application is configured. */
+  locks?: LockProvider | null;
 }
 
 function photoStoreFrom(env: Env, bucket: string): PhotoStore {
@@ -140,6 +143,17 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   todayRoutes(app, { scope });
   taskRoutes(app, { scope, photos: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, box });
   inboxRoutes(app, { scope });
+  const lockProvider =
+    deps.locks !== undefined
+      ? deps.locks
+      : deps.env.TTLOCK_CLIENT_ID && deps.env.TTLOCK_CLIENT_SECRET
+        ? new TTLockProvider({
+            clientId: deps.env.TTLOCK_CLIENT_ID,
+            clientSecret: deps.env.TTLOCK_CLIENT_SECRET,
+            baseUrl: deps.env.TTLOCK_API_URL,
+          })
+        : null;
+  lockRoutes(app, { scope, provider: lockProvider, box });
   memberRoutes(app, {
     scope,
     mailer:

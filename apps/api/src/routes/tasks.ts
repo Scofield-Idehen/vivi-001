@@ -237,11 +237,23 @@ async function accessFor(
     )
     .where(eq(customFields.crewVisible, true))
     .orderBy(asc(customFields.position));
-  return rows.map((r) => ({
+  const fields = rows.map((r) => ({
     name: r.name,
     kind: r.kind,
     value: r.secret ? (box ? box.open(Buffer.from(r.secret)) : null) : (r.value ?? null),
   }));
+  // The job's own code from the smart lock, for its day only, once the lock holds it.
+  const [door] = (
+    await tx.execute<{ code_sealed: Buffer; locks: string }>(sql`
+      select (array_agg(c.code_sealed))[1] as code_sealed, string_agg(l.name, ', ' order by l.name) as locks
+        from app.lock_codes c join app.locks l on l.id = c.lock_id
+       where c.task_id = ${task.id} and c.status = 'set' and c.ends_at > now()
+       group by c.task_id`)
+  ).rows;
+  const code = door && box ? box.open(Buffer.from(door.code_sealed)) : null;
+  return code
+    ? [{ name: `Door code (${door?.locks}), today only`, kind: 'secret', value: code }, ...fields]
+    : fields;
 }
 
 function toTemplate(row: typeof taskTemplates.$inferSelect): TaskTemplate {

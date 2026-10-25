@@ -36,3 +36,16 @@ export {
   MemoryTokenStore,
 } from './guesty/client.ts';
 export { SecretBox } from './secrets.ts';
+export {
+  type CodeWindow,
+  LockError,
+  type LockProvider,
+  type LockToken,
+  MemoryLockProvider,
+  md5,
+  type ProviderGateway,
+  type ProviderLock,
+  TTLOCK_API_URL,
+  type TTLockConfig,
+  TTLockProvider,
+} from './ttlock/client.ts';

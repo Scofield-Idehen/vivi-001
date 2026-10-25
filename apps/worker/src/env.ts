@@ -27,6 +27,10 @@ const EnvSchema = z
     /** Email to direct guests (the Inbox): a Resend key, and the one address V-01 sends from, on a verified domain. */
     RESEND_API_KEY: z.string().min(1).optional(),
     MAIL_FROM: z.email().optional(),
+    /** V-01's TTLock developer application (euopen.ttlock.com). Without both, no door codes are made. */
+    TTLOCK_CLIENT_ID: z.string().min(1).optional(),
+    TTLOCK_CLIENT_SECRET: z.string().min(1).optional(),
+    TTLOCK_API_URL: z.url().optional(),
     /** Changes are batched per property every 30–60 seconds (playbook, Section 4). */
     OUTBOX_INTERVAL_MS: z.coerce.number().int().min(1000).default(30_000),
     WEBHOOK_INTERVAL_MS: z.coerce.number().int().min(500).default(5_000),

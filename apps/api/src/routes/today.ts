@@ -14,6 +14,7 @@ import {
   type AttentionItem,
   CHANNEL_LABELS,
   can,
+  LOW_BATTERY,
   type Today,
   TodaySchema,
   type TodayStay,
@@ -305,6 +306,69 @@ export function todayRoutes(app: FastifyInstance, deps: { scope: RequestScope })
               title: `Couldn’t connect ${s.propertyName} to Channex`,
               detail: s.lastError,
               to: `/properties/${s.propertyId}`,
+            });
+          }
+        }
+
+        // Door locks: a lost sign-in, codes that didn't reach a lock, a battery running down, a gateway offline.
+        if (can(ctx.role, 'properties.read')) {
+          const [account] = (
+            await tx.execute<{
+              status: string;
+              last_error: string | null;
+              gateways: { name: string; online: boolean }[];
+            }>(sql`select status, last_error, gateways from app.lock_accounts limit 1`)
+          ).rows;
+          if (account?.status === 'error') {
+            attention.push({
+              id: 'locks:account',
+              severity: 'urgent',
+              title: 'Door codes have stopped: TTLock isn’t connected',
+              detail: account.last_error,
+              to: '/workspace#locks',
+            });
+          }
+          for (const g of account?.gateways.filter((x) => !x.online) ?? []) {
+            attention.push({
+              id: `locks:gateway:${g.name}`,
+              severity: 'urgent',
+              title: `${g.name} is offline`,
+              detail: 'Codes can’t reach the locks on it until it is back online. Check its power and Wi-Fi.',
+              to: '/workspace#locks',
+            });
+          }
+          const [failed] = (
+            await tx.execute<{ n: number; soon: number }>(sql`
+              select count(distinct coalesce(c.reservation_id, c.task_id))::int as n,
+                     count(distinct c.reservation_id) filter (where c.starts_at < now() + interval '2 days')::int as soon
+                from app.lock_codes c where c.status = 'failed'`)
+          ).rows;
+          if (failed && failed.n > 0) {
+            attention.push({
+              id: 'locks:failed',
+              severity: failed.soon > 0 ? 'urgent' : 'warning',
+              title:
+                failed.n === 1
+                  ? 'A door code didn’t reach its lock'
+                  : `${failed.n} door codes didn’t reach their locks`,
+              detail: 'They are tried again every few minutes. The lock or its gateway may be offline.',
+              to: '/workspace#locks',
+            });
+          }
+          const low = (
+            await tx.execute<{ id: string; name: string; battery: number; property: string | null }>(sql`
+              select l.id, l.name, l.battery, p.name as property
+                from app.locks l left join app.properties p on p.id = l.property_id
+               where l.battery is not null and l.battery < ${LOW_BATTERY} and l.property_id is not null
+               order by l.battery`)
+          ).rows;
+          for (const l of low) {
+            attention.push({
+              id: `locks:battery:${l.id}`,
+              severity: l.battery < 10 ? 'urgent' : 'warning',
+              title: `${l.property ? `${l.property}: ` : ''}${l.name} battery at ${l.battery}%`,
+              detail: 'Change the batteries before it runs out and locks a guest out.',
+              to: '/workspace#locks',
             });
           }
         }

@@ -3,6 +3,17 @@
 Newest first. Each entry says what was decided and why. Product decisions also live in the
 V-01 Build Playbook and Design Roadmap.
 
+## 2026-10-25
+
+- **V-01 makes door codes on TTLock, as Guesty's Locks Manager does (Alpha, 20 Oct 2026: "we
+  support TTLock … can you work on them"; access granted 25 Oct; the locks are on gateways).** One
+  six-digit code per stay on every lock of the home, from check-in to 30 minutes after check-out,
+  made up to 14 days ahead; one code per job, for its day only (07:00–22:00), which can replace the
+  fixed bottom lock code. Codes follow the booking (moved dates move the window, a cancellation takes
+  the code off) and show only once the lock holds them. V-01 keeps TTLock's token, never the
+  password, and seals tokens and codes with FIELD_SECRET_KEY. "V-01 makes the codes" is off per lock
+  until turned on, so V-01 and Guesty's Locks Manager never both code the same lock (migration 0033).
+
 ## 2026-10-20
 
 - **Build first, switch later (Alpha, 20 Oct 2026: "we are not getting off guesty anytime soon so

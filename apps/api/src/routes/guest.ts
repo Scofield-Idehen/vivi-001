@@ -32,6 +32,7 @@ interface RawStay {
     value: string | null;
     secret: string | null;
   }[];
+  doorCode: string | null;
 }
 
 const nightsBetween = (a: string, b: string) =>
@@ -76,6 +77,10 @@ export function guestRoutes(
         property: raw.property,
         brand: raw.brand,
         fields,
+        doorCode:
+          phase === 'during' && raw.doorCode && deps.box
+            ? deps.box.open(Buffer.from(raw.doorCode, 'base64'))
+            : null,
       };
     },
   );

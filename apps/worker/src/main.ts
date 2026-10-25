@@ -6,7 +6,8 @@ import { enqueueFullSync } from './full-sync.ts';
 import { makeAutomaticMessages, type Senders, sendQueuedMessages } from './inbox.ts';
 import { startJobs } from './jobs.ts';
 import { syncChannelLinks } from './links.ts';
-import { liveDeps, senders } from './live-deps.ts';
+import { liveDeps, lockDeps, senders } from './live-deps.ts';
+import { syncDoorCodes } from './locks.ts';
 import { processOutbox } from './outbox.ts';
 import { beginRun, checkAllAutoClose, recover } from './safety.ts';
 import { connectProperties } from './setup.ts';
@@ -34,7 +35,11 @@ function every(name: string, intervalMs: number, task: () => Promise<unknown>): 
 }
 
 const mail: Senders = senders(env);
-log.info({ provider: deps.provider.name, email: Boolean(mail.email) }, 'Worker starting');
+const doors = lockDeps(env);
+log.info(
+  { provider: deps.provider.name, email: Boolean(mail.email), doorCodes: Boolean(doors) },
+  'Worker starting',
+);
 
 // Drain before push. While `holding` is true nothing goes out to the channel manager: the bookings
 // that arrived while V-01 was away are saved first (docs/runbooks/recovery.md, done by the worker).
@@ -62,8 +67,20 @@ const stops = [
       log.info(stats, 'Channel links synced');
   }),
   // The Inbox: automatic messages when their moment comes, and whatever is queued goes out.
-  every('automatic-messages', 5 * 60_000, () => makeAutomaticMessages(deps, { appUrl: env.APP_URL })),
+  every('automatic-messages', 5 * 60_000, () =>
+    makeAutomaticMessages(deps, { appUrl: env.APP_URL, box: doors?.box }),
+  ),
   every('send-messages', 60_000, () => sendQueuedMessages(deps, mail)),
+  // Door codes: every stay and every job day gets its code on the home's locks.
+  ...(doors
+    ? [
+        every('door-codes', 5 * 60_000, async () => {
+          const stats = await syncDoorCodes(deps, doors);
+          if (stats.added || stats.changed || stats.removed || stats.failed)
+            log.info(stats, 'Door codes synced');
+        }),
+      ]
+    : []),
 ];
 
 if (holding) {

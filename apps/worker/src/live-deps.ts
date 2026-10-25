@@ -5,11 +5,20 @@ import {
   FakeChannelProvider,
 } from '@v01/channels';
 import { WorkerDatabase } from '@v01/db';
-import { type AlertSink, AppAlerts, LogSink, ResendSender, SlackWebhookSink } from '@v01/integrations';
+import {
+  type AlertSink,
+  AppAlerts,
+  LogSink,
+  ResendSender,
+  SecretBox,
+  SlackWebhookSink,
+  TTLockProvider,
+} from '@v01/integrations';
 import { type Logger, pino } from 'pino';
 import type { WorkerDeps } from './deps.ts';
 import { loadEnv, type WorkerEnv } from './env.ts';
 import type { Senders } from './inbox.ts';
+import type { LockDeps } from './locks.ts';
 
 /** The worker's real dependencies from its environment, for the worker itself and for hand-run jobs. */
 export function liveDeps(
@@ -54,4 +63,17 @@ export function liveDeps(
 export function senders(env: WorkerEnv): Senders {
   if (!env.RESEND_API_KEY || !env.MAIL_FROM) return {};
   return { email: new ResendSender(env.RESEND_API_KEY), from: env.MAIL_FROM };
+}
+
+/** Door codes through TTLock once V-01's TTLock application and the secret key are set; otherwise none. */
+export function lockDeps(env: WorkerEnv): LockDeps | null {
+  if (!env.TTLOCK_CLIENT_ID || !env.TTLOCK_CLIENT_SECRET || !env.FIELD_SECRET_KEY) return null;
+  return {
+    provider: new TTLockProvider({
+      clientId: env.TTLOCK_CLIENT_ID,
+      clientSecret: env.TTLOCK_CLIENT_SECRET,
+      baseUrl: env.TTLOCK_API_URL,
+    }),
+    box: new SecretBox(env.FIELD_SECRET_KEY),
+  };
 }

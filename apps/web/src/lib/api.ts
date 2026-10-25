@@ -23,12 +23,16 @@ import type {
   CustomFieldList,
   CustomFieldUpdate,
   DamageReport,
+  DoorCode,
   GuestLink,
   GuestStay,
   Invitation,
   InvitationList,
   Invite,
   InviteResult,
+  LockConnect,
+  LocksView,
+  LockUpdate,
   Me,
   MemberRoleUpdate,
   MessageSend,
@@ -1242,5 +1246,62 @@ export function useUpdateMe() {
       void queryClient.invalidateQueries({ queryKey: ['me'] });
       void queryClient.invalidateQueries({ queryKey: ['team'] });
     },
+  });
+}
+
+// Door locks (TTLock): connect the account, put locks on homes, turn codes on.
+
+export function useLocks(orgId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['locks', orgId],
+    enabled: Boolean(token && orgId),
+    queryFn: () => apiFetch<LocksView>('/v1/locks', { token: token as string, orgId }),
+    staleTime: 60_000,
+  });
+}
+
+function useLockMutation<B>(
+  orgId: string | null,
+  call: (body: B) => { path: string; method: 'POST' | 'PATCH' | 'DELETE'; body?: unknown },
+) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: B) => {
+      const c = call(body);
+      return apiFetch<LocksView>(c.path, { token: token as string, orgId, method: c.method, body: c.body });
+    },
+    onSuccess: (view) => {
+      queryClient.setQueryData(['locks', orgId], view);
+      void queryClient.invalidateQueries({ queryKey: ['today', orgId] });
+    },
+  });
+}
+
+export const useConnectLocks = (orgId: string | null) =>
+  useLockMutation<LockConnect>(orgId, (body) => ({ path: '/v1/locks/connect', method: 'POST', body }));
+export const useRefreshLocks = (orgId: string | null) =>
+  useLockMutation<void>(orgId, () => ({ path: '/v1/locks/refresh', method: 'POST' }));
+export const useDisconnectLocks = (orgId: string | null) =>
+  useLockMutation<void>(orgId, () => ({ path: '/v1/locks/account', method: 'DELETE' }));
+export const useUpdateLock = (orgId: string | null) =>
+  useLockMutation<{ id: string } & LockUpdate>(orgId, ({ id, ...body }) => ({
+    path: `/v1/locks/${id}`,
+    method: 'PATCH',
+    body,
+  }));
+
+export function useDoorCodes(orgId: string | null, reservationId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['door-codes', orgId, reservationId],
+    enabled: Boolean(token && orgId && reservationId),
+    queryFn: () =>
+      apiFetch<{ codes: DoorCode[] }>(`/v1/reservations/${reservationId}/door-codes`, {
+        token: token as string,
+        orgId,
+      }),
+    staleTime: 60_000,
   });
 }
