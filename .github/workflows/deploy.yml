@@ -73,12 +73,18 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
         run: pnpm --filter @v01/web build
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+      # Firebase's own CLI, pinned, signed in as the deploy service account. A failure's last lines
+      # are raised as annotations, so they show on the run's summary page.
+      - uses: google-github-actions/auth@v2
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          projectId: ${{ env.PROJECT }}
-          channelId: live
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - name: Publish to Firebase Hosting
+        run: |
+          set -o pipefail
+          if ! npx --yes firebase-tools@14 deploy --only hosting --project "$PROJECT" --non-interactive 2>&1 | tee firebase.log; then
+            tail -n 15 firebase.log | sed 's/^/::error title=Firebase Hosting::/'
+            exit 1
+          fi
 
   services:
     name: API and worker to Cloud Run
