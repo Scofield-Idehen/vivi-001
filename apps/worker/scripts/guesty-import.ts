@@ -26,7 +26,11 @@ const dryRun = args.includes('--dry-run');
 const daysBack = value('--bookings-days-back');
 const calendarDays = value('--calendar-days');
 
-const { env, deps, log } = liveDeps(undefined, { applicationName: 'v01-guesty-import' });
+// A query that hasn't answered in two minutes has lost its connection: stop rather than hang.
+const { env, deps, log } = liveDeps(undefined, {
+  applicationName: 'v01-guesty-import',
+  queryTimeoutMs: 120_000,
+});
 if (!env.GUESTY_CLIENT_ID || !env.GUESTY_CLIENT_SECRET) {
   console.error('GUESTY_CLIENT_ID and GUESTY_CLIENT_SECRET are not set in apps/worker/.env.');
   process.exit(2);
@@ -64,6 +68,7 @@ try {
     dryRun,
     bookingsDaysBack: daysBack ? Number(daysBack) : undefined,
     calendarDaysAhead: calendarDays ? Number(calendarDays) : undefined,
+    onProgress: (message) => console.log(`  ${new Date().toLocaleTimeString('en-GB')}  ${message}`),
   });
   console.log(report(summary, org.name));
   log.info({ orgId: org.id, dryRun }, 'Guesty import finished');

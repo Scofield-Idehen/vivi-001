@@ -23,7 +23,7 @@ import type { LockDeps } from './locks.ts';
 /** The worker's real dependencies from its environment, for the worker itself and for hand-run jobs. */
 export function liveDeps(
   env: WorkerEnv = loadEnv(),
-  options: { applicationName?: string } = {},
+  options: { applicationName?: string; queryTimeoutMs?: number } = {},
 ): { env: WorkerEnv; deps: WorkerDeps; log: Logger } {
   const log: Logger = pino({
     level: env.LOG_LEVEL,
@@ -50,6 +50,7 @@ export function liveDeps(
     db: new WorkerDatabase(env.DATABASE_URL, {
       applicationName: options.applicationName ?? 'v01-worker',
       max: 5,
+      queryTimeoutMs: options.queryTimeoutMs,
     }),
     provider,
     limiter: createChannexRateLimiter(),

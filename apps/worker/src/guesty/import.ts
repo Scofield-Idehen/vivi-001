@@ -53,6 +53,8 @@ export interface ImportOptions {
   /** How far ahead to read calendars (730). */
   calendarDaysAhead?: number;
   now?: Date;
+  /** Told what the import is doing as it goes, so a long run shows it is moving. */
+  onProgress?: (message: string) => void;
 }
 
 export interface ImportSummary {
@@ -187,6 +189,9 @@ class Importer {
     await this.loadAccounts();
     for await (const listing of this.options.guesty.listings()) {
       this.summary.listings.seen += 1;
+      this.options.onProgress?.(
+        `Listing ${this.summary.listings.seen}: ${listing.nickname ?? listing.title ?? listing._id}`,
+      );
       if (listing.type === 'MTL') {
         // A multi-unit parent: its units come as SUB listings of their own.
         this.summary.listings.skipped.push(
@@ -528,8 +533,11 @@ class Importer {
 
   async reservations(from: string): Promise<void> {
     const guestByEmail = new Map<string, string>();
+    this.options.onProgress?.('Listings done. Reading bookings…');
     for await (const r of this.options.guesty.reservations(from)) {
       this.summary.reservations.seen += 1;
+      if (this.summary.reservations.seen % 50 === 0)
+        this.options.onProgress?.(`Bookings read: ${this.summary.reservations.seen}`);
       const propertyId = r.listingId ? this.propertyOf.get(r.listingId) : undefined;
       if (!propertyId) {
         this.summary.reservations.skipped.push(`${r.confirmationCode ?? r._id}: its listing wasn't imported`);

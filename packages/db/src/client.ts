@@ -23,6 +23,11 @@ function assertUuid(value: string, name: string): void {
 export interface PoolOptions {
   max?: number;
   applicationName?: string;
+  /**
+   * Gives up on a query that hasn't answered in this long, instead of waiting for ever on a
+   * connection the network dropped without saying so. Off by default; hand-run scripts set it.
+   */
+  queryTimeoutMs?: number;
 }
 
 function createPool(url: string, options: PoolOptions): pg.Pool {
@@ -31,6 +36,10 @@ function createPool(url: string, options: PoolOptions): pg.Pool {
     max: options.max ?? 10,
     application_name: options.applicationName ?? 'v01',
     idleTimeoutMillis: 30_000,
+    // Notices a connection a router dropped silently, so a query fails rather than hangs.
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
+    ...(options.queryTimeoutMs ? { query_timeout: options.queryTimeoutMs } : {}),
   });
 }
 
