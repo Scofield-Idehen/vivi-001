@@ -25,7 +25,7 @@ import { ReservationPage } from './pages/reservations/ReservationPage.tsx';
 import { Reservations } from './pages/reservations/Reservations.tsx';
 import { SignIn } from './pages/SignIn.tsx';
 import { StayPage } from './pages/StayPage.tsx';
-import { Today } from './pages/Today.tsx';
+import { Today, TodayList } from './pages/Today.tsx';
 import { TasksPage } from './pages/tasks/TasksPage.tsx';
 import { WorkspacePage } from './pages/WorkspacePage.tsx';
 
@@ -127,6 +127,7 @@ const routes = [
         element: <AppShell />,
         children: [
           { path: 'today', element: <Today /> },
+          { path: 'today/:list', element: <TodayList /> },
           { path: 'calendar', element: <CalendarPage /> },
           { path: 'reservations', element: <Reservations /> },
           { path: 'reservations/:id', element: <ReservationPage /> },

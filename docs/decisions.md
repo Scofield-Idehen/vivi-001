@@ -3,6 +3,16 @@
 Newest first. Each entry says what was decided and why. Product decisions also live in the
 V-01 Build Playbook and Design Roadmap.
 
+## 2026-10-26
+
+- **Today is short (Alpha, 26 Oct 2026: "the today has a long list of everything … should show like
+  airbnb, limited and focus on 3 or 4 and view more open a separate page, keep it minimal and
+  basic").** Four numbers, then "Your day": one row of tabs (needs attention, checking out, checking
+  in, cleans due) with counts, each showing four cards; "View all" opens the full list on its own
+  page (/today/attention, /today/leaving, /today/arriving, /today/cleans). Then the next two weeks
+  and money booked. The channel mix and the switch-off checklist are gone from Today: with Guesty
+  staying for a while, the checklist was noise.
+
 ## 2026-10-25
 
 - **V-01 makes door codes on TTLock, as Guesty's Locks Manager does (Alpha, 20 Oct 2026: "we

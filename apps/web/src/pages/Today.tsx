@@ -1,83 +1,14 @@
-import {
-  type AttentionItem,
-  CHANNEL_LABELS,
-  can,
-  formatMoney,
-  type Glance,
-  type TodayStay,
-} from '@v01/shared';
+import { IconArrowLeft } from '@tabler/icons-react';
+import { CHANNEL_LABELS, can, formatMoney, type Glance, type TodayStay } from '@v01/shared';
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { Spinner } from '../components/Spinner.tsx';
-import { Notice, SectionHeading, type Status, StatusDot } from '../components/ui.tsx';
-import { ApiError, useProperties, useToday, useWorkspace } from '../lib/api.ts';
-import { plural, relativeTime, useNow, V01 } from '../lib/format.ts';
+import { Notice, PageHeader } from '../components/ui.tsx';
+import { ApiError, useToday, useWorkspace } from '../lib/api.ts';
+import { plural, relativeTime, useNow } from '../lib/format.ts';
 import { useCurrentWorkspace } from '../lib/workspace.tsx';
 import { ChannelMark } from './calendar/marks.tsx';
-
-interface Milestone {
-  id: string;
-  status: Status;
-  label: React.ReactNode;
-  when: string;
-}
-
-/**
- * What needs a person, first. Each row is the click target (no underlines: decisions, 19 Oct 2026),
- * and takes the reader to where the problem is dealt with.
- */
-function NeedsAttention({
-  items,
-  workerSeenAt,
-  now,
-}: {
-  items: AttentionItem[];
-  workerSeenAt: string | null;
-  now: number;
-}) {
-  const navigate = useNavigate();
-  if (items.length === 0) {
-    return (
-      <StatusDot status="done">
-        Nothing needs you right now.
-        {workerSeenAt
-          ? ` ${V01} last synced with the channels ${relativeTime(workerSeenAt, now)}.`
-          : ` ${V01}'s sync worker hasn't reported in yet.`}
-      </StatusDot>
-    );
-  }
-  return (
-    <ul className="divide-y divide-hairline rounded-2xl border border-hairline">
-      {items.map((item) => (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: the title inside is the link; this only widens its target
-        <li
-          key={item.id}
-          onClick={item.to ? () => navigate(item.to as string) : undefined}
-          className={`flex gap-3 px-4 py-3 ${item.to ? 'cursor-pointer transition-colors hover:bg-linen first:rounded-t-2xl last:rounded-b-2xl' : ''}`}
-        >
-          <span
-            aria-hidden
-            className={`mt-[7px] size-[9px] shrink-0 rounded-full ${item.severity === 'urgent' ? 'bg-urgent' : 'bg-pending'}`}
-          />
-          <div className="min-w-0">
-            <p className="text-[14.5px] font-medium text-ink">
-              {item.to ? (
-                <Link to={item.to} onClick={(e) => e.stopPropagation()}>
-                  {item.title}
-                </Link>
-              ) : (
-                item.title
-              )}
-            </p>
-            {item.detail ? (
-              <p className="mt-0.5 text-[13.5px] leading-relaxed text-slate">{item.detail}</p>
-            ) : null}
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
+import { NotFound } from './misc.tsx';
 
 const DAY_SHORT = new Intl.DateTimeFormat('en-GB', { weekday: 'short' });
 const DAY_LONG = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -242,186 +173,172 @@ function MoneyCard({ money, locale }: { money: NonNullable<Glance['money']>; loc
   );
 }
 
-/** Where bookings come from: one bar per channel, length by count, the number beside it. */
-function Channels({ channels }: { channels: Glance['channels'] }) {
-  const most = Math.max(1, ...channels.map((c) => c.bookings));
-  const all = channels.reduce((sum, c) => sum + c.bookings, 0);
-  return (
-    <section aria-labelledby="channels" className="rounded-2xl border border-hairline p-5">
-      <h2 id="channels" className="font-serif text-[20px] text-ink">
-        Where bookings come from
-      </h2>
-      <p className="mb-4 text-[13px] text-slate">Confirmed bookings made in the last 90 days</p>
-      {channels.length === 0 ? (
-        <p className="text-[14px] text-slate">No bookings in the last 90 days yet.</p>
-      ) : (
-        <ul className="flex flex-col gap-3">
-          {channels.map((c) => (
-            <li
-              key={c.channel}
-              className="grid grid-cols-[120px_minmax(0,1fr)_56px] items-center gap-3 text-[13.5px]"
-            >
-              <span className="flex items-center gap-2 truncate text-ink">
-                <ChannelMark channel={c.channel} size={18} />
-                {CHANNEL_LABELS[c.channel]}
-              </span>
-              <span className="h-2.5 rounded-full bg-linen">
-                <span
-                  className="block h-full rounded-full bg-accent"
-                  style={{ width: `${(c.bookings / most) * 100}%` }}
-                />
-              </span>
-              <span className="text-right text-slate tnum">
-                {c.bookings}
-                <span className="text-mist"> · {Math.round((c.bookings / all) * 100)}%</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+type ListId = 'attention' | 'arriving' | 'leaving' | 'cleans';
+
+const LIST_TITLES: Record<ListId, string> = {
+  attention: 'Needs attention',
+  arriving: 'Checking in today',
+  leaving: 'Checking out today',
+  cleans: 'Cleans due',
+};
+
+/** How many cards a tab shows before "View all". */
+const PREVIEW = 4;
+
+function todayTitle(locale: string, timeZone: string) {
+  return new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone }).format(
+    new Date(),
   );
 }
 
-/** Arrivals or departures for the day, with each arriving home's clean state beside it. */
-function DayList({
-  id,
+/** One small card in a tab: a short line on top, who or what, and where. The whole card opens it. */
+function Card({
+  to,
+  top,
+  tone,
   title,
-  stays,
-  empty,
-  dirty,
+  sub,
+  end,
 }: {
-  id: string;
-  title: string;
-  stays: TodayStay[];
-  empty: string;
-  dirty?: Set<string>;
+  to: string | null;
+  top: React.ReactNode;
+  tone?: 'urgent' | 'pending' | 'done';
+  title: React.ReactNode;
+  sub?: React.ReactNode;
+  end?: React.ReactNode;
 }) {
-  const navigate = useNavigate();
-  return (
-    <section aria-labelledby={id} className="rounded-2xl border border-hairline">
-      <div className="flex items-baseline justify-between gap-3 border-b border-hairline px-5 py-3.5">
-        <h2 id={id} className="font-serif text-[20px] text-ink">
-          {title}
-        </h2>
-        <span className="font-serif text-[22px] text-ink tnum">{stays.length}</span>
-      </div>
-      {stays.length === 0 ? (
-        <p className="px-5 py-4 text-[14px] text-slate">{empty}</p>
-      ) : (
-        <ul className="divide-y divide-hairline">
-          {stays.map((s) => {
-            const notReady = dirty?.has(s.propertyId);
-            return (
-              // biome-ignore lint/a11y/useKeyWithClickEvents: the property name inside is the link; this only widens its target
-              <li
-                key={s.reservationId}
-                onClick={() => navigate(`/reservations/${s.reservationId}`)}
-                className="flex cursor-pointer items-center gap-3 px-5 py-3 transition-colors last:rounded-b-2xl hover:bg-linen"
-              >
-                <span className="w-12 shrink-0 font-serif text-[18px] text-ink tnum">{s.time ?? '—'}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14.5px] text-ink">
-                    <Link to={`/reservations/${s.reservationId}`} onClick={(e) => e.stopPropagation()}>
-                      {s.guestName ?? CHANNEL_LABELS[s.channel]}
-                    </Link>
-                  </p>
-                  <p className="truncate text-[12.5px] text-slate">
-                    {s.propertyName} · {plural(s.guests, 'guest')} · {plural(s.nights, 'night')}
-                  </p>
-                </div>
-                {dirty ? (
-                  notReady ? (
-                    <span className="shrink-0 rounded-full bg-pending/15 px-2 py-0.5 text-[11.5px] font-medium text-pending-text">
-                      Not cleaned yet
-                    </span>
-                  ) : (
-                    <span className="shrink-0 rounded-full bg-done/12 px-2 py-0.5 text-[11.5px] font-medium text-done-text">
-                      Ready
-                    </span>
-                  )
-                ) : null}
-                <ChannelMark channel={s.channel} size={20} />
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
+  const body = (
+    <>
+      <p
+        className={`text-[12.5px] font-medium ${tone === 'urgent' ? 'text-urgent' : tone === 'pending' ? 'text-pending-text' : tone === 'done' ? 'text-done-text' : 'text-slate'}`}
+      >
+        {top}
+      </p>
+      <p className="mt-2 line-clamp-2 text-[15px] leading-snug text-ink">{title}</p>
+      {sub ? <p className="mt-1 line-clamp-2 text-[13px] text-slate">{sub}</p> : null}
+      {end ? <div className="mt-auto flex items-center justify-between gap-2 pt-3">{end}</div> : null}
+    </>
+  );
+  const box = 'flex flex-col rounded-2xl sm:min-h-[132px] border border-hairline bg-canvas p-4';
+  return to ? (
+    <Link to={to} className={`${box} transition-colors hover:border-edge hover:bg-paper`}>
+      {body}
+    </Link>
+  ) : (
+    <div className={box}>{body}</div>
   );
 }
 
-export function Today() {
+function ListCards({
+  list,
+  d,
+  dirty,
+  now,
+  limit,
+}: {
+  list: ListId;
+  d: NonNullable<ReturnType<typeof useToday>['data']>;
+  dirty: Set<string> | undefined;
+  now: number;
+  limit?: number;
+}) {
+  const cut = <T,>(xs: T[]) => (limit ? xs.slice(0, limit) : xs);
+  const stay = (s: TodayStay, word: string) => (
+    <Card
+      key={s.reservationId}
+      to={`/reservations/${s.reservationId}`}
+      top={`${word}${s.time ? ` ${s.time}` : ''}`}
+      tone={list === 'arriving' && dirty?.has(s.propertyId) ? 'pending' : undefined}
+      title={s.guestName ?? CHANNEL_LABELS[s.channel]}
+      sub={s.propertyName}
+      end={
+        <>
+          <span className="text-[12.5px] text-mist">
+            {list === 'arriving' && dirty
+              ? dirty.has(s.propertyId)
+                ? 'Not cleaned yet'
+                : 'Ready'
+              : `${plural(s.guests, 'guest')} · ${plural(s.nights, 'night')}`}
+          </span>
+          <ChannelMark channel={s.channel} size={18} />
+        </>
+      }
+    />
+  );
+  const cards =
+    list === 'attention'
+      ? cut(d.attention).map((a) => (
+          <Card
+            key={a.id}
+            to={a.to}
+            top={a.severity === 'urgent' ? 'Urgent' : 'To look at'}
+            tone={a.severity === 'urgent' ? 'urgent' : 'pending'}
+            title={a.title}
+            sub={a.detail}
+          />
+        ))
+      : list === 'arriving'
+        ? cut(d.arrivals).map((s) => stay(s, 'Arriving'))
+        : list === 'leaving'
+          ? cut(d.departures).map((s) => stay(s, 'Leaving'))
+          : cut(d.cleansDue).map((c) => (
+              <Card
+                key={c.propertyId}
+                to={`/properties/${c.propertyId}`}
+                top={c.since ? `Dirty since ${relativeTime(c.since, now)}` : 'Dirty'}
+                tone="pending"
+                title={c.propertyName}
+              />
+            ));
+  return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{cards}</div>;
+}
+
+const EMPTY: Record<ListId, string> = {
+  attention: 'Nothing needs you right now.',
+  arriving: 'No one arrives today.',
+  leaving: 'No one leaves today.',
+  cleans: 'Every home is clean.',
+};
+
+function useTodayParts() {
   const { orgId, entry } = useCurrentWorkspace();
   const workspace = useWorkspace(orgId);
   const today = useToday(orgId);
   const now = useNow();
   const canSeeProperties = can(entry.role, 'properties.read');
-  const properties = useProperties(canSeeProperties ? orgId : null);
+  const d = today.data;
+  const dirty = canSeeProperties ? new Set(d?.cleansDue.map((c) => c.propertyId) ?? []) : undefined;
+  const counts: Record<ListId, number> = {
+    attention: d?.attention.length ?? 0,
+    arriving: d?.arrivals.length ?? 0,
+    leaving: d?.departures.length ?? 0,
+    cleans: d?.cleansDue.length ?? 0,
+  };
+  const lists: ListId[] = canSeeProperties
+    ? ['attention', 'leaving', 'arriving', 'cleans']
+    : ['attention', 'leaving', 'arriving'];
+  return { orgId, entry, workspace, today, now, d, dirty, counts, lists };
+}
 
+/**
+ * Today, kept short (Alpha, 26 Oct 2026: "keep it minimal and basic", like Airbnb's): a few numbers,
+ * then one row of tabs (needs attention, checking out, checking in, cleans), each showing four
+ * cards and "View all" for the rest on a page of its own, then how full the next two weeks are.
+ */
+export function Today() {
+  const { entry, workspace, today, now, d, dirty, counts, lists } = useTodayParts();
   const timeZone = workspace.data?.settings.timeZone ?? 'Europe/London';
   const locale = workspace.data?.settings.locale ?? 'en-GB';
-  const title = new Intl.DateTimeFormat(locale, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone,
-  }).format(new Date());
-
-  const count = properties.data?.properties.length ?? 0;
-  const live = properties.data?.properties.filter((p) => p.managedBy === 'v01').length ?? 0;
-  const milestones: Milestone[] = [
-    {
-      id: 'workspace',
-      status: 'done',
-      label: `Workspace set up for ${entry.organisationName}`,
-      when: 'Phase 0',
-    },
-    canSeeProperties && count > 0
-      ? {
-          id: 'properties',
-          status: 'done',
-          label: `${count} ${count === 1 ? 'property' : 'properties'} added`,
-          when: 'Phase 0',
-        }
-      : {
-          id: 'properties',
-          status: 'pending',
-          label: canSeeProperties ? (
-            <Link to="/properties">Add your properties</Link>
-          ) : (
-            'Properties are being added'
-          ),
-          when: 'Phase 0',
-        },
-    {
-      id: 'channels',
-      status: 'pending',
-      label:
-        live > 0
-          ? `${live} of ${count} ${count === 1 ? 'property' : 'properties'} run through ${V01}; connect the channel accounts and link every listing`
-          : 'Connect the channel accounts and link every listing',
-      when: 'Phase 1',
-    },
-    { id: 'certification', status: 'pending', label: 'Channex certification', when: 'Week 7' },
-    {
-      id: 'switch-off',
-      status: 'pending',
-      label: 'Move every property across, then switch off Guesty',
-      when: 'Week 17',
-    },
-  ];
-
-  const d = today.data;
+  const [picked, setPicked] = useState<ListId | null>(null);
+  const tab = picked ?? lists.find((l) => counts[l] > 0) ?? 'leaving';
   const g = d?.glance;
-  const dirty = new Set(d?.cleansDue.map((c) => c.propertyId) ?? []);
   const tonight = g?.nights[0]?.occupied ?? d?.staying ?? 0;
 
   return (
     <>
-      <header className="mb-6">
+      <header className="mb-8">
         <p className="text-[13.5px] text-slate">
-          {greeting(timeZone)}, {title}
+          {greeting(timeZone)}, {todayTitle(locale, timeZone)}
         </p>
         <h1 className="mt-1 font-serif text-[34px] leading-[1.1] font-normal tracking-[-0.01em] text-ink">
           {workspace.data?.brand.displayName ?? entry.organisationName}
@@ -437,21 +354,8 @@ export function Today() {
           {today.error instanceof ApiError ? today.error.message : 'Today couldn’t be loaded. Try again.'}
         </Notice>
       ) : d && g ? (
-        <div className="flex flex-col gap-6">
-          <section aria-labelledby="attention">
-            <h2 id="attention" className="sr-only">
-              Needs attention
-            </h2>
-            {d.attention.length ? (
-              <NeedsAttention items={d.attention} workerSeenAt={d.workerSeenAt} now={now} />
-            ) : (
-              <div className="rounded-2xl bg-done/10 px-4 py-3">
-                <NeedsAttention items={[]} workerSeenAt={d.workerSeenAt} now={now} />
-              </div>
-            )}
-          </section>
-
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5 [&>*:last-child]:col-span-2 md:[&>*:last-child]:col-span-1">
+        <div className="flex flex-col gap-10">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Stat
               label="In tonight"
               value={
@@ -462,12 +366,6 @@ export function Today() {
               }
               detail={g.homes ? `${Math.round((tonight / g.homes) * 100)}% of homes` : 'No homes yet'}
               to="/calendar"
-            />
-            <Stat
-              label="Arriving today"
-              value={d.arrivals.length}
-              detail={`${plural(d.departures.length, 'departure')}`}
-              to="/reservations"
             />
             <Stat
               label="Jobs today"
@@ -490,87 +388,78 @@ export function Today() {
             <Stat label="New bookings" value={g.newBookings} detail="in the last 7 days" to="/reservations" />
           </div>
 
+          <section aria-labelledby="your-day">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 id="your-day" className="font-serif text-[24px] text-ink">
+                Your day
+              </h2>
+              {counts[tab] > PREVIEW ? (
+                <Link to={`/today/${tab}`} className="action">
+                  View all {counts[tab]}
+                </Link>
+              ) : null}
+            </div>
+            <div role="tablist" aria-label="Your day" className="mb-4 flex gap-2 overflow-x-auto pb-1">
+              {lists.map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === l}
+                  onClick={() => setPicked(l)}
+                  className={`h-9 shrink-0 rounded-full border px-4 text-[13.5px] transition-colors ${tab === l ? 'border-ink bg-ink text-canvas' : 'border-hairline text-ink hover:border-edge'}`}
+                >
+                  {LIST_TITLES[l].replace(' today', '')} ({counts[l]})
+                  {l === 'attention' && d.attention.some((a) => a.severity === 'urgent') ? (
+                    <span
+                      aria-label="urgent"
+                      role="img"
+                      className="ml-1.5 inline-block size-2 rounded-full bg-urgent align-middle"
+                    />
+                  ) : null}
+                </button>
+              ))}
+            </div>
+            <div role="tabpanel">
+              {counts[tab] === 0 ? (
+                <p className="rounded-2xl border border-dashed border-hairline px-5 py-8 text-center text-[14px] text-slate">
+                  {EMPTY[tab]}
+                </p>
+              ) : (
+                <ListCards list={tab} d={d} dirty={dirty} now={now} limit={PREVIEW} />
+              )}
+            </div>
+          </section>
+
           <div className={`grid gap-6 ${g.money ? 'lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]' : ''}`}>
             <OccupancyChart nights={g.nights} homes={g.homes} />
             {g.money ? <MoneyCard money={g.money} locale={locale} /> : null}
           </div>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <DayList
-              id="arrivals"
-              title="Checking in"
-              stays={d.arrivals}
-              empty="No one arrives today."
-              dirty={canSeeProperties ? dirty : undefined}
-            />
-            <DayList id="departures" title="Checking out" stays={d.departures} empty="No one leaves today." />
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            {g.channels.length || g.money ? <Channels channels={g.channels} /> : null}
-            {canSeeProperties ? (
-              <section aria-labelledby="cleans" className="rounded-2xl border border-hairline">
-                <div className="flex items-baseline justify-between gap-3 border-b border-hairline px-5 py-3.5">
-                  <h2 id="cleans" className="font-serif text-[20px] text-ink">
-                    Cleans due
-                  </h2>
-                  <span className="font-serif text-[22px] text-ink tnum">{d.cleansDue.length}</span>
-                </div>
-                {d.cleansDue.length === 0 ? (
-                  <p className="px-5 py-4 text-[14px] text-slate">Every home is clean.</p>
-                ) : (
-                  <CleansDue cleans={d.cleansDue} now={now} />
-                )}
-              </section>
-            ) : null}
-          </div>
-
-          <section aria-labelledby="switch-off" className="mt-4">
-            <SectionHeading id="switch-off">Getting to switch-off</SectionHeading>
-            <ol className="max-w-[720px] divide-y divide-hairline border-y border-hairline">
-              {milestones.map((m) => (
-                <li key={m.id} className="flex items-center justify-between gap-6 py-3 text-[14px]">
-                  <StatusDot status={m.status}>{m.label}</StatusDot>
-                  <span className="shrink-0 text-[13px] text-mist">{m.when}</span>
-                </li>
-              ))}
-            </ol>
-          </section>
         </div>
       ) : null}
     </>
   );
 }
 
-function CleansDue({
-  cleans,
-  now,
-}: {
-  cleans: { propertyId: string; propertyName: string; since: string | null }[];
-  now: number;
-}) {
-  const navigate = useNavigate();
+/** One of Today's lists in full: /today/attention, /today/arriving, /today/leaving, /today/cleans. */
+export function TodayList() {
+  const { list } = useParams();
+  const { today, now, d, dirty, counts, lists } = useTodayParts();
+  const id = (lists as string[]).includes(list ?? '') ? (list as ListId) : null;
+  if (!id) return <NotFound />;
   return (
-    <ul className="divide-y divide-hairline">
-      {cleans.map((c) => (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: the property name inside is the link; this only widens its target
-        <li
-          key={c.propertyId}
-          onClick={() => navigate(`/properties/${c.propertyId}`)}
-          className="flex cursor-pointer items-center justify-between gap-4 px-5 py-3 transition-colors last:rounded-b-2xl hover:bg-linen"
-        >
-          <Link
-            to={`/properties/${c.propertyId}`}
-            onClick={(e) => e.stopPropagation()}
-            className="text-[14.5px] text-ink"
-          >
-            {c.propertyName}
-          </Link>
-          <span className="shrink-0 text-[13px] text-mist">
-            {c.since ? `dirty since ${relativeTime(c.since, now)}` : 'dirty'}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <>
+      <Link to="/today" className="action -ml-2.5 mb-4 inline-flex items-center gap-1">
+        <IconArrowLeft size={15} stroke={1.75} aria-hidden /> Today
+      </Link>
+      <PageHeader title={`${LIST_TITLES[id]} (${counts[id]})`} />
+      {today.isPending ? (
+        <Spinner size={16} />
+      ) : !d ? null : counts[id] === 0 ? (
+        <p className="text-[14px] text-slate">{EMPTY[id]}</p>
+      ) : (
+        <ListCards list={id} d={d} dirty={dirty} now={now} />
+      )}
+    </>
   );
 }
