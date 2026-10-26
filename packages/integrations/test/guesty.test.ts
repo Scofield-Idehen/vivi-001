@@ -87,3 +87,33 @@ describe('Guesty client', () => {
     expect((error as GuestyError).message).toContain('refused the credentials');
   });
 });
+
+describe('Guesty, when it is slow', () => {
+  it('asks again after no answer or a 5xx, and gives up only after five tries', async () => {
+    let calls = 0;
+    const fetchImpl = (async (url: string) => {
+      if (String(url).endsWith('/oauth2/token'))
+        return Response.json({ access_token: 't', expires_in: 86400 });
+      calls += 1;
+      if (calls === 1) throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+      if (calls === 2) return new Response('busy', { status: 503 });
+      return Response.json({ ok: true });
+    }) as unknown as typeof fetch;
+    const client = new GuestyClient({
+      clientId: 'i',
+      clientSecret: 's',
+      fetch: fetchImpl,
+      sleep: async () => {},
+    });
+    expect(await client.get('/v1/x')).toEqual({ ok: true });
+    expect(calls).toBe(3);
+
+    const never = (async (url: string) => {
+      if (String(url).endsWith('/oauth2/token'))
+        return Response.json({ access_token: 't', expires_in: 86400 });
+      throw new Error('socket hang up');
+    }) as unknown as typeof fetch;
+    const stuck = new GuestyClient({ clientId: 'i', clientSecret: 's', fetch: never, sleep: async () => {} });
+    await expect(stuck.get('/v1/x')).rejects.toMatchObject({ kind: 'network' });
+  });
+});

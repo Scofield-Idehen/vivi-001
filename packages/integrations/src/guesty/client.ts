@@ -143,7 +143,7 @@ export class GuestyClient {
     return token.accessToken;
   }
 
-  /** One GET, with the token; waits and tries again on a 429, up to three times. */
+  /** One GET, with the token; waits and tries again on a 429, a 5xx or no answer, a few times each. */
   async get<T = unknown>(path: string, query: Record<string, string | number | undefined> = {}): Promise<T> {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(query)) {
@@ -157,10 +157,19 @@ export class GuestyClient {
         response = await this.fetchImpl(url, {
           method: 'GET',
           headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
-          signal: AbortSignal.timeout(this.config.timeoutMs ?? 30_000),
+          signal: AbortSignal.timeout(this.config.timeoutMs ?? 60_000),
         });
       } catch (error) {
+        // A slow or dropped answer is usually Guesty catching its breath: wait, then ask again.
+        if (attempt < 5) {
+          await this.sleep(Math.min(30, 2 ** attempt * 2) * 1000);
+          continue;
+        }
         throw new GuestyError(`Guesty request failed: ${describe(error)}`, 'network');
+      }
+      if (response.status >= 500 && attempt < 5) {
+        await this.sleep(Math.min(30, 2 ** attempt * 2) * 1000);
+        continue;
       }
       if (response.status === 429 && attempt < 4) {
         const after = Number(response.headers.get('retry-after') ?? '2');
