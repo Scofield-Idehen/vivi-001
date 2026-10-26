@@ -17,6 +17,7 @@ import {
   reservationFrom,
   reservationStatusOf,
 } from '../src/guesty/mapping.ts';
+import { GuestySnapshot } from '../src/guesty/snapshot.ts';
 
 /**
  * The import from Guesty, against a stand-in for Guesty's Open API: a small account with two
@@ -737,5 +738,29 @@ describe('importing an account', () => {
       await owner("select id from app.property_photos where storage_path like 'guesty/L1/%'"),
     ).toHaveLength(2);
     expect(await owner('select id from app.messages where organisation_id = $1', [op.orgId])).toHaveLength(3);
+  });
+});
+
+describe('reading Guesty before saving', () => {
+  it('reads everything once, and gives back each refusal exactly as Guesty made it', async () => {
+    const { client, paths } = stubGuesty();
+    const snap = await GuestySnapshot.take(client, {
+      today: TODAY,
+      calendarDaysAhead: 30,
+      bookingsFrom: day(-365),
+      messagesFrom: day(-90),
+    });
+    const before = paths.length;
+    const listed = [];
+    for await (const l of snap.listings()) listed.push(l._id);
+    expect(listed).toEqual(['L1', 'L2', 'L3']);
+    expect((await snap.calendar('L1', TODAY, day(29))).length).toBe(30);
+    // L2's calendar isn't in the stand-in, so Guesty refused it; the snapshot keeps the refusal.
+    await expect(snap.calendar('L2', TODAY, day(29))).rejects.toThrow(/404/);
+    const posts = [];
+    for await (const p of snap.posts('C1')) posts.push(p._id);
+    expect(posts).toEqual(['P1', 'P2', 'P3']);
+    // Nothing more is asked of Guesty once the snapshot is taken.
+    expect(paths.length).toBe(before);
   });
 });

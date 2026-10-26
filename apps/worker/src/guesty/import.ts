@@ -17,7 +17,7 @@ import {
   reservations,
   type Tx,
 } from '@v01/db';
-import type { GuestyClient, GuestyConversation, GuestyListing, SecretBox } from '@v01/integrations';
+import type { GuestyConversation, GuestyListing, SecretBox } from '@v01/integrations';
 import {
   addDays,
   CHANNEL_LABELS,
@@ -39,6 +39,7 @@ import {
   propertyFromListing,
   reservationFrom,
 } from './mapping.ts';
+import { calendarWindows, type GuestyReader, GuestySnapshot } from './snapshot.ts';
 
 /**
  * The import from Guesty (playbook, Section 13; decisions, 19 Oct 2026): every listing becomes a
@@ -53,7 +54,12 @@ import {
 
 export interface ImportOptions {
   orgId: string;
-  guesty: GuestyClient;
+  guesty: GuestyReader;
+  /**
+   * Read everything from Guesty first, then save it in one short transaction (the default). Off,
+   * the import reads as it saves, which only suits a small account or a test.
+   */
+  readFirst?: boolean;
   /** Seals secret custom fields (lock codes, Wi-Fi passwords). Without it they are reported, not stored. */
   box?: SecretBox;
   dryRun?: boolean;
@@ -133,6 +139,23 @@ export async function importFromGuesty(
   const summary = emptySummary(dryRun);
   const now = options.now ?? new Date();
   const log = deps.log;
+  if (options.readFirst !== false) {
+    // Guesty first, with no transaction open, then everything saved in one go.
+    const timeZone = await deps.db.withOrg({ orgId: options.orgId }, async (tx) => {
+      const [row] = await tx.select({ timeZone: organisationSettings.timeZone }).from(organisationSettings);
+      return row?.timeZone ?? 'Europe/London';
+    });
+    const today = todayIn(timeZone, now);
+    const messagesBack = options.messagesDaysBack ?? 90;
+    const snapshot = await GuestySnapshot.take(options.guesty, {
+      today,
+      calendarDaysAhead: options.calendarDaysAhead ?? 730,
+      bookingsFrom: addDays(today, -(options.bookingsDaysBack ?? 365)),
+      messagesFrom: messagesBack > 0 ? addDays(today, -messagesBack) : null,
+      onProgress: options.onProgress,
+    });
+    options = { ...options, guesty: snapshot, readFirst: false };
+  }
   try {
     await deps.db.withOrg({ orgId: options.orgId }, async (tx) => {
       // One import per operator at a time: a second one would wait for ever on the first one's
@@ -511,11 +534,7 @@ class Importer {
     const ahead = this.options.calendarDaysAhead ?? 730;
     const currency = listing.prices?.currency?.toUpperCase() || this.org.currency;
     const days = [];
-    for (let from = this.today; from <= addDays(this.today, ahead - 1); from = addDays(from, 180)) {
-      const to =
-        addDays(from, 179) < addDays(this.today, ahead - 1)
-          ? addDays(from, 179)
-          : addDays(this.today, ahead - 1);
+    for (const { from, to } of calendarWindows(this.today, ahead)) {
       try {
         days.push(...(await this.options.guesty.calendar(listing._id, from, to)));
       } catch (error) {
