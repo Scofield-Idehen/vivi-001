@@ -8,7 +8,8 @@
     "build": "node ../../scripts/build-node.mjs src/server.ts dist/server.js",
     "start": "node --enable-source-maps dist/server.js",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sign-in-link": "tsx --env-file-if-exists=.env scripts/sign-in-link.ts"
   },
   "dependencies": {
     "@fastify/cors": "11.3.1",
