@@ -135,6 +135,21 @@ export async function importFromGuesty(
   const log = deps.log;
   try {
     await deps.db.withOrg({ orgId: options.orgId }, async (tx) => {
+      // One import per operator at a time: a second one would wait for ever on the first one's
+      // bookings. A wait for anyone else's lock gives up after a minute instead of hanging, and a
+      // run whose computer goes quiet lets go of everything after ten minutes.
+      const [lock] = (
+        await tx.execute<{ ok: boolean }>(
+          sql`select pg_try_advisory_xact_lock(hashtext(${`guesty-import:${options.orgId}`})) as ok`,
+        )
+      ).rows;
+      if (!lock?.ok) {
+        throw new Error(
+          'Another Guesty import for this workspace is still running (here, on another computer, or on GitHub). Let it finish, or end it, then try again.',
+        );
+      }
+      await tx.execute(sql`set local lock_timeout = '60s'`);
+      await tx.execute(sql`set local idle_in_transaction_session_timeout = '10min'`);
       const [settings] = await tx
         .select({
           currency: organisationSettings.currency,
