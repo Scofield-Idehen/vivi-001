@@ -5,6 +5,7 @@ import { Link } from 'react-router';
 import { useMe, useToday, useWorkspace } from '../lib/api.ts';
 import { signOut, useSession } from '../lib/session.tsx';
 import { useCurrentWorkspace } from '../lib/workspace.tsx';
+import { NewMenu } from './NewMenu.tsx';
 
 /**
  * The bar along the top of every page (after Guesty's): a bell with everything that needs someone,
@@ -203,6 +204,7 @@ export function AccountActions() {
   const { entry } = useCurrentWorkspace();
   return (
     <div className="flex items-center gap-1.5">
+      <NewMenu />
       {can(entry.role, 'workspace.read') && entry.role !== 'field' ? <Notifications /> : null}
       <ProfileMenu />
     </div>

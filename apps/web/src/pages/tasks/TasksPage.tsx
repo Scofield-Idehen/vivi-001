@@ -566,25 +566,29 @@ function ReportDamage({ t, orgId }: { t: Task; orgId: string }) {
   );
 }
 
-/** Making a task by hand. */
-function NewTaskSheet({
+/** Making a task by hand; from the New menu it can start on a home and a day. */
+export function NewTaskSheet({
   orgId,
   team,
   today,
   onClose,
+  propertyId: startProperty,
+  dueOn: startDay,
 }: {
   orgId: string;
   team: TeamMember[];
   today: string;
   onClose(): void;
+  propertyId?: string;
+  dueOn?: string;
 }) {
   const properties = useProperties(orgId);
   const templates = useTaskTemplates(orgId);
   const create = useCreateTask(orgId);
-  const [propertyId, setPropertyId] = useState('');
+  const [propertyId, setPropertyId] = useState(startProperty ?? '');
   const [kind, setKind] = useState<TaskKind>('cleaning');
   const [title, setTitle] = useState('');
-  const [dueOn, setDueOn] = useState(today);
+  const [dueOn, setDueOn] = useState(startDay ?? today);
   const [dueTime, setDueTime] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
   const [notes, setNotes] = useState('');

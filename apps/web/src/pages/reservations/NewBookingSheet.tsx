@@ -16,7 +16,16 @@ const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
  * nights like any other booking; the price is for the record, nothing is charged yet. The nights
  * are refused if a booking or block already holds them.
  */
-export function NewBookingSheet({ today, onClose }: { today: string; onClose(): void }) {
+export function NewBookingSheet({
+  today,
+  onClose,
+  propertyId: startProperty,
+}: {
+  today: string;
+  onClose(): void;
+  /** Opened from a home's page: that home, already chosen. */
+  propertyId?: string;
+}) {
   const { orgId } = useCurrentWorkspace();
   const workspace = useWorkspace(orgId);
   const properties = useProperties(orgId);
@@ -24,7 +33,7 @@ export function NewBookingSheet({ today, onClose }: { today: string; onClose(): 
   const navigate = useNavigate();
   const currency = workspace.data?.settings.currency ?? 'GBP';
 
-  const [propertyId, setPropertyId] = useState('');
+  const [propertyId, setPropertyId] = useState(startProperty ?? '');
   const [checkIn, setCheckIn] = useState(today);
   const [checkOut, setCheckOut] = useState(addDays(today, 2));
   const [guestName, setGuestName] = useState('');

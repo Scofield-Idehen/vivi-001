@@ -20,6 +20,13 @@ V-01 Build Playbook and Design Roadmap.
   scale on the right; a legend with an icon and the total for each, which also hides or shows it.
   Guesty's two scales are kept on purpose; occupancy is drawn as an area, not bars, so the two
   can't be mixed up. Daily overview tiles follow Guesty's too: the figure first, a small ring.
+- **A "New" menu in the top bar (Alpha, 29 Oct 2026, after Guesty's "Add new": "we are not
+  replicating guesty, we are building slightly different").** Booking, task, block dates, message
+  a guest, property: what people make most first. Each opens over the page they're on (a property
+  goes to its own page). From a home's page the home is already chosen; from a booking's page the
+  home, and a task's day is the check-out. N opens it, a letter picks. Only what the role allows is
+  listed; the field team gets "Report damage" from one of their jobs. Owners and expenses join it
+  when they exist.
 - **A top bar on every page: the notifications bell (what needs someone) and the person's menu
   (name, workspace and role, My profile, Sign out).** The person and sign-out leave the side rail.
   /profile is the person's own page: name, email, when they signed in, their companies.
