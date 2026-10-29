@@ -1,4 +1,13 @@
-import { IconAlertTriangle, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
+import {
+  IconAlertTriangle,
+  IconArrowDownLeft,
+  IconArrowsExchange,
+  IconArrowUpRight,
+  IconChartPie,
+  IconChevronLeft,
+  IconChevronRight,
+  IconInfoCircle,
+} from '@tabler/icons-react';
 import { formatMoney, type OverviewRange, type Revenue, type Trends } from '@v01/shared';
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
@@ -15,6 +24,7 @@ const at = (day: string) => new Date(`${day}T12:00:00`);
 const DAY_LONG = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 const DAY_SHORT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
 const WEEKDAY = new Intl.DateTimeFormat('en-GB', { weekday: 'short' });
+const MONTH_DAY = new Intl.DateTimeFormat('en-GB', { month: 'short', day: 'numeric' });
 const MONTH = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 /** A small segmented switch: Today / Tomorrow / Next 7 days, 7 / 30 days. */
@@ -77,22 +87,22 @@ function Panel({
   );
 }
 
-/** A done-of-total ring: the arc is how many are done. */
+/** A small done-of-total ring, as on Guesty's tiles: a thin track, the arc is how many are done. */
 function Ring({ done, total }: { done: number; total: number }) {
-  const r = 22;
+  const r = 15;
   const c = 2 * Math.PI * r;
   const share = total ? Math.min(done / total, 1) : 0;
   return (
-    <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden className="shrink-0 -rotate-90">
-      <circle cx="28" cy="28" r={r} fill="none" stroke="var(--color-linen)" strokeWidth="5" />
+    <svg width="38" height="38" viewBox="0 0 38 38" aria-hidden className="shrink-0 -rotate-90">
+      <circle cx="19" cy="19" r={r} fill="none" stroke="var(--color-linen)" strokeWidth="4" />
       {share > 0 ? (
         <circle
-          cx="28"
-          cy="28"
+          cx="19"
+          cy="19"
           r={r}
           fill="none"
           stroke="var(--color-accent)"
-          strokeWidth="5"
+          strokeWidth="4"
           strokeLinecap="round"
           strokeDasharray={`${c * share} ${c}`}
         />
@@ -101,6 +111,7 @@ function Ring({ done, total }: { done: number; total: number }) {
   );
 }
 
+/** One tile of the daily overview: the figure, what it is under it, a note pinned to the bottom. */
 function Tile({
   to,
   label,
@@ -117,18 +128,16 @@ function Tile({
   const body = (
     <>
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[13px] text-slate">{label}</p>
-          <p className="mt-1 text-[28px] leading-none font-semibold tracking-[-0.02em] text-ink tnum">
-            {value}
-          </p>
+        <div className="min-w-0">
+          <p className="text-[22px] leading-tight font-semibold tracking-[-0.015em] text-ink tnum">{value}</p>
+          <p className="mt-0.5 text-[14px] text-slate">{label}</p>
         </div>
         {ring ? <Ring {...ring} /> : null}
       </div>
-      {foot ? <div className="mt-auto pt-4 text-[12.5px]">{foot}</div> : null}
+      {foot ? <div className="mt-auto pt-6 text-[13px]">{foot}</div> : null}
     </>
   );
-  const box = 'flex min-h-[132px] flex-col rounded-xl border border-hairline bg-canvas p-4';
+  const box = 'flex min-h-[176px] flex-col rounded-xl border border-hairline bg-canvas p-5';
   return to ? (
     <Link to={to} className={`${box} transition-colors hover:border-edge hover:bg-paper`}>
       {body}
@@ -184,21 +193,12 @@ export function DailyOverview({ orgId, canSeeProperties }: { orgId: string; canS
           <Tile
             to={isToday ? '/today/arriving' : '/calendar'}
             label={isToday ? 'Checked in' : `Checking in ${RANGE_WORDS[range]}`}
-            value={
-              isToday ? (
-                <>
-                  {d.checkIns.done}
-                  <span className="text-[18px] text-mist">/{d.checkIns.total}</span>
-                </>
-              ) : (
-                d.checkIns.total
-              )
-            }
+            value={isToday ? `${d.checkIns.done}/${d.checkIns.total}` : d.checkIns.total}
             ring={isToday ? { done: d.checkIns.done ?? 0, total: d.checkIns.total } : undefined}
             foot={
               isToday && canSeeProperties && notReady > 0 ? (
-                <span className="inline-flex items-center gap-1.5 font-medium text-pending-text">
-                  <IconAlertTriangle size={15} stroke={1.75} aria-hidden />
+                <span className="inline-flex items-center gap-2 font-semibold text-ink">
+                  <IconAlertTriangle size={17} stroke={1.75} aria-hidden className="text-pending-text" />
                   {notReady} {notReady === 1 ? 'home' : 'homes'} not ready
                 </span>
               ) : isToday ? (
@@ -215,16 +215,7 @@ export function DailyOverview({ orgId, canSeeProperties }: { orgId: string; canS
           <Tile
             to={isToday ? '/today/leaving' : '/calendar'}
             label={isToday ? 'Checked out' : `Checking out ${RANGE_WORDS[range]}`}
-            value={
-              isToday ? (
-                <>
-                  {d.checkOuts.done}
-                  <span className="text-[18px] text-mist">/{d.checkOuts.total}</span>
-                </>
-              ) : (
-                d.checkOuts.total
-              )
-            }
+            value={isToday ? `${d.checkOuts.done}/${d.checkOuts.total}` : d.checkOuts.total}
             ring={isToday ? { done: d.checkOuts.done ?? 0, total: d.checkOuts.total } : undefined}
             foot={
               isToday && canSeeProperties && d.checkOuts.total > 0 ? (
@@ -241,7 +232,8 @@ export function DailyOverview({ orgId, canSeeProperties }: { orgId: string; canS
             value={d.turnovers.total}
             foot={
               d.turnovers.shortestHours !== null ? (
-                <span className="inline-flex rounded-full bg-linen px-2.5 py-1 font-medium text-ink">
+                <span className="flex items-center gap-2 rounded-md bg-accent-tint px-2.5 py-1.5 font-semibold text-ink">
+                  <IconInfoCircle size={16} stroke={1.75} aria-hidden className="shrink-0 text-accent" />
                   Shortest turnover: {hours(d.turnovers.shortestHours)}
                 </span>
               ) : (
@@ -256,7 +248,8 @@ export function DailyOverview({ orgId, canSeeProperties }: { orgId: string; canS
             foot={
               canSeeProperties ? (
                 d.needCleaning ? (
-                  <span className="font-medium text-pending-text">
+                  <span className="inline-flex items-center gap-2 font-semibold text-ink">
+                    <IconAlertTriangle size={17} stroke={1.75} aria-hidden className="text-pending-text" />
                     {d.needCleaning} {d.needCleaning === 1 ? 'unit needs' : 'units need'} cleaning
                   </span>
                 ) : (
@@ -618,99 +611,170 @@ export function RevenueOverview({
   );
 }
 
-type Metric = 'checkIns' | 'checkOuts' | 'turnovers' | 'occupancy';
-const METRICS: { id: Metric; label: string }[] = [
-  { id: 'checkIns', label: 'Check-ins' },
-  { id: 'checkOuts', label: 'Check-outs' },
-  { id: 'turnovers', label: 'Turnovers' },
-  { id: 'occupancy', label: 'Occupancy' },
-];
+type Series = 'checkIns' | 'checkOuts' | 'turnovers' | 'occupancy';
 
-function TrendBars({ t, metric }: { t: Trends; metric: Metric }) {
+/**
+ * The three counts as grouped bars on the left scale and occupancy as a soft area on the right, as
+ * Guesty draws it (Alpha, 29 Oct 2026: "I want same"). Hues checked for colour-blind separation; the
+ * legend carries an icon and the total for each, and every bar shows its numbers on hover.
+ */
+const SERIES: { id: Series; label: string; color: string; Icon: typeof IconArrowDownLeft }[] = [
+  { id: 'checkIns', label: 'Check-ins', color: '#7C9FEF', Icon: IconArrowDownLeft },
+  { id: 'checkOuts', label: 'Check-outs', color: '#0F8466', Icon: IconArrowUpRight },
+  { id: 'turnovers', label: 'Turnovers', color: '#EE8C5A', Icon: IconArrowsExchange },
+  { id: 'occupancy', label: 'Occupancy', color: '#D9C7A0', Icon: IconChartPie },
+];
+const OCC_LINE = '#C8B07E';
+const TH = 280;
+const TP = { l: 36, r: 46, t: 14, b: 44 };
+
+/**
+ * A smooth line through points that never swings past them (monotone cubic, Fritsch–Carlson), so
+ * occupancy never draws above 100% or below 0%.
+ */
+function smooth(pts: [number, number][]): string {
+  const n = pts.length;
+  if (n === 0) return '';
+  const X = pts.map((p) => p[0]);
+  const Y = pts.map((p) => p[1]);
+  if (n === 1) return `M${X[0]},${Y[0]}`;
+  const dx: number[] = [];
+  const m: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    const h = (X[i + 1] ?? 0) - (X[i] ?? 0);
+    dx.push(h);
+    m.push(((Y[i + 1] ?? 0) - (Y[i] ?? 0)) / h);
+  }
+  const t: number[] = [m[0] ?? 0];
+  for (let i = 1; i < n - 1; i++) {
+    const a = m[i - 1] ?? 0;
+    const b = m[i] ?? 0;
+    t.push(a * b <= 0 ? 0 : (3 * (a + b)) / ((2 * b + a) / a + (b + 2 * a) / b));
+  }
+  t.push(m[n - 2] ?? 0);
+  let d = `M${X[0]},${Y[0]}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = (dx[i] ?? 0) / 3;
+    d += `C${(X[i] ?? 0) + h},${(Y[i] ?? 0) + (t[i] ?? 0) * h} ${(X[i + 1] ?? 0) - h},${(Y[i + 1] ?? 0) - (t[i + 1] ?? 0) * h} ${X[i + 1]},${Y[i + 1]}`;
+  }
+  return d;
+}
+
+function TrendChart({ t, shown }: { t: Trends; shown: Set<Series> }) {
   const [hover, setHover] = useState<number | null>(null);
   const [box, W] = useWidth();
   const days = t.days;
-  const values = days.map((d) => d[metric]);
-  const max = metric === 'occupancy' ? 100 : Math.max(1, ...values);
-  const ys = metric === 'occupancy' ? [0, 25, 50, 75, 100] : ticks(max).filter((v) => Number.isInteger(v));
-  const top = ys.at(-1) ?? 1;
-  const y = (v: number) => PAD.t + (1 - v / top) * (H - PAD.t - PAD.b);
-  const slot = (W - PAD.l - PAD.r) / days.length;
-  const bar = Math.max(4, Math.min(28, slot - 4));
-  const fmt = (v: number) => (metric === 'occupancy' ? `${Math.round(v)}%` : String(v));
+  const bars = SERIES.filter((s) => s.id !== 'occupancy' && shown.has(s.id));
+  const max = Math.max(1, ...days.flatMap((d) => bars.map((b) => d[b.id])));
+  const step = Math.max(1, Math.ceil(max / 4));
+  const top = step * 4;
+  const left = [0, 1, 2, 3, 4].map((k) => k * step);
+  const base = TH - TP.b;
+  const y = (v: number) => TP.t + (1 - v / top) * (base - TP.t);
+  const yp = (pct: number) => TP.t + (1 - pct / 100) * (base - TP.t);
+  const slot = (W - TP.l - TP.r) / days.length;
+  const mid = (i: number) => TP.l + slot * i + slot / 2;
+  const bw = Math.max(3, Math.min(20, (slot * 0.66 - (bars.length - 1) * 3) / Math.max(bars.length, 1)));
+  const group = bars.length * bw + (bars.length - 1) * 3;
+  const occ = shown.has('occupancy') ? days.map((d, i) => [mid(i), yp(d.occupancy)] as [number, number]) : [];
+  const line = smooth(occ);
+  const first = occ[0];
+  const last = occ[occ.length - 1];
+  const area = line && first && last ? `${line}L${last[0]},${base}L${first[0]},${base}Z` : '';
+  const every = days.length > 7 ? Math.ceil(days.length / (W < 600 ? 4 : 8)) : 1;
   const h = hover === null ? null : days[hover];
   return (
     <div ref={box} className="relative w-full min-w-0 overflow-hidden">
       <svg
-        viewBox={`0 0 ${W} ${H}`}
         width={W}
-        height={H}
+        height={TH}
         className="block"
         role="img"
-        aria-label={`${METRICS.find((m) => m.id === metric)?.label}, day by day`}
+        aria-label="Check-ins, check-outs, turnovers and occupancy, day by day"
       >
-        {ys.map((v) => (
+        <defs>
+          <linearGradient id="occ-fill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" stopColor={SERIES[3]?.color} stopOpacity="0.35" />
+            <stop offset="1" stopColor={SERIES[3]?.color} stopOpacity="0.04" />
+          </linearGradient>
+        </defs>
+        {left.map((v, k) => (
           <g key={v}>
-            <line x1={PAD.l} x2={W - PAD.r} y1={y(v)} y2={y(v)} stroke="var(--color-hairline)" />
-            <text x={PAD.l - 8} y={y(v) + 4} textAnchor="end" className="fill-mist text-[11px] tnum">
-              {fmt(v)}
+            <line x1={TP.l} x2={W - TP.r} y1={y(v)} y2={y(v)} stroke="var(--color-hairline)" />
+            <text x={TP.l - 10} y={y(v) + 4} textAnchor="end" className="fill-mist text-[11px] tnum">
+              {v}
             </text>
+            {shown.has('occupancy') ? (
+              <text x={W - TP.r + 10} y={y(v) + 4} className="fill-mist text-[11px] tnum">
+                {k * 25}%
+              </text>
+            ) : null}
           </g>
         ))}
+        {area ? <path d={area} fill="url(#occ-fill)" /> : null}
+        {line ? <path d={line} fill="none" stroke={OCC_LINE} strokeWidth="2" /> : null}
         {days.map((d, i) => {
-          const v = d[metric];
-          const mid = PAD.l + slot * i + slot / 2;
-          const yt = y(v);
-          const height = H - PAD.b - yt;
-          const rr = Math.min(4, height);
-          const labelEvery = days.length > 7 ? 5 : 1;
+          const x0 = mid(i) - group / 2;
           return (
             // biome-ignore lint/a11y/noStaticElementInteractions: hover only shows the same numbers the table below holds
             <g key={d.date} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
               <rect
-                x={PAD.l + slot * i}
-                y={PAD.t}
+                x={TP.l + slot * i}
+                y={TP.t}
                 width={slot}
-                height={H - PAD.t - PAD.b}
-                fill={hover === i ? 'var(--color-paper)' : 'transparent'}
+                height={base - TP.t}
+                fill={hover === i ? 'color-mix(in srgb, var(--color-ink) 4%, transparent)' : 'transparent'}
               />
-              {height > 0 ? (
-                <path
-                  d={`M${mid - bar / 2},${H - PAD.b}V${yt + rr}q0,-${rr} ${rr},-${rr}h${bar - 2 * rr}q${rr},0 ${rr},${rr}V${H - PAD.b}Z`}
-                  fill="var(--color-accent)"
-                />
-              ) : null}
-              {i % labelEvery === 0 ? (
-                <text
-                  x={mid}
-                  y={H - 4}
-                  textAnchor="middle"
-                  className={`text-[11px] ${i === 0 ? 'fill-ink' : 'fill-mist'}`}
-                >
-                  {i === 0
-                    ? 'Today'
-                    : days.length > 7
-                      ? DAY_SHORT.format(at(d.date))
-                      : WEEKDAY.format(at(d.date))}
+              {bars.map((b, k) => {
+                const v = d[b.id];
+                const yt = y(v);
+                const height = base - yt;
+                if (height <= 0) return null;
+                const rr = Math.min(4, height, bw / 2);
+                const x = x0 + k * (bw + 3);
+                return (
+                  <path
+                    key={b.id}
+                    d={`M${x},${base}V${yt + rr}q0,-${rr} ${rr},-${rr}h${bw - 2 * rr}q${rr},0 ${rr},${rr}V${base}Z`}
+                    fill={b.color}
+                  />
+                );
+              })}
+              {i % every === 0 ? (
+                <text x={mid(i)} y={base + 18} textAnchor="middle" className="fill-slate text-[12px]">
+                  <tspan x={mid(i)}>{WEEKDAY.format(at(d.date))}</tspan>
+                  <tspan x={mid(i)} dy="15" className="fill-mist text-[11.5px]">
+                    {slot < 60 && every === 1 ? Number(d.date.slice(8)) : MONTH_DAY.format(at(d.date))}
+                  </tspan>
                 </text>
               ) : null}
             </g>
           );
         })}
       </svg>
-      {h ? (
+      {h && hover !== null ? (
         <div
-          className="pointer-events-none absolute top-0 z-10 rounded-lg border border-hairline bg-canvas px-3 py-2 text-[12.5px] shadow-[0_8px_24px_-12px_rgb(21_24_27/0.3)]"
+          className="pointer-events-none absolute top-0 z-10 min-w-[170px] rounded-lg border border-hairline bg-canvas px-3 py-2 text-[12.5px] shadow-[0_8px_24px_-12px_rgb(21_24_27/0.3)]"
           style={{
-            left: `${((PAD.l + slot * (hover ?? 0) + slot / 2) / W) * 100}%`,
-            transform: `translateX(${(hover ?? 0) >= days.length / 2 ? '-105%' : '5%'})`,
+            left: mid(hover),
+            transform: `translateX(${hover >= days.length / 2 ? 'calc(-100% - 14px)' : '14px'})`,
           }}
         >
-          <p className="font-medium text-ink">{DAY_LONG.format(at(h.date))}</p>
-          <p className="text-slate tnum">
-            {h.checkIns} in · {h.checkOuts} out · {h.turnovers} turnovers
-          </p>
-          <p className="text-slate tnum">{Math.round(h.occupancy)}% occupied</p>
+          <p className="mb-1 font-medium text-ink">{DAY_LONG.format(at(h.date))}</p>
+          {SERIES.filter((s) => shown.has(s.id)).map((s) => (
+            <p key={s.id} className="flex items-center justify-between gap-4 text-slate">
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="size-2.5 rounded-[3px]"
+                  style={{ background: s.id === 'occupancy' ? OCC_LINE : s.color }}
+                />
+                {s.label}
+              </span>
+              <span className="font-medium text-ink tnum">
+                {s.id === 'occupancy' ? `${Math.round(h.occupancy)}%` : h[s.id]}
+              </span>
+            </p>
+          ))}
         </div>
       ) : null}
       <table className="sr-only">
@@ -733,14 +797,21 @@ function TrendBars({ t, metric }: { t: Trends; metric: Metric }) {
 
 export function TrendsOverview({ orgId }: { orgId: string }) {
   const [days, setDays] = useState<7 | 30>(7);
-  const [metric, setMetric] = useState<Metric>('checkIns');
+  const [hidden, setHidden] = useState<Set<Series>>(new Set());
   const q = useTrends(orgId, days);
   const t = q.data;
+  const shown = new Set(SERIES.map((s) => s.id).filter((id) => !hidden.has(id)));
+  const toggle = (id: Series) =>
+    setHidden((h) => {
+      const n = new Set(h);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
   return (
     <Panel
       id="trends"
       title="Trends overview"
-      sub={`The next ${days} days`}
       end={
         <Segmented
           label="How far ahead"
@@ -757,28 +828,30 @@ export function TrendsOverview({ orgId }: { orgId: string }) {
         <Spinner size={16} />
       ) : (
         <div className={q.isPlaceholderData ? 'opacity-60' : ''}>
-          <div
-            role="tablist"
-            aria-label="What to chart"
-            className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4"
-          >
-            {METRICS.map((m) => (
+          <div className="mb-4 flex flex-wrap gap-x-2 gap-y-2">
+            {SERIES.map(({ id, label, color, Icon }) => (
               <button
-                key={m.id}
+                key={id}
                 type="button"
-                role="tab"
-                aria-selected={metric === m.id}
-                onClick={() => setMetric(m.id)}
-                className={`rounded-xl border px-4 py-3 text-left transition-colors ${metric === m.id ? 'border-accent bg-accent-tint/40' : 'border-hairline hover:border-edge'}`}
+                aria-pressed={shown.has(id)}
+                onClick={() => toggle(id)}
+                title={shown.has(id) ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+                className={`inline-flex h-9 items-center gap-2 rounded-full px-2 pr-3 text-[14px] transition-colors hover:bg-linen ${shown.has(id) ? '' : 'opacity-45'}`}
               >
-                <span className="block text-[13px] text-slate">{m.label}</span>
-                <span className="mt-0.5 block text-[22px] leading-tight font-semibold tracking-[-0.02em] text-ink tnum">
-                  {m.id === 'occupancy' ? `${Math.round(t.totals.occupancy)}%` : t.totals[m.id]}
+                <span
+                  className="flex size-6 items-center justify-center rounded-md"
+                  style={{ background: color, color: id === 'occupancy' ? 'var(--color-ink)' : '#fff' }}
+                >
+                  <Icon size={15} stroke={2} aria-hidden />
                 </span>
+                <span className="font-semibold text-ink tnum">
+                  {id === 'occupancy' ? `${Math.round(t.totals.occupancy)}%` : t.totals[id]}
+                </span>
+                <span className="text-slate">{label}</span>
               </button>
             ))}
           </div>
-          <TrendBars t={t} metric={metric} />
+          <TrendChart t={t} shown={shown} />
         </div>
       )}
     </Panel>

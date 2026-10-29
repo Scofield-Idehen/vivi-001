@@ -15,6 +15,11 @@ V-01 Build Playbook and Design Roadmap.
   daily rate day by day, and total revenue by week; each booking's money is spread over its nights.
   Trends for the next 7 or 30 days: check-ins, check-outs, turnovers, occupancy. Endpoints
   /v1/overview, /v1/overview/revenue (bookings readers only) and /v1/overview/trends.
+- **Trends overview drawn like Guesty's (Alpha, 29 Oct 2026: "I want same").** Check-ins,
+  check-outs and turnovers as grouped bars on the left scale, occupancy as a soft area on a 0–100%
+  scale on the right; a legend with an icon and the total for each, which also hides or shows it.
+  Guesty's two scales are kept on purpose; occupancy is drawn as an area, not bars, so the two
+  can't be mixed up. Daily overview tiles follow Guesty's too: the figure first, a small ring.
 - **A top bar on every page: the notifications bell (what needs someone) and the person's menu
   (name, workspace and role, My profile, Sign out).** The person and sign-out leave the side rail.
   /profile is the person's own page: name, email, when they signed in, their companies.
