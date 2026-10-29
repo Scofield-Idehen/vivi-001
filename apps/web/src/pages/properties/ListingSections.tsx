@@ -252,7 +252,9 @@ export function DescriptionSection({ d, canEdit, save }: SectionProps) {
             <div className="flex items-start justify-between gap-4">
               <p
                 className={
-                  d.title ? 'font-serif text-[20px] leading-snug text-ink' : 'text-[14.5px] text-mist'
+                  d.title
+                    ? 'font-semibold tracking-[-0.015em] text-[18px] leading-snug text-ink'
+                    : 'text-[14.5px] text-mist'
                 }
               >
                 {d.title ?? 'No title yet'}

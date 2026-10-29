@@ -867,7 +867,7 @@ export function CalendarPanel(props: PanelProps) {
       <div className="flex h-full flex-col pt-[env(safe-area-inset-top,0px)]">
         <header className="flex items-start justify-between gap-4 border-b border-hairline px-5 py-4 md:px-6">
           <div className="min-w-0">
-            <h2 id={titleId} className="font-serif text-[22px] leading-tight text-ink">
+            <h2 id={titleId} className="font-semibold tracking-[-0.015em] text-[18px] leading-tight text-ink">
               {title}
             </h2>
             <p className="mt-1 text-[13px] text-slate">{subtitle}</p>

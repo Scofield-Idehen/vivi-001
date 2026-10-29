@@ -160,7 +160,7 @@ export function Reservations() {
               <li key={r.id}>
                 <Link to={`/reservations/${r.id}`} className="flex items-center gap-3 py-3.5">
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-serif text-[16px] text-ink">
+                    <span className="block truncate font-semibold tracking-[-0.015em] text-[16px] text-ink">
                       {r.guestName ?? 'Guest'}
                     </span>
                     <span className="block truncate text-[12.5px] text-slate">
@@ -218,7 +218,7 @@ export function Reservations() {
                         <Link
                           to={`/reservations/${r.id}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="font-serif text-[16px] text-ink"
+                          className="font-semibold tracking-[-0.015em] text-[16px] text-ink"
                         >
                           {r.guestName ?? 'Guest'}
                         </Link>

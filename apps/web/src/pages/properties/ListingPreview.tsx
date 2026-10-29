@@ -53,7 +53,7 @@ export function ListingPreview({
           </div>
         )}
         <figcaption className="min-w-0">
-          <p className="truncate font-serif text-[19px] leading-tight text-ink">
+          <p className="truncate font-semibold tracking-[-0.015em] text-[18px] leading-tight text-ink">
             {heading || 'Your new property'}
           </p>
           {kindLine ? <p className="mt-0.5 truncate text-[13px] text-slate">{kindLine}</p> : null}
@@ -81,8 +81,8 @@ export function ListingPreview({
         <p
           className={
             heading
-              ? 'font-serif text-[21px] leading-tight text-ink'
-              : 'font-serif text-[21px] leading-tight text-mist'
+              ? 'font-semibold tracking-[-0.015em] text-[18px] leading-tight text-ink'
+              : 'font-semibold tracking-[-0.015em] text-[18px] leading-tight text-mist'
           }
         >
           {heading || 'Your new property'}

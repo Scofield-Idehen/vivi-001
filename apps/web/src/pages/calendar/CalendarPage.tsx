@@ -302,7 +302,7 @@ function CalendarScreen() {
   const free = filters.free;
   const empty = (
     <div className="flex flex-col items-start gap-2">
-      <p className="font-serif text-[19px] text-ink">
+      <p className="font-semibold tracking-[-0.015em] text-[18px] text-ink">
         {free && data?.properties.length === 0 ? 'Nothing is available for that stay' : 'No property matches'}
       </p>
       <p className="text-[13.5px] leading-relaxed text-slate">

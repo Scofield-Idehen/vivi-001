@@ -237,7 +237,7 @@ export function PropertyPage() {
       </Link>
       <header className="mt-4 mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
-          <h1 className="font-serif text-[32px] leading-[1.1] font-light tracking-[-0.01em] text-ink md:text-[40px]">
+          <h1 className="font-semibold tracking-[-0.015em] text-[26px] leading-[1.1] font-light text-ink md:text-[40px]">
             {d.name}
           </h1>
           {placeLine ? (

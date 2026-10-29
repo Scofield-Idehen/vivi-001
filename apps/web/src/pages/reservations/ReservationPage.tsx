@@ -31,7 +31,7 @@ function Part({ title, children }: { title: string; children: ReactNode }) {
   const id = useId();
   return (
     <section aria-labelledby={id} className="border-t border-hairline py-8 first:border-t-0 first:pt-0">
-      <h2 id={id} className="mb-4 font-serif text-[22px] leading-tight text-ink">
+      <h2 id={id} className="mb-4 font-semibold tracking-[-0.015em] text-[18px] leading-tight text-ink">
         {title}
       </h2>
       {children}
@@ -147,7 +147,9 @@ function DoorCodes({
     <section className="rounded-xl bg-paper px-4 py-3.5 text-[13.5px]">
       <p className="font-medium text-ink">Door code</p>
       {digits ? (
-        <p className="mt-1 font-serif text-[30px] leading-none tracking-[0.08em] text-ink tnum">{digits}</p>
+        <p className="mt-1 font-semibold tracking-[-0.015em] text-[26px] leading-none tracking-[0.08em] text-ink tnum">
+          {digits}
+        </p>
       ) : (
         <p className="mt-1 text-slate">
           {list.some((c) => c.status === 'set')
@@ -275,7 +277,7 @@ export function ReservationPage() {
       {back}
       <header className="mt-4 mb-8 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-b border-hairline pb-6">
         <div className="min-w-0">
-          <h1 className="font-serif text-[32px] leading-[1.1] font-light tracking-[-0.01em] text-ink md:text-[40px]">
+          <h1 className="font-semibold tracking-[-0.015em] text-[26px] leading-[1.1] font-light text-ink md:text-[40px]">
             {r.guestName ?? 'Guest'}
           </h1>
           <p className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1 text-[14px] text-slate">

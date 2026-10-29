@@ -69,7 +69,7 @@ export function LocksSection({ orgId, role }: { orgId: string; role: WorkspaceRo
             connect.mutate({ username: username.trim(), password }, { onSuccess: () => setPassword('') });
           }}
         >
-          <h3 className="font-serif text-[20px] text-ink">Connect TTLock</h3>
+          <h3 className="font-semibold tracking-[-0.015em] text-[18px] text-ink">Connect TTLock</h3>
           <TextField
             label="TTLock app email or phone"
             value={username}

@@ -1,6 +1,5 @@
 @import "tailwindcss";
-@import "@fontsource-variable/fraunces/opsz.css";
-@import "@fontsource-variable/geist/wght.css";
+@import "@fontsource-variable/inter/opsz.css";
 @import "@fontsource-variable/geist-mono/wght.css";
 
 /*
@@ -48,9 +47,9 @@
   /* The V-01 console's sidebar sits on the accent; its quieter text is mixed from the accent tint. */
   --color-console-muted: color-mix(in srgb, var(--brand-accent-tint) 75%, var(--brand-accent));
 
-  /* The serif speaks for the property; the grotesk for the operation. */
-  --font-serif: "Fraunces Variable", Georgia, serif;
-  --font-sans: "Geist Variable", system-ui, sans-serif;
+  /* One clean sans for everything (Alpha, 29 Oct 2026): headings are the same face, heavier. */
+  --font-serif: "Inter Variable", system-ui, sans-serif;
+  --font-sans: "Inter Variable", system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
 }
 
@@ -120,7 +119,7 @@
     background: var(--color-canvas);
     color: var(--color-ink);
     font-family: var(--font-sans);
-    font-feature-settings: "ss01";
+    font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }

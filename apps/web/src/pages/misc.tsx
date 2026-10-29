@@ -59,7 +59,9 @@ export function NoWorkspace() {
       <BrandMark />
       <main className="flex items-center">
         <div className="max-w-[440px] md:ml-[12vw]">
-          <h1 className="font-serif text-[34px] leading-[1.1] font-normal">You're not in a workspace yet</h1>
+          <h1 className="font-semibold tracking-[-0.02em] text-[26px] leading-[1.2]">
+            You're not in a workspace yet
+          </h1>
           <p className="mt-4 text-[15px] leading-relaxed text-slate">
             You're signed in as <span className="font-medium text-ink">{session?.user.email}</span>. Ask your
             operator admin to invite this email address, then sign in again.

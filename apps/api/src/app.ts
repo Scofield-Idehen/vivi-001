@@ -27,6 +27,7 @@ import { inboxRoutes } from './routes/inbox.ts';
 import { lockRoutes } from './routes/locks.ts';
 import { meRoutes } from './routes/me.ts';
 import { memberRoutes } from './routes/members.ts';
+import { overviewRoutes } from './routes/overview.ts';
 import { propertyRoutes } from './routes/properties.ts';
 import { reservationRoutes } from './routes/reservations.ts';
 import { taskRoutes } from './routes/tasks.ts';
@@ -141,6 +142,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   channexRoutes(app, { scope });
   channelRoutes(app, { scope });
   todayRoutes(app, { scope });
+  overviewRoutes(app, { scope, now: deps.now });
   taskRoutes(app, { scope, photos: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, box });
   inboxRoutes(app, { scope });
   const lockProvider =

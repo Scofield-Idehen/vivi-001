@@ -22,6 +22,7 @@ import type {
   CustomFieldCreate,
   CustomFieldList,
   CustomFieldUpdate,
+  DailyOverview,
   DamageReport,
   DoorCode,
   GuestLink,
@@ -41,6 +42,7 @@ import type {
   MessageTemplateList,
   MessageTemplateUpdate,
   MeUpdate,
+  OverviewRange,
   PaymentCreate,
   PhotoStage,
   PhotoUploadTicket,
@@ -58,6 +60,7 @@ import type {
   ReservationList,
   ReservationUpdate,
   ReservationView,
+  Revenue,
   RoomInput,
   SupportAccessStart,
   SupportGrant,
@@ -78,6 +81,7 @@ import type {
   ThreadListQuery,
   ThreadUpdate,
   Today,
+  Trends,
   Workspace,
   WorkspaceSync,
 } from '@v01/shared';
@@ -1303,5 +1307,42 @@ export function useDoorCodes(orgId: string | null, reservationId: string | null)
         orgId,
       }),
     staleTime: 60_000,
+  });
+}
+
+// Today's overview, after Guesty's dashboard: the day's moves, money by month, the coming days.
+
+export function useOverview(orgId: string | null, range: OverviewRange) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['overview', orgId, range],
+    enabled: Boolean(token && orgId),
+    queryFn: () => apiFetch<DailyOverview>(`/v1/overview?range=${range}`, { token: token as string, orgId }),
+    refetchInterval: 60_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useRevenue(orgId: string | null, month: string | null, enabled = true) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['revenue', orgId, month],
+    enabled: Boolean(token && orgId && enabled),
+    queryFn: () =>
+      apiFetch<Revenue>(`/v1/overview/revenue${month ? `?month=${month}` : ''}`, {
+        token: token as string,
+        orgId,
+      }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useTrends(orgId: string | null, days: 7 | 30) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['trends', orgId, days],
+    enabled: Boolean(token && orgId),
+    queryFn: () => apiFetch<Trends>(`/v1/overview/trends?days=${days}`, { token: token as string, orgId }),
+    placeholderData: keepPreviousData,
   });
 }

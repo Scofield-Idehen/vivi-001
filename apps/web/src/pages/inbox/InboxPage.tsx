@@ -301,7 +301,7 @@ function Conversation({
               <IconArrowLeft size={15} stroke={1.75} aria-hidden />
               All conversations
             </button>
-            <h2 className="truncate font-serif text-[22px] leading-tight text-ink">
+            <h2 className="truncate font-semibold tracking-[-0.015em] text-[18px] leading-tight text-ink">
               {t.guestName ?? 'Guest'}
             </h2>
             <p className="mt-0.5 flex flex-col gap-x-2 text-[13px] text-slate sm:flex-row sm:flex-wrap sm:items-center">

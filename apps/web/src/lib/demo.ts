@@ -33,6 +33,7 @@ import {
   CustomFieldUpdateSchema,
   can,
   countBeds,
+  type DailyOverview,
   DamageReportSchema,
   eachNight,
   FIELDS_MAX,
@@ -57,8 +58,10 @@ import {
   MessageTemplateUpdateSchema,
   type MessageVia,
   MeUpdateSchema,
+  monthWeeks,
   nightRules,
   nightsBetween,
+  type OverviewRange,
   type Payment,
   PaymentCreateSchema,
   type Permission,
@@ -77,6 +80,7 @@ import {
   PropertySchema,
   type PropertyType,
   PropertyUpdateSchema,
+  previousMonth,
   RESERVATION_LIST_LIMIT,
   type Reservation,
   ReservationCancelSchema,
@@ -86,6 +90,7 @@ import {
   type ReservationStatus,
   type ReservationSummary,
   ReservationUpdateSchema,
+  type Revenue,
   RoomsUpdateSchema,
   renderTemplate,
   SUPPORT_ROLE,
@@ -109,6 +114,7 @@ import {
   ThreadUpdateSchema,
   type Today,
   type TodayStay,
+  type Trends,
   todayIn,
   type Workspace,
   type WorkspaceRole,
@@ -2823,6 +2829,168 @@ function demoToday(operator: DemoOperator, role: WorkspaceRole): Today {
   };
 }
 
+/** GET /v1/overview: the day's moves, worked out the way the API does from the demo's own stays. */
+function demoOverview(operator: DemoOperator, range: OverviewRange): DailyOverview {
+  const tz = operator.workspace.settings.timeZone;
+  const today = todayIn(tz);
+  const localNow = new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date());
+  const from = range === 'tomorrow' ? addDays(today, 1) : today;
+  const to = range === 'week' ? addDays(today, 6) : from;
+  const isToday = range === 'today';
+  const homes = new Map(operator.properties.map((p) => [p.id, p]));
+  const dirty = (id: string) => operator.cleaning?.[id]?.status === 'dirty';
+  const confirmed = operator.calendar.stays.filter(
+    (x) => x.status === 'confirmed' && homes.has(x.propertyId),
+  );
+  const ins = confirmed
+    .filter((x) => x.checkIn >= from && x.checkIn <= to)
+    .map((x) => ({
+      x,
+      day: x.checkIn,
+      at: (x.checkInTime ?? homes.get(x.propertyId)?.checkInTime ?? '15:00').slice(0, 5),
+    }));
+  const outs = confirmed
+    .filter((x) => x.checkOut >= from && x.checkOut <= to)
+    .map((x) => ({
+      x,
+      day: x.checkOut,
+      at: (x.checkOutTime ?? homes.get(x.propertyId)?.checkOutTime ?? '10:00').slice(0, 5),
+    }));
+  const past = (r: { day: string; at: string }) => r.day < today || (r.day === today && r.at <= localNow);
+  const minutes = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const gaps = ins.flatMap((i) =>
+    outs
+      .filter((o) => o.x.propertyId === i.x.propertyId && o.day === i.day)
+      .map((o) => minutes(i.at) - minutes(o.at)),
+  );
+  return {
+    range,
+    from,
+    to,
+    checkIns: {
+      total: ins.length,
+      done: isToday ? ins.filter(past).length : null,
+      ready: isToday ? ins.filter((i) => !dirty(i.x.propertyId)).length : null,
+    },
+    checkOuts: {
+      total: outs.length,
+      done: isToday ? outs.filter(past).length : null,
+      cleaned: isToday
+        ? outs.filter(
+            (o) => !dirty(o.x.propertyId) && (operator.cleaning?.[o.x.propertyId]?.changedAt ?? '') >= from,
+          ).length
+        : null,
+    },
+    turnovers: {
+      total: gaps.length,
+      shortestHours: gaps.length ? Math.round((Math.min(...gaps) / 60) * 10) / 10 : null,
+    },
+    staying: confirmed.filter((x) => x.checkIn < from && x.checkOut > from).length,
+    needCleaning: operator.properties.filter((p) => dirty(p.id)).length,
+  };
+}
+
+/** GET /v1/overview/revenue: each booking's money spread over its nights, against the month before. */
+function demoRevenue(operator: DemoOperator, month: string | null): Revenue {
+  const m = month ?? todayIn(operator.workspace.settings.timeZone).slice(0, 7);
+  const before = previousMonth(m);
+  const byNight = new Map<string, { minor: number; nights: number }>();
+  for (const x of operator.calendar.stays) {
+    if (x.status !== 'confirmed' || x.totalMinor === null) continue;
+    const n = Math.max(1, Math.round((Date.parse(x.checkOut) - Date.parse(x.checkIn)) / 86_400_000));
+    for (let night = x.checkIn; night < x.checkOut; night = addDays(night, 1)) {
+      const k = byNight.get(night) ?? { minor: 0, nights: 0 };
+      k.minor += x.totalMinor / n;
+      k.nights += 1;
+      byNight.set(night, k);
+    }
+  }
+  const lastDay = (mm: string) => {
+    const [y, mo] = mm.split('-').map(Number) as [number, number];
+    return new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  };
+  const day = (mm: string, d: number) => `${mm}-${String(d).padStart(2, '0')}`;
+  const sum = (mm: string, a: number, b: number) => {
+    let minor = 0;
+    let nights = 0;
+    for (let d = a; d <= Math.min(b, lastDay(mm)); d++) {
+      const r = byNight.get(day(mm, d));
+      if (r) {
+        minor += r.minor;
+        nights += r.nights;
+      }
+    }
+    return { minor: Math.round(minor), nights };
+  };
+  const rate = (s: { minor: number; nights: number }) => (s.nights ? Math.round(s.minor / s.nights) : null);
+  const per = (mm: string, d: number) => {
+    const r = d <= lastDay(mm) ? byNight.get(day(mm, d)) : undefined;
+    return r ? Math.round(r.minor / r.nights) : null;
+  };
+  return {
+    month: m,
+    currency: operator.workspace.settings.currency,
+    adr: {
+      currentMinor: rate(sum(m, 1, 31)),
+      previousMinor: rate(sum(before, 1, 31)),
+      days: Array.from({ length: lastDay(m) }, (_, i) => ({
+        date: day(m, i + 1),
+        currentMinor: per(m, i + 1),
+        previousMinor: per(before, i + 1),
+      })),
+    },
+    total: {
+      currentMinor: sum(m, 1, 31).minor,
+      previousMinor: sum(before, 1, 31).minor,
+      weeks: monthWeeks(m).map((w) => ({
+        label: w.label,
+        days: w.to - w.from + 1,
+        currentMinor: sum(m, w.from, w.to).minor,
+        previousMinor: sum(before, w.from, w.to).minor,
+      })),
+    },
+  };
+}
+
+/** GET /v1/overview/trends: check-ins, check-outs, turnovers and occupancy for the next 7 or 30 days. */
+function demoTrends(operator: DemoOperator, days: 7 | 30): Trends {
+  const today = todayIn(operator.workspace.settings.timeZone);
+  const homes = operator.properties.length;
+  const conf = operator.calendar.stays.filter((x) => x.status === 'confirmed');
+  const pct = (o: number, h: number) => (h ? Math.round((o / h) * 1000) / 10 : 0);
+  let occupiedSum = 0;
+  const out = Array.from({ length: days }, (_, i) => {
+    const date = addDays(today, i);
+    const occupied = new Set(
+      conf.filter((x) => x.checkIn <= date && x.checkOut > date).map((x) => x.propertyId),
+    ).size;
+    occupiedSum += occupied;
+    const leaving = conf.filter((x) => x.checkOut === date);
+    return {
+      date,
+      checkIns: conf.filter((x) => x.checkIn === date).length,
+      checkOuts: leaving.length,
+      turnovers: leaving.filter((o) => conf.some((b) => b.propertyId === o.propertyId && b.checkIn === date))
+        .length,
+      occupancy: pct(occupied, homes),
+    };
+  });
+  return {
+    days: out,
+    totals: {
+      checkIns: out.reduce((s, d) => s + d.checkIns, 0),
+      checkOuts: out.reduce((s, d) => s + d.checkOuts, 0),
+      turnovers: out.reduce((s, d) => s + d.turnovers, 0),
+      occupancy: pct(occupiedSum, homes * days),
+    },
+  };
+}
+
 function findStay(operator: DemoOperator, id: string): DemoStay {
   const stay = operator.calendar.stays.find((x) => x.id === id);
   if (!stay) {
@@ -3583,6 +3751,23 @@ export async function demoFetch<T>(
   if (method === 'GET' && path === '/v1/today') {
     const { operator, role } = access(options.orgId, 'workspace.read');
     return demoToday(operator, role) as T;
+  }
+
+  if (method === 'GET' && path.startsWith('/v1/overview')) {
+    const url = new URL(path, 'https://demo.invalid');
+    if (url.pathname === '/v1/overview') {
+      const { operator } = access(options.orgId, 'calendar.read');
+      const r = url.searchParams.get('range');
+      return demoOverview(operator, r === 'tomorrow' || r === 'week' ? r : 'today') as T;
+    }
+    if (url.pathname === '/v1/overview/revenue') {
+      const { operator } = access(options.orgId, 'reservations.read');
+      return demoRevenue(operator, url.searchParams.get('month')) as T;
+    }
+    if (url.pathname === '/v1/overview/trends') {
+      const { operator } = access(options.orgId, 'calendar.read');
+      return demoTrends(operator, url.searchParams.get('days') === '30' ? 30 : 7) as T;
+    }
   }
 
   if (method === 'GET' && path === '/v1/channels/sync') {

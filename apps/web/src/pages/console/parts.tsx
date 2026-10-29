@@ -158,7 +158,10 @@ export function SupportAccessDialog({
     >
       <form onSubmit={submit} className="flex flex-col gap-5 p-6" noValidate>
         <div>
-          <h2 id={`${reasonId}-title`} className="font-serif text-[24px] leading-tight font-normal">
+          <h2
+            id={`${reasonId}-title`}
+            className="font-semibold tracking-[-0.015em] text-[20px] leading-tight"
+          >
             Open {operator.name}
           </h2>
           <p className="mt-2 text-[14px] leading-relaxed text-slate">

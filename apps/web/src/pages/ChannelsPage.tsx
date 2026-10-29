@@ -322,7 +322,7 @@ export function ChannelsPage() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-2xl bg-paper px-4 py-3.5">
                 <p className="text-[12.5px] text-slate">Waiting to go out</p>
-                <p className="mt-1 font-serif text-[26px] leading-none text-ink tnum">
+                <p className="mt-1 font-semibold tracking-[-0.015em] text-[20px] leading-none text-ink tnum">
                   {sync.data.outboxWaiting}
                 </p>
                 <p className="mt-1.5 text-[12.5px] text-mist">
@@ -334,7 +334,7 @@ export function ChannelsPage() {
               <div className="rounded-2xl bg-paper px-4 py-3.5">
                 <p className="text-[12.5px] text-slate">Failed to send</p>
                 <p
-                  className={`mt-1 font-serif text-[26px] leading-none tnum ${sync.data.outboxFailed ? 'text-urgent' : 'text-ink'}`}
+                  className={`mt-1 font-semibold tracking-[-0.015em] text-[20px] leading-none tnum ${sync.data.outboxFailed ? 'text-urgent' : 'text-ink'}`}
                 >
                   {sync.data.outboxFailed}
                 </p>
@@ -346,7 +346,7 @@ export function ChannelsPage() {
               </div>
               <div className="rounded-2xl bg-paper px-4 py-3.5">
                 <p className="text-[12.5px] text-slate">Last booking in</p>
-                <p className="mt-1 font-serif text-[26px] leading-none text-ink">
+                <p className="mt-1 font-semibold tracking-[-0.015em] text-[20px] leading-none text-ink">
                   {sync.data.lastBookingAt ? relativeTime(sync.data.lastBookingAt, now) : '—'}
                 </p>
                 <p className="mt-1.5 text-[12.5px] text-mist">from any channel</p>
@@ -396,7 +396,9 @@ function CrossCheckTile({ check, now }: { check: WorkspaceSync['crossCheck']; no
   return (
     <div className="rounded-2xl bg-paper px-4 py-3.5">
       <p className="text-[12.5px] text-slate">Checked against Channex</p>
-      <p className={`mt-1 font-serif text-[26px] leading-none tnum ${trouble ? 'text-urgent' : 'text-ink'}`}>
+      <p
+        className={`mt-1 font-semibold tracking-[-0.015em] text-[20px] leading-none tnum ${trouble ? 'text-urgent' : 'text-ink'}`}
+      >
         {check.properties === 0 ? '—' : trouble ? trouble : `${check.matching} of ${check.properties}`}
       </p>
       <p className="mt-1.5 text-[12.5px] text-mist">

@@ -150,9 +150,7 @@ export function PageHeader({
   return (
     <header className="mb-8 flex flex-wrap items-end justify-between gap-4 border-b border-hairline pb-6">
       <div className="min-w-0">
-        <h1 className="font-serif text-[34px] leading-[1.1] font-normal tracking-[-0.01em] text-ink">
-          {title}
-        </h1>
+        <h1 className="font-semibold tracking-[-0.02em] text-[26px] leading-[1.2] text-ink">{title}</h1>
         {description ? <p className="mt-2 max-w-[62ch] text-[14px] text-slate">{description}</p> : null}
       </div>
       {action}
@@ -171,7 +169,7 @@ export function EmptyState({
 }) {
   return (
     <div className="flex max-w-[52ch] flex-col items-start gap-3 py-16">
-      <h2 className="font-serif text-[22px] font-normal">{title}</h2>
+      <h2 className="font-semibold tracking-[-0.015em] text-[18px]">{title}</h2>
       <p className="text-[14px] leading-relaxed text-slate">{children}</p>
       {action}
     </div>

@@ -182,7 +182,7 @@ export function TemplatesSheet({ orgId, onClose }: { orgId: string; onClose(): v
 
         <section className="flex flex-col gap-3">
           <div className="flex items-baseline justify-between gap-3">
-            <h3 className="font-serif text-[20px] text-ink">Saved replies</h3>
+            <h3 className="font-semibold tracking-[-0.015em] text-[18px] text-ink">Saved replies</h3>
             {editing !== 'new' ? (
               <Button variant="quiet" onClick={() => setEditing('new')}>
                 New saved reply

@@ -66,7 +66,7 @@ export function SignIn() {
           <div className="w-full max-w-[380px] lg:mx-auto">
             {state === 'sent' ? (
               <div aria-live="polite">
-                <h1 className="font-serif text-[38px] leading-[1.05] font-normal tracking-[-0.015em]">
+                <h1 className="font-semibold tracking-[-0.015em] text-[30px] leading-[1.05] tracking-[-0.015em]">
                   Check your email
                 </h1>
                 <p className="mt-4 text-[15px] leading-relaxed text-slate">
@@ -79,7 +79,7 @@ export function SignIn() {
               </div>
             ) : (
               <>
-                <h1 className="font-serif text-[38px] leading-[1.05] font-normal tracking-[-0.015em]">
+                <h1 className="font-semibold tracking-[-0.015em] text-[30px] leading-[1.05] tracking-[-0.015em]">
                   Sign in to {appBrand.name}
                 </h1>
                 <p className="mt-4 text-[15px] leading-relaxed text-slate">

@@ -110,7 +110,7 @@ export function Section({
           <h2
             id={titleId}
             tabIndex={-1}
-            className="font-serif text-[24px] leading-tight text-ink outline-none"
+            className="font-semibold tracking-[-0.015em] text-[20px] leading-tight text-ink outline-none"
           >
             {SECTION_TITLES[id]}
           </h2>

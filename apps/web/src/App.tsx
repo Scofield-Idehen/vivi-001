@@ -18,6 +18,7 @@ import { ConsoleSupportLog } from './pages/console/SupportLog.tsx';
 import { ConsoleSync } from './pages/console/Sync.tsx';
 import { InboxPage } from './pages/inbox/InboxPage.tsx';
 import { About, ModuleToCome, NotFound, NoWorkspace } from './pages/misc.tsx';
+import { ProfilePage } from './pages/ProfilePage.tsx';
 import { Properties } from './pages/Properties.tsx';
 import { NewPropertyPanel } from './pages/properties/NewPropertyPanel.tsx';
 import { PropertyPage } from './pages/properties/PropertyPage.tsx';
@@ -141,6 +142,7 @@ const routes = [
           { path: 'tasks', element: <TasksPage /> },
           { path: 'channels', element: <ChannelsPage /> },
           { path: 'workspace', element: <WorkspacePage /> },
+          { path: 'profile', element: <ProfilePage /> },
           { path: 'about', element: <About /> },
           ...PENDING_MODULES.map((module) => ({
             path: module.path,

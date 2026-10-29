@@ -367,7 +367,7 @@ function GettingIn({ access }: { access: Task['access'] }) {
         {access.map((a) => (
           <div key={a.name} className="flex items-baseline justify-between gap-4">
             <dt className="text-[14px] text-ink">{a.name}</dt>
-            <dd className="font-serif text-[24px] leading-none tracking-[0.06em] text-ink tnum">
+            <dd className="font-semibold tracking-[-0.015em] text-[20px] leading-none tracking-[0.06em] text-ink tnum">
               {a.value ?? <span className="font-sans text-[13px] tracking-normal text-mist">Not set</span>}
             </dd>
           </div>

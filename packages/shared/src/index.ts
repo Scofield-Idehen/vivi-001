@@ -10,6 +10,7 @@ export * from './inbox.ts';
 export * from './listing.ts';
 export * from './locks.ts';
 export * from './money.ts';
+export * from './overview.ts';
 export * from './permissions.ts';
 export * from './reservations.ts';
 export * from './schemas.ts';

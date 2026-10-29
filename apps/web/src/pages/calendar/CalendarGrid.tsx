@@ -909,7 +909,7 @@ export function CalendarGrid({
                 <div className="min-w-0">
                   <Link
                     to={`/properties/${row.property.id}`}
-                    className="block truncate font-serif text-[14.5px] leading-tight text-ink outline-offset-2"
+                    className="block truncate font-semibold tracking-[-0.015em] text-[14.5px] leading-tight text-ink outline-offset-2"
                   >
                     {row.property.name}
                   </Link>

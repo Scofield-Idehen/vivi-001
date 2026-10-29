@@ -1,6 +1,5 @@
 import { IconArrowLeft, IconInfoCircle, IconLock, IconLogout, IconRefresh } from '@tabler/icons-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { PLATFORM_ROLE_LABELS, ROLE_LABELS } from '@v01/shared';
 import { useState } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router';
 import { useEndSupportAccess, useMe, useWorkspace } from '../lib/api.ts';
@@ -8,7 +7,7 @@ import { config } from '../lib/config.ts';
 import { demoOriginalRole, resetDemoData, setDemoRole } from '../lib/demo.ts';
 import { clockTime, useNow } from '../lib/format.ts';
 import { MODULE_GROUPS } from '../lib/modules.ts';
-import { signOut, useSession } from '../lib/session.tsx';
+import { signOut } from '../lib/session.tsx';
 import { useCurrentWorkspace, useWorkspaces } from '../lib/workspace.tsx';
 import { NoWorkspace } from '../pages/misc.tsx';
 import { OperatorMark } from './BrandMark.tsx';
@@ -20,9 +19,9 @@ import {
   RailInitial,
   RailLink,
   RailMark,
-  RailPerson,
   useRail,
 } from './Rail.tsx';
+import { AccountActions } from './TopBar.tsx';
 import { Button, EmptyState } from './ui.tsx';
 
 /** The top of the sidebar: whose workspace this is, and the way back to the console for V-01 staff. */
@@ -99,19 +98,10 @@ export function useResetSampleData(): (() => void) | null {
 }
 
 function AccountFooter({ onNavigate }: { onNavigate?: () => void }) {
-  const { session } = useSession();
-  const { entry } = useCurrentWorkspace();
   const reset = useResetSampleData();
-  const platformRole = useMe().data?.platformRole ?? null;
-  const roles = [ROLE_LABELS[entry.role]];
-  if (platformRole && entry.role !== 'v01_support') {
-    roles.push(`V-01 ${PLATFORM_ROLE_LABELS[platformRole].toLowerCase()}`);
-  }
-
+  // Who is signed in, and signing out, live in the menu at the top right (TopBar.tsx).
   return (
     <RailFooter>
-      <RailPerson email={session?.user.email ?? ''} detail={roles.join(', ')} />
-      <RailButton label="Sign out" icon={IconLogout} onClick={() => void signOut()} />
       <RailLink to="/about" label="About" icon={IconInfoCircle} quiet onNavigate={onNavigate} />
       {reset ? <RailButton label="Reset sample data" icon={IconRefresh} quiet onClick={reset} /> : null}
     </RailFooter>
@@ -198,14 +188,21 @@ function WorkspaceFrame() {
         <div className="min-w-0">
           <OperatorMark name={entry.organisationName} />
         </div>
-        <Button
-          variant="secondary"
-          aria-expanded={menuOpen}
-          aria-controls="mobile-menu"
-          onClick={() => setMenuOpen((open) => !open)}
-        >
-          {menuOpen ? 'Close' : 'Menu'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <AccountActions />
+          <Button
+            variant="secondary"
+            aria-expanded={menuOpen}
+            aria-controls="mobile-menu"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            {menuOpen ? 'Close' : 'Menu'}
+          </Button>
+        </div>
+      </div>
+      {/* The bell and the person's menu, top right, on a laptop or tablet. */}
+      <div className="sticky top-0 z-30 hidden h-14 items-center justify-end gap-2 border-b border-hairline bg-canvas/90 px-6 backdrop-blur min-[560px]:flex">
+        <AccountActions />
       </div>
       {menuOpen ? (
         <div

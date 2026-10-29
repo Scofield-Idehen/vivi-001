@@ -1,177 +1,15 @@
 import { IconArrowLeft } from '@tabler/icons-react';
-import { CHANNEL_LABELS, can, formatMoney, type Glance, type TodayStay } from '@v01/shared';
+import { CHANNEL_LABELS, can, type TodayStay, todayIn } from '@v01/shared';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Spinner } from '../components/Spinner.tsx';
 import { Notice, PageHeader } from '../components/ui.tsx';
-import { ApiError, useToday, useWorkspace } from '../lib/api.ts';
+import { ApiError, useMe, useToday, useWorkspace } from '../lib/api.ts';
 import { plural, relativeTime, useNow } from '../lib/format.ts';
 import { useCurrentWorkspace } from '../lib/workspace.tsx';
 import { ChannelMark } from './calendar/marks.tsx';
 import { NotFound } from './misc.tsx';
-
-const DAY_SHORT = new Intl.DateTimeFormat('en-GB', { weekday: 'short' });
-const DAY_LONG = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-const at = (day: string) => new Date(`${day}T12:00:00`);
-
-function greeting(timeZone: string): string {
-  const hour = Number(
-    new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone }).format(new Date()),
-  );
-  return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-}
-
-/** One headline number: the figure big, what it is under it, and where to go for more. */
-function Stat({
-  label,
-  value,
-  detail,
-  to,
-  tone,
-}: {
-  label: string;
-  value: React.ReactNode;
-  detail?: React.ReactNode;
-  to?: string;
-  tone?: 'urgent' | 'pending';
-}) {
-  const body = (
-    <>
-      <p className="text-[12.5px] text-slate">{label}</p>
-      <p className="font-serif text-[30px] leading-none text-ink tnum">
-        {value}
-        {tone ? (
-          <span
-            aria-hidden
-            className={`ml-2 inline-block size-2.5 rounded-full align-middle ${tone === 'urgent' ? 'bg-urgent' : 'bg-pending'}`}
-          />
-        ) : null}
-      </p>
-      {detail ? <p className="text-[12.5px] text-mist">{detail}</p> : null}
-    </>
-  );
-  const box = 'flex flex-col gap-1.5 rounded-2xl bg-paper px-4 py-3.5';
-  return to ? (
-    <Link to={to} className={`${box} transition-colors hover:bg-linen`}>
-      {body}
-    </Link>
-  ) : (
-    <div className={box}>{body}</div>
-  );
-}
-
-/**
- * How full the next two weeks are: one bar a night, homes with a guest in out of all homes. One
- * series, so one hue and no legend; the value of a night shows on hover or focus, and the table
- * underneath reads the same for a screen reader.
- */
-function OccupancyChart({ nights, homes }: { nights: Glance['nights']; homes: number }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const total = Math.max(homes, 1);
-  const average = nights.length
-    ? nights.reduce((sum, n) => sum + n.occupied, 0) / (nights.length * total)
-    : 0;
-  const shown = hover === null ? null : nights[hover];
-  return (
-    <section aria-labelledby="occupancy" className="rounded-2xl border border-hairline p-5">
-      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <div>
-          <h2 id="occupancy" className="font-serif text-[20px] text-ink">
-            The next two weeks
-          </h2>
-          <p className="text-[13px] text-slate">Homes with a guest in, each night</p>
-        </div>
-        <p className="text-[13px] text-slate" aria-live="polite">
-          {shown ? (
-            <>
-              <span className="text-ink">{DAY_LONG.format(at(shown.date))}</span>: {shown.occupied} of {homes}{' '}
-              {homes === 1 ? 'home' : 'homes'}
-            </>
-          ) : (
-            <>
-              <span className="font-serif text-[22px] text-ink tnum">{Math.round(average * 100)}%</span> full
-              on average
-            </>
-          )}
-        </p>
-      </div>
-      <div className="flex h-40 items-end gap-[2px]">
-        {nights.map((n, i) => {
-          const share = n.occupied / total;
-          return (
-            <button
-              key={n.date}
-              type="button"
-              onMouseEnter={() => setHover(i)}
-              onMouseLeave={() => setHover(null)}
-              onFocus={() => setHover(i)}
-              onBlur={() => setHover(null)}
-              aria-label={`${DAY_LONG.format(at(n.date))}: ${n.occupied} of ${homes}`}
-              className="group flex h-full flex-1 flex-col justify-end rounded-t-[4px] focus:outline-none"
-            >
-              <span
-                className={`block w-full rounded-t-[4px] transition-colors ${hover === i ? 'bg-ink' : 'bg-accent'} ${share === 0 ? 'h-[2px] !bg-hairline' : ''}`}
-                style={share === 0 ? undefined : { height: `${Math.max(share * 100, 3)}%` }}
-              />
-            </button>
-          );
-        })}
-      </div>
-      <div className="mt-2 flex gap-[2px] text-center text-[11px] text-mist" aria-hidden>
-        {nights.map((n, i) => (
-          <span key={n.date} className={`flex-1 ${i === 0 ? 'font-medium text-ink' : ''}`}>
-            {i === 0 ? 'Now' : DAY_SHORT.format(at(n.date)).slice(0, 2)}
-          </span>
-        ))}
-      </div>
-      <table className="sr-only">
-        <caption>Homes with a guest in, the next 14 nights</caption>
-        <tbody>
-          {nights.map((n) => (
-            <tr key={n.date}>
-              <th>{DAY_LONG.format(at(n.date))}</th>
-              <td>
-                {n.occupied} of {homes}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
-  );
-}
-
-function MoneyCard({ money, locale }: { money: NonNullable<Glance['money']>; locale: string }) {
-  const fmt = (minor: number) =>
-    formatMoney({ amountMinor: minor, currency: money.currency }, locale).replace(/\.00$/, '');
-  const change =
-    money.lastMonthMinor > 0
-      ? Math.round(((money.thisMonthMinor - money.lastMonthMinor) / money.lastMonthMinor) * 100)
-      : null;
-  return (
-    <section aria-labelledby="money" className="flex flex-col gap-4 rounded-2xl border border-hairline p-5">
-      <h2 id="money" className="font-serif text-[20px] text-ink">
-        Booked
-      </h2>
-      <div>
-        <p className="text-[12.5px] text-slate">Stays arriving this month</p>
-        <p className="font-serif text-[32px] leading-tight text-ink tnum">{fmt(money.thisMonthMinor)}</p>
-        <p className="text-[12.5px] text-mist">
-          {change === null
-            ? 'Nothing last month to compare with'
-            : `${change >= 0 ? 'Up' : 'Down'} ${Math.abs(change)}% on last month (${fmt(money.lastMonthMinor)})`}
-        </p>
-      </div>
-      <div className="border-t border-hairline pt-3">
-        <p className="text-[12.5px] text-slate">Arriving in the next 30 days</p>
-        <p className="font-serif text-[24px] leading-tight text-ink tnum">{fmt(money.next30Minor)}</p>
-      </div>
-      <p className="mt-auto text-[11.5px] leading-snug text-mist">
-        Totals from confirmed bookings, by arrival date.
-      </p>
-    </section>
-  );
-}
+import { DailyOverview, RevenueOverview, TrendsOverview } from './today/Overview.tsx';
 
 type ListId = 'attention' | 'arriving' | 'leaving' | 'cleans';
 
@@ -321,76 +159,53 @@ function useTodayParts() {
 }
 
 /**
- * Today, kept short (Alpha, 26 Oct 2026: "keep it minimal and basic", like Airbnb's): a few numbers,
- * then one row of tabs (needs attention, checking out, checking in, cleans), each showing four
- * cards and "View all" for the rest on a page of its own, then how full the next two weeks are.
+ * Today, after Guesty's dashboard (Alpha, 29 Oct 2026): welcome, the daily overview (who is in, who
+ * is out, turnovers, who is staying), revenue for a month against the one before, the trend of the
+ * coming days, then the day's lists, four cards each with "View all" for the rest.
  */
 export function Today() {
-  const { entry, workspace, today, now, d, dirty, counts, lists } = useTodayParts();
+  const { orgId, entry, workspace, today, now, d, dirty, counts, lists } = useTodayParts();
+  const me = useMe();
   const timeZone = workspace.data?.settings.timeZone ?? 'Europe/London';
   const locale = workspace.data?.settings.locale ?? 'en-GB';
   const [picked, setPicked] = useState<ListId | null>(null);
   const tab = picked ?? lists.find((l) => counts[l] > 0) ?? 'leaving';
-  const g = d?.glance;
-  const tonight = g?.nights[0]?.occupied ?? d?.staying ?? 0;
+  const name = me.data?.user.fullName?.trim();
+  const first = name && !name.includes('@') ? name.split(/\s+/)[0] : null;
+  const canSeeProperties = can(entry.role, 'properties.read');
 
   return (
     <>
       <header className="mb-8">
-        <p className="text-[13.5px] text-slate">
-          {greeting(timeZone)}, {todayTitle(locale, timeZone)}
-        </p>
-        <h1 className="mt-1 font-serif text-[34px] leading-[1.1] font-normal tracking-[-0.01em] text-ink">
-          {workspace.data?.brand.displayName ?? entry.organisationName}
+        <h1 className="font-semibold tracking-[-0.02em] text-[26px] leading-[1.2] text-ink">
+          Welcome back{first ? `, ${first}` : ''}
         </h1>
+        <p className="mt-1 text-[14px] text-slate">
+          {todayTitle(locale, timeZone)} · {workspace.data?.brand.displayName ?? entry.organisationName}
+        </p>
       </header>
 
-      {today.isPending ? (
-        <span className="inline-flex items-center gap-2 text-[14px] text-slate">
-          <Spinner size={16} /> Loading today
-        </span>
-      ) : today.error && !d ? (
-        <Notice tone="urgent">
-          {today.error instanceof ApiError ? today.error.message : 'Today couldn’t be loaded. Try again.'}
-        </Notice>
-      ) : d && g ? (
-        <div className="flex flex-col gap-10">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Stat
-              label="In tonight"
-              value={
-                <>
-                  {tonight}
-                  <span className="text-[18px] text-mist"> / {g.homes}</span>
-                </>
-              }
-              detail={g.homes ? `${Math.round((tonight / g.homes) * 100)}% of homes` : 'No homes yet'}
-              to="/calendar"
-            />
-            <Stat
-              label="Jobs today"
-              value={g.jobs.open}
-              detail={
-                g.jobs.unassigned
-                  ? `${g.jobs.unassigned} with nobody on it`
-                  : `${g.jobs.doneToday} done today`
-              }
-              to="/tasks"
-              tone={g.jobs.unassigned ? 'pending' : undefined}
-            />
-            <Stat
-              label="Guests waiting"
-              value={g.awaitingReply}
-              detail={g.awaitingReply ? 'for a reply' : 'Everyone answered'}
-              to="/inbox"
-              tone={g.awaitingReply ? 'pending' : undefined}
-            />
-            <Stat label="New bookings" value={g.newBookings} detail="in the last 7 days" to="/reservations" />
-          </div>
+      <div className="flex flex-col gap-10">
+        <DailyOverview orgId={orgId} canSeeProperties={canSeeProperties} />
 
+        {can(entry.role, 'reservations.read') ? (
+          <RevenueOverview orgId={orgId} locale={locale} thisMonth={todayIn(timeZone).slice(0, 7)} />
+        ) : null}
+
+        <TrendsOverview orgId={orgId} />
+
+        {today.isPending ? (
+          <span className="inline-flex items-center gap-2 text-[14px] text-slate">
+            <Spinner size={16} /> Loading today
+          </span>
+        ) : today.error && !d ? (
+          <Notice tone="urgent">
+            {today.error instanceof ApiError ? today.error.message : 'Today couldn’t be loaded. Try again.'}
+          </Notice>
+        ) : d ? (
           <section aria-labelledby="your-day">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <h2 id="your-day" className="font-serif text-[24px] text-ink">
+              <h2 id="your-day" className="font-semibold tracking-[-0.015em] text-[20px] text-ink">
                 Your day
               </h2>
               {counts[tab] > PREVIEW ? (
@@ -430,13 +245,8 @@ export function Today() {
               )}
             </div>
           </section>
-
-          <div className={`grid gap-6 ${g.money ? 'lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]' : ''}`}>
-            <OccupancyChart nights={g.nights} homes={g.homes} />
-            {g.money ? <MoneyCard money={g.money} locale={locale} /> : null}
-          </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </>
   );
 }

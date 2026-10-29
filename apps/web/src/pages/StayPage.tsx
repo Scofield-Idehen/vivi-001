@@ -30,7 +30,7 @@ function placeOf(f: GuestField): 'code' | 'wifi_name' | 'wifi_password' | 'instr
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="rounded-2xl bg-paper px-5 py-4">
-      <h2 className="mb-2 font-serif text-[20px] font-normal leading-tight text-ink">{title}</h2>
+      <h2 className="mb-2 font-semibold tracking-[-0.015em] text-[18px] leading-tight text-ink">{title}</h2>
       <div className="flex flex-col gap-2 text-[16px] leading-relaxed text-ink">{children}</div>
     </section>
   );
@@ -42,7 +42,9 @@ function Code({ label, value, from }: { label: string; value: string | null; fro
     <div className="rounded-xl bg-canvas px-4 py-3">
       <p className="text-[13px] text-slate">{label}</p>
       {value ? (
-        <p className="mt-0.5 font-serif text-[30px] leading-none tracking-[0.08em] text-ink tnum">{value}</p>
+        <p className="mt-0.5 font-semibold tracking-[-0.015em] text-[26px] leading-none tracking-[0.08em] text-ink tnum">
+          {value}
+        </p>
       ) : (
         <p className="mt-0.5 text-[15px] text-slate">
           {from ? `Appears here on ${long(from)}.` : 'No longer shown now the stay has ended.'}
@@ -89,7 +91,7 @@ export function StayPage() {
     const gone = stay.error instanceof ApiError && stay.error.status === 404;
     return (
       <main className="mx-auto flex min-h-dvh max-w-[560px] flex-col justify-center gap-3 px-5 text-center">
-        <h1 className="font-serif text-[28px] font-normal text-ink">
+        <h1 className="font-semibold tracking-[-0.015em] text-[26px] text-ink">
           {gone ? 'This link isn’t for a current stay' : 'The page couldn’t be loaded'}
         </h1>
         <p className="text-[16px] text-slate">
@@ -135,7 +137,9 @@ export function StayPage() {
         ) : null}
 
         <div>
-          <h1 className="font-serif text-[30px] font-normal leading-[1.1] text-ink">{p.title ?? p.name}</h1>
+          <h1 className="font-semibold tracking-[-0.015em] text-[26px] leading-[1.1] text-ink">
+            {p.title ?? p.name}
+          </h1>
           <p className="mt-2 text-[16px] text-slate">
             {firstName ? `${firstName}, your stay: ` : 'Your stay: '}
             <span className="text-ink">

@@ -211,7 +211,7 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
           ) : null}
 
           <div className="mt-6 flex max-w-[560px] flex-col gap-4 rounded-2xl border border-hairline bg-canvas p-4">
-            <h3 className="font-serif text-[20px] text-ink">Invite a colleague</h3>
+            <h3 className="font-semibold tracking-[-0.015em] text-[18px] text-ink">Invite a colleague</h3>
             <TextField
               label="Name"
               value={name}

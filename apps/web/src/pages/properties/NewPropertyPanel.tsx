@@ -118,7 +118,7 @@ function Question({
       <h3
         ref={headingRef}
         tabIndex={-1}
-        className="font-serif text-[30px] leading-[1.1] font-light tracking-[-0.012em] text-ink outline-none md:text-[38px]"
+        className="font-semibold tracking-[-0.015em] text-[26px] leading-[1.1] font-light tracking-[-0.012em] text-ink outline-none md:text-[38px]"
       >
         {children}
       </h3>
@@ -129,7 +129,12 @@ function Question({
 
 function SubQuestion({ children, first = false }: { children: ReactNode; first?: boolean }) {
   return (
-    <h4 className={cx('font-serif text-[23px] leading-tight font-normal text-ink', first ? 'mt-9' : 'mt-12')}>
+    <h4
+      className={cx(
+        'font-semibold tracking-[-0.015em] text-[18px] leading-tight text-ink',
+        first ? 'mt-9' : 'mt-12',
+      )}
+    >
       {children}
     </h4>
   );
@@ -571,7 +576,7 @@ function Panel({ orgId, organisationName }: { orgId: string; organisationName: s
         <h3
           ref={heading}
           tabIndex={-1}
-          className="mt-6 font-serif text-[34px] leading-[1.1] font-light text-ink outline-none md:text-[42px]"
+          className="mt-6 font-semibold tracking-[-0.02em] text-[28px] leading-[1.15] text-ink outline-none md:text-[34px]"
         >
           {property.name} is added
         </h3>

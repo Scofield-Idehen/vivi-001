@@ -57,9 +57,6 @@ export function WorkspacePage() {
               <Row label="Time zone">{data.settings.timeZone}</Row>
               <Row label="Country">{data.settings.countryCode}</Row>
               <Row label="Your role">{ROLE_LABELS[entry.role]}</Row>
-              <Row label="Your name">
-                <YourName current={me.data?.user.fullName ?? null} />
-              </Row>
             </dl>
           </section>
           <section aria-labelledby="brand">
@@ -106,7 +103,7 @@ export function WorkspacePage() {
 }
 
 /** What the team sees instead of your email: on tasks, in the Inbox, on photo stamps. */
-function YourName({ current }: { current: string | null }) {
+export function YourName({ current }: { current: string | null }) {
   const update = useUpdateMe();
   const [editing, setEditing] = useState(current === null);
   const [draft, setDraft] = useState(current ?? '');

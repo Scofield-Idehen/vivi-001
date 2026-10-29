@@ -3,6 +3,25 @@
 Newest first. Each entry says what was decided and why. Product decisions also live in the
 V-01 Build Playbook and Design Roadmap.
 
+## 2026-10-29
+
+- **Today follows Guesty's dashboard (Alpha, 29 Oct 2026: "see how today has notifications profile
+  and see how it shows the checkin and checkout / see how revenue is tracked … trends overview").**
+  "Welcome back", then a daily overview for today, tomorrow or the next 7 days: checked in and
+  checked out as done/total, the turnovers with the shortest gap, who is staying and units needing
+  cleaning. A guest counts as checked in (or out) once their check-in (check-out) time has passed:
+  the time agreed for the stay, or the home's usual one (Alpha: "could we track 0/11 with when the
+  guest is supposed to check in"). Revenue for a picked month against the month before: average
+  daily rate day by day, and total revenue by week; each booking's money is spread over its nights.
+  Trends for the next 7 or 30 days: check-ins, check-outs, turnovers, occupancy. Endpoints
+  /v1/overview, /v1/overview/revenue (bookings readers only) and /v1/overview/trends.
+- **A top bar on every page: the notifications bell (what needs someone) and the person's menu
+  (name, workspace and role, My profile, Sign out).** The person and sign-out leave the side rail.
+  /profile is the person's own page: name, email, when they signed in, their companies.
+- **One typeface, Inter, for headings and text (Alpha: "our font also lack professionality … the
+  guesty font is better").** Fraunces and Geist are gone; headings are Inter semibold with slightly
+  tight tracking, on a smaller, regular scale (18 / 20 / 26 / 30 px).
+
 ## 2026-10-26
 
 - **Today is short (Alpha, 26 Oct 2026: "the today has a long list of everything … should show like
