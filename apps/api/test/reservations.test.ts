@@ -573,18 +573,18 @@ describe('money on a booking, and cancelling one', () => {
   let id: string;
 
   it('keeps extra charges and payments, and works out the balance', async () => {
-    id = (
-      await call('POST', '/v1/reservations', {
-        as: asA(),
-        body: {
-          propertyId: lodge,
-          checkIn: day(70),
-          checkOut: day(72),
-          guestName: 'Pat Balance',
-          totalMinor: 30000,
-        },
-      })
-    ).body.id;
+    const made = await call('POST', '/v1/reservations', {
+      as: asA(),
+      body: {
+        propertyId: lodge,
+        checkIn: day(70),
+        checkOut: day(72),
+        guestName: 'Pat Balance',
+        totalMinor: 30000,
+      },
+    });
+    expect(made.status, JSON.stringify(made.body)).toBe(201);
+    id = made.body.id;
     const fresh = (await call('GET', `/v1/reservations/${id}`, { as: asA() })).body;
     expect(fresh).toMatchObject({
       charges: [],
