@@ -125,7 +125,8 @@ export function fieldRoutes(app: FastifyInstance, deps: { scope: RequestScope; b
             })
             .returning();
           if (!row) throw new Error('insert returned nothing');
-          return reply.code(201).send(toField(row));
+          reply.code(201);
+          return toField(row);
         } catch (error) {
           if (pgConstraint(error) === 'custom_fields_org_name_key') {
             throw new HttpError(409, 'field_exists', `There is already a field called "${req.body.name}".`);

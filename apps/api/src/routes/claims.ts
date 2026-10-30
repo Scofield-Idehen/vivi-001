@@ -382,7 +382,10 @@ export function claimRoutes(
           .from(claims)
           .where(eq(claims.reservationId, booking.id));
         // One claim per booking: asking again opens the one there is.
-        if (existing) return reply.code(200).send(await loadClaim(tx, existing.id, deps.files));
+        if (existing) {
+          reply.code(200);
+          return await loadClaim(tx, existing.id, deps.files);
+        }
         const next = await nextCheckIn(tx, booking.propertyId, booking.checkOut);
         const [row] = await tx
           .insert(claims)
@@ -395,7 +398,8 @@ export function claimRoutes(
           })
           .returning({ id: claims.id });
         if (!row) throw new Error('Inserting the claim returned nothing.');
-        return reply.code(201).send(await loadClaim(tx, row.id, deps.files));
+        reply.code(201);
+        return await loadClaim(tx, row.id, deps.files);
       }),
   );
 
@@ -456,7 +460,8 @@ export function claimRoutes(
           amountMinor: req.body.amountMinor,
           position: pos?.n ?? 0,
         });
-        return reply.code(201).send(await loadClaim(tx, claim.id, deps.files));
+        reply.code(201);
+        return await loadClaim(tx, claim.id, deps.files);
       }),
   );
 
@@ -557,7 +562,8 @@ export function claimRoutes(
           bytes: req.body.bytes,
           uploadedBy: ctx.userId,
         });
-        return reply.code(201).send(await loadClaim(tx, claim.id, deps.files));
+        reply.code(201);
+        return await loadClaim(tx, claim.id, deps.files);
       }),
   );
 

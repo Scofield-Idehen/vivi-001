@@ -260,7 +260,8 @@ export function inboxRoutes(app: FastifyInstance, deps: { scope: RequestScope })
           .set({ unreadCount: 0, status: 'open' })
           .where(eq(messageThreads.id, thread.id));
         const fresh = await threadOr404(tx, thread.id);
-        return reply.code(201).send({ thread: fresh, messages: await loadMessages(tx, thread.id) });
+        reply.code(201);
+        return { thread: fresh, messages: await loadMessages(tx, thread.id) };
       }),
   );
 
@@ -315,7 +316,8 @@ export function inboxRoutes(app: FastifyInstance, deps: { scope: RequestScope })
           })
           .returning();
         if (!row) throw new Error('Inserting the template returned nothing.');
-        return reply.code(201).send(toTemplate(row));
+        reply.code(201);
+        return toTemplate(row);
       }),
   );
 
@@ -372,7 +374,8 @@ export function inboxRoutes(app: FastifyInstance, deps: { scope: RequestScope })
         if (current.trigger !== 'manual')
           throw new HttpError(400, 'standard_template', 'An automatic message is switched off, not removed.');
         await tx.delete(messageTemplates).where(eq(messageTemplates.id, req.params.id));
-        return reply.code(204).send(null);
+        reply.code(204);
+        return null;
       }),
   );
 }

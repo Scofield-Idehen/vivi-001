@@ -373,7 +373,8 @@ export function taskRoutes(
         if (!row) throw new Error('Inserting the task returned nothing.');
         const [task] = await loadTasks(tx, eq(tasks.id, row.id), 'asc', deps.photos);
         if (!task) throw new Error('The task was not found after insert.');
-        return reply.code(201).send(task);
+        reply.code(201);
+        return task;
       }),
   );
 
@@ -471,7 +472,8 @@ export function taskRoutes(
         if (!row) throw new Error('Inserting the report returned nothing.');
         const [task] = await loadTasks(tx, eq(tasks.id, row.id), 'asc', deps.photos);
         if (!task) throw new Error('The report was not found after insert.');
-        return reply.code(201).send(task);
+        reply.code(201);
+        return task;
       }),
   );
 
@@ -546,7 +548,8 @@ export function taskRoutes(
         });
         const [full] = await loadTasks(tx, eq(tasks.id, task.id), 'asc', deps.photos);
         if (!full) throw new Error('The task was not found after adding the photo.');
-        return reply.code(201).send(full);
+        reply.code(201);
+        return full;
       }),
   );
 

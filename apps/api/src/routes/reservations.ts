@@ -261,7 +261,8 @@ export function reservationRoutes(app: FastifyInstance, deps: { scope: RequestSc
           throw error;
         }
         if (!row) throw new Error('Inserting the booking returned nothing.');
-        return reply.code(201).send(await loadReservation(tx, row.id));
+        reply.code(201);
+        return await loadReservation(tx, row.id);
       }),
   );
 
@@ -334,7 +335,8 @@ export function reservationRoutes(app: FastifyInstance, deps: { scope: RequestSc
           amountMinor: req.body.amountMinor,
           createdBy: ctx.userId,
         });
-        return reply.code(201).send(await loadReservation(tx, req.params.id));
+        reply.code(201);
+        return await loadReservation(tx, req.params.id);
       }),
   );
 
@@ -375,7 +377,8 @@ export function reservationRoutes(app: FastifyInstance, deps: { scope: RequestSc
           note: req.body.note || null,
           recordedBy: ctx.userId,
         });
-        return reply.code(201).send(await loadReservation(tx, req.params.id));
+        reply.code(201);
+        return await loadReservation(tx, req.params.id);
       }),
   );
 
