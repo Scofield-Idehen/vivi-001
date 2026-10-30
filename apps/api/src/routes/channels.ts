@@ -181,7 +181,8 @@ export function channelRoutes(app: FastifyInstance, deps: { scope: RequestScope 
             .returning({ id: channelAccounts.id });
           const [account] = await accountsOf(tx, row?.id);
           if (!account) throw new Error('insert returned nothing');
-          return reply.code(201).send(account);
+          reply.code(201);
+          return account;
         } catch (error) {
           if (pgConstraint(error) === 'channel_accounts_org_label_key') {
             throw new HttpError(
@@ -384,7 +385,8 @@ export function channelRoutes(app: FastifyInstance, deps: { scope: RequestScope 
           }
           throw error;
         }
-        return reply.code(201).send({ links: await linksOf(tx, property.id) });
+        reply.code(201);
+        return { links: await linksOf(tx, property.id) };
       }),
   );
 

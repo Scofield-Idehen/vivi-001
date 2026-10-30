@@ -206,7 +206,8 @@ export function ownerRoutes(
           })
           .returning({ id: owners.id });
         if (!row) throw new Error('Inserting the owner returned nothing.');
-        return reply.code(201).send(await oneOwner(tx, row.id));
+        reply.code(201);
+        return await oneOwner(tx, row.id);
       }),
   );
 
@@ -228,7 +229,8 @@ export function ownerRoutes(
       // Their homes stay; they just have nobody recorded as owner.
       await tx.update(properties).set({ ownerId: null }).where(eq(properties.ownerId, req.params.id));
       await tx.delete(owners).where(eq(owners.id, req.params.id));
-      return reply.code(204).send();
+      reply.code(204);
+      return null;
     }),
   );
 
@@ -392,7 +394,8 @@ export function ownerRoutes(
           })
           .returning({ id: expenses.id });
         if (!row) throw new Error('Inserting the expense returned nothing.');
-        return reply.code(201).send(await oneExpense(tx, row.id, deps.files));
+        reply.code(201);
+        return await oneExpense(tx, row.id, deps.files);
       }),
   );
 
@@ -421,7 +424,8 @@ export function ownerRoutes(
       if (!e) throw new HttpError(404, 'expense_not_found', 'That expense is not in this workspace.');
       await tx.delete(expenses).where(eq(expenses.id, req.params.id));
       if (e.path) await deps.files.remove(e.path).catch(() => {});
-      return reply.code(204).send();
+      reply.code(204);
+      return null;
     }),
   );
 

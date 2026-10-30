@@ -122,7 +122,8 @@ export function memberRoutes(
         }
         const invitation = (await openInvitations(tx)).find((i) => i.id === row.id);
         if (!invitation) throw new Error('The invitation was not found after insert.');
-        return reply.code(201).send({ invitation, email: sent, reason: sent === 'none' ? reason : null });
+        reply.code(201);
+        return { invitation, email: sent, reason: sent === 'none' ? reason : null };
       }),
   );
 
@@ -137,7 +138,8 @@ export function memberRoutes(
           .returning({ id: invitations.id });
         if (gone.length === 0)
           throw new HttpError(404, 'invitation_not_found', 'That invitation is no longer open.');
-        return reply.code(204).send(null);
+        reply.code(204);
+        return null;
       }),
   );
 
@@ -181,7 +183,8 @@ export function memberRoutes(
         await tx
           .delete(memberships)
           .where(and(eq(memberships.organisationId, ctx.orgId), eq(memberships.userId, req.params.userId)));
-        return reply.code(204).send(null);
+        reply.code(204);
+        return null;
       }),
   );
 }

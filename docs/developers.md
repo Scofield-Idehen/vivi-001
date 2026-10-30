@@ -263,3 +263,10 @@ Vivistays' name. Production and the Firebase hosting are still to come. The step
   read back as the adapter expects (prices as decimals, `max_stay` 0 for no limit).
 
 Design sign-off: Alpha and Alessio, at every design gate.
+
+## Replies leave after the transaction commits
+
+Inside `scope.inOrg(...)`, never call `reply.send()`. Set the status with `reply.code(201)` and
+return the body; Fastify sends it once the transaction has committed. Sending from inside the
+transaction lets the reply reach the browser before the row is saved, so the next request can miss
+it (this was the cause of tests that failed now and then, 30 Oct 2026). A test checks every route.
