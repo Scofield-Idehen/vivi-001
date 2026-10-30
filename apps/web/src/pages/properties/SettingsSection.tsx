@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { SelectField } from '../../components/fields.tsx';
 import { Button, Notice } from '../../components/ui.tsx';
-import { ApiError, useArchiveProperty, useTeam, useUpdateProperty } from '../../lib/api.ts';
+import { ApiError, useArchiveProperty, useOwners, useTeam, useUpdateProperty } from '../../lib/api.ts';
 import { V01 } from '../../lib/format.ts';
 import { Section } from './Section.tsx';
 
@@ -32,6 +32,7 @@ export function SettingsSection({
   const archive = useArchiveProperty(orgId);
   const update = useUpdateProperty(orgId, d.id);
   const team = useTeam(canEdit ? orgId : null);
+  const owners = useOwners(orgId, canEdit);
   const navigate = useNavigate();
   const [asking, setAsking] = useState(false);
   // The field team first, then everyone else: whoever usually does the check-out clean.
@@ -59,6 +60,20 @@ export function SettingsSection({
       </p>
       <div className="mt-8 max-w-[420px]">
         {canEdit ? (
+          <div className="mb-4">
+            <SelectField
+              label="Owner"
+              value={d.owner?.id ?? ''}
+              onChange={(v) => update.mutate({ ownerId: v || null })}
+              options={[
+                { value: '', label: 'Nobody recorded' },
+                ...(owners.data?.owners ?? []).map((o) => ({ value: o.id, label: o.name })),
+              ]}
+              hint="Their month shows what this home earns and the expenses charged to them. Add owners on the Owners page."
+            />
+          </div>
+        ) : null}
+        {canEdit ? (
           <SelectField
             label="Usual cleaner"
             value={d.cleaner?.id ?? ''}
@@ -85,6 +100,7 @@ export function SettingsSection({
           </div>
         ) : (
           <dl className="m-0">
+            <Fact label="Owner">{d.owner?.name ?? <span className="text-mist">Nobody recorded</span>}</Fact>
             <Fact label="Usual cleaner">
               {d.cleaner?.name ?? <span className="text-mist">Nobody yet</span>}
             </Fact>

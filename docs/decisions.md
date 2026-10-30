@@ -5,6 +5,19 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-30
 
+- **Owners and expenses (Alpha, 30 Oct 2026: "lets build it").** An owner has a name, company,
+  email, phone, notes and a management fee (a percentage of what their homes earn); a home points
+  at its owner, set on the owner's page ("Choose homes") or the property's Settings. An owner's
+  page shows their month: what each home earned (each confirmed booking spread over its nights),
+  the fee, the expenses charged to them, and what's left for them; the draft of the statement
+  that comes next. An expense is money spent on a home, or on the business when no home is given:
+  day, what, kind (cleaning, laundry, repairs, supplies, utilities, furnishing, other), who was
+  paid, amount, and who bears it (charged to the owner, or the company keeps it; always the
+  company without a home), with one receipt kept as uploaded. An expense can be for a damage
+  claim; the claim shows what has been spent putting it right and its download carries the
+  receipts. Admins, operations and accounts see and change both; guest comms and the field team
+  don't. New menu: E for an expense, O for an owner.
+
 - **Claims, built in V-01, one per booking (design roadmap Phase 2; Alpha, 30 Oct 2026: "lets
   build").** A claim holds what was damaged and what each thing costs, a short account, and the
   evidence: the photos from the last clean before the guest arrived and from every job at the home

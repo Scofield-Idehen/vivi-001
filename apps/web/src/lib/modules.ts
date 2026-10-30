@@ -8,9 +8,11 @@ import {
   IconFileInvoice,
   IconHome,
   IconInbox,
+  IconReceipt2,
   IconSettings,
   IconStar,
   IconSun,
+  IconUserDollar,
   type TablerIcon,
 } from '@tabler/icons-react';
 
@@ -82,6 +84,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
     label: 'Portfolio',
     items: [
       { path: 'properties', label: 'Properties', icon: IconHome, built: true },
+      { path: 'owners', label: 'Owners', icon: IconUserDollar, built: true },
       { path: 'channels', label: 'Channels & sync', icon: IconArrowsExchange, built: true },
       {
         path: 'reviews',
@@ -107,6 +110,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
   {
     label: 'Money',
     items: [
+      { path: 'expenses', label: 'Expenses', icon: IconReceipt2, built: true },
       {
         path: 'bookings',
         label: 'Bookings & invoices',

@@ -45,6 +45,9 @@ import {
   countBeds,
   type DailyOverview,
   DamageReportSchema,
+  EXPENSE_CATEGORIES,
+  type Expense,
+  type ExpenseList,
   eachNight,
   FIELDS_MAX,
   formatMoney,
@@ -72,6 +75,9 @@ import {
   nightRules,
   nightsBetween,
   type OverviewRange,
+  type Owner,
+  type OwnerList,
+  type OwnerMonth,
   type Payment,
   PaymentCreateSchema,
   type Permission,
@@ -234,6 +240,9 @@ interface DemoOperator {
   taskTemplates?: TaskTemplate[];
   /** Damage claims, one per booking. Missing in older saved states. */
   claims?: DemoClaim[];
+  /** Owners (homes point at them through `owner` on the property) and money spent. Missing in older saved states. */
+  owners?: Omit<Owner, 'homes'>[];
+  expenses?: DemoExpense[];
   /** Open invitations to the team. Missing in older saved states. */
   invitations?: Invitation[];
   /** The Inbox: a thread per booking, and the automatic messages and saved replies. Missing in older saved states. */
@@ -398,6 +407,7 @@ function listingDefaults(): Omit<PropertyDetail, keyof Property | 'updatedAt'> {
     links: [],
     cleaner: null,
     maintainer: null,
+    owner: null,
   };
 }
 
@@ -2636,6 +2646,7 @@ const shortDay = (date: string) => SHORT_DAY.format(new Date(`${date}T12:00:00Z`
 
 /** GET /v1/today: arrivals, departures, cleans due and what needs a person, from the demo's own state. */
 function demoToday(operator: DemoOperator, role: WorkspaceRole): Today {
+  settleOwners(operator);
   const today = todayIn(operator.workspace.settings.timeZone);
   const seesGuests = can(role, 'reservations.read');
   const seesChannels = can(role, 'channels.read');
@@ -3265,6 +3276,11 @@ async function claimView(operator: DemoOperator, c: DemoClaim): Promise<Claim> {
       .filter((t) => t.source === 'report')
       .map((t) => ({ taskId: t.id, day: t.dueOn, what: t.notes, by: t.assignee?.name ?? 'The field team' })),
     nextCheckIn: next,
+    costs: await Promise.all(
+      settleExpenses(operator)
+        .filter((e) => e.claimId === c.id)
+        .map((e) => expenseView(operator, e)),
+    ),
   };
 }
 
@@ -3459,6 +3475,364 @@ async function demoClaims(
     await deleteDemoPhoto(file.id);
     touch();
     return claimView(operator, claim);
+  }
+  throw new ApiError(404, 'not_found', 'Nothing here.');
+}
+
+interface DemoExpense extends Omit<Expense, 'propertyName' | 'ownerName' | 'receipt'> {
+  receipt: { fileName: string; contentType: string; bytes: number; url: string } | null;
+}
+
+/** The demo's owners, the first time from the "Owner: …" tags on the sample homes. */
+function settleOwners(operator: DemoOperator): Omit<Owner, 'homes'>[] {
+  if (operator.owners) return operator.owners;
+  operator.owners = [];
+  const known: Record<string, { name: string; company: string | null; fee: number; email: string }> = {
+    Ellis: { name: 'Tom Ellis', company: null, fee: 2000, email: 'tom.ellis@example.com' },
+    Patel: {
+      name: 'Anita Patel',
+      company: 'Patel Lettings Ltd',
+      fee: 1800,
+      email: 'anita@patel-lettings.example',
+    },
+  };
+  for (const p of operator.properties) {
+    const tag = p.tags?.find((t) => t.startsWith('Owner: '))?.slice(7);
+    if (!tag) continue;
+    let owner = operator.owners.find((o) => o.notes === `demo:${tag}`);
+    if (!owner) {
+      const k = known[tag] ?? {
+        name: `${tag} family`,
+        company: null,
+        fee: 2000,
+        email: `${tag.toLowerCase()}@example.com`,
+      };
+      owner = {
+        id: crypto.randomUUID(),
+        name: k.name,
+        company: k.company,
+        email: k.email,
+        phone: null,
+        feeBasisPoints: k.fee,
+        notes: `demo:${tag}`,
+        createdAt: new Date().toISOString(),
+      };
+      operator.owners.push(owner);
+    }
+    p.owner = { id: owner.id, name: owner.name };
+  }
+  for (const o of operator.owners) if (o.notes?.startsWith('demo:')) o.notes = null;
+  save();
+  return operator.owners;
+}
+
+function ownerView(operator: DemoOperator, o: Omit<Owner, 'homes'>): Owner {
+  return {
+    ...o,
+    homes: operator.properties
+      .filter((p) => p.owner?.id === o.id)
+      .map((p) => ({ id: p.id, name: p.name }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  };
+}
+
+/** A few expenses this month and last, the first time; the claim's repair is one of them. */
+function settleExpenses(operator: DemoOperator): DemoExpense[] {
+  settleOwners(operator);
+  const claims = settleClaims(operator);
+  if (operator.expenses) return operator.expenses;
+  operator.expenses = [];
+  const today = todayIn(operator.workspace.settings.timeZone);
+  const currency = operator.workspace.settings.currency;
+  const [p0, p1, p2] = operator.properties;
+  const add = (
+    p: PropertyDetail | undefined,
+    daysAgo: number,
+    category: Expense['category'],
+    description: string,
+    vendor: string | null,
+    amountMinor: number,
+    chargeTo: Expense['chargeTo'] = 'owner',
+    claimId: string | null = null,
+  ) =>
+    operator.expenses?.push({
+      id: crypto.randomUUID(),
+      spentOn: addDays(today, -daysAgo),
+      category,
+      description,
+      vendor,
+      amountMinor,
+      currency,
+      chargeTo: p ? chargeTo : 'company',
+      propertyId: p?.id ?? null,
+      claimId,
+      receipt: null,
+      createdBy: 'Demo user',
+      createdAt: new Date().toISOString(),
+    });
+  add(p0, 2, 'supplies', 'Restock: toiletries, coffee, bin bags', 'Costco', 4280);
+  add(p0, 9, 'laundry', 'Linen service, two changes', 'Fresh Linen Co', 6400);
+  add(p1, 5, 'repairs', 'Boiler pressure reset, call-out', 'Harbour Plumbing', 9500);
+  add(p2, 12, 'cleaning', 'Deep clean after a long stay', 'Spotless Homes', 12000);
+  add(undefined, 6, 'other', 'Key safes, three spare', 'Screwfix', 8997);
+  add(p1, 35, 'furnishing', 'Bedside lamps (2)', 'IKEA', 5800);
+  const claim = claims[0];
+  const stay = claim ? operator.calendar.stays.find((x) => x.id === claim.reservationId) : undefined;
+  if (claim && stay) {
+    const home = operator.properties.find((p) => p.id === stay.propertyId);
+    add(home, 1, 'repairs', 'Rug deep clean (wine)', 'Spotless Homes', 8500, 'company', claim.id);
+  }
+  save();
+  return operator.expenses;
+}
+
+async function expenseView(operator: DemoOperator, e: DemoExpense): Promise<Expense> {
+  const home = e.propertyId ? operator.properties.find((p) => p.id === e.propertyId) : undefined;
+  return {
+    ...e,
+    propertyName: home?.name ?? null,
+    ownerName: home?.owner?.name ?? null,
+    receipt: e.receipt ? { ...e.receipt, url: (await demoUrl(e.receipt.url)) ?? '' } : null,
+  };
+}
+
+function monthRange(month: string) {
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+  return { first: `${month}-01`, next: `${next}-01` };
+}
+
+function findExpense(operator: DemoOperator, id: string): DemoExpense {
+  const e = settleExpenses(operator).find((x) => x.id === id);
+  if (!e) throw new ApiError(404, 'expense_not_found', 'That expense is not in this workspace.');
+  return e;
+}
+
+export async function demoSetReceipt(
+  orgId: string | null,
+  expenseId: string,
+  file: File,
+  contentType: string,
+): Promise<Expense> {
+  const { operator } = access(orgId, 'expenses.write');
+  const e = findExpense(operator, expenseId);
+  const id = crypto.randomUUID();
+  await putDemoPhoto(id, file);
+  if (e.receipt?.url.startsWith('demo-photo:')) await deleteDemoPhoto(e.receipt.url.slice(11));
+  e.receipt = {
+    fileName: file.name.slice(0, 200),
+    contentType: contentType || 'application/octet-stream',
+    bytes: file.size,
+    url: `demo-photo:${id}`,
+  };
+  save();
+  return expenseView(operator, e);
+}
+
+async function demoMoney(
+  orgId: string | null | undefined,
+  method: string,
+  path: string,
+  body: unknown,
+): Promise<unknown> {
+  const url = new URL(path, 'https://demo.invalid');
+  const parts = url.pathname.split('/').filter(Boolean);
+  const today = () => todayIn(findOperator(orgId ?? '')?.workspace.settings.timeZone ?? 'Europe/London');
+  if (parts[1] === 'owners') {
+    const { operator } = access(orgId, method === 'GET' ? 'owners.read' : 'owners.write');
+    const list = settleOwners(operator);
+    if (parts.length === 2 && method === 'GET') {
+      return {
+        owners: list.map((o) => ownerView(operator, o)).sort((a, b) => a.name.localeCompare(b.name)),
+        unowned: operator.properties
+          .filter((p) => !p.owner)
+          .map((p) => ({ id: p.id, name: p.name }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      } satisfies OwnerList;
+    }
+    const clean = (b: Record<string, unknown>) => {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(b)) {
+        if (v === undefined) continue;
+        out[k] = typeof v === 'string' ? (v.trim() ? v.trim() : null) : v;
+      }
+      return out;
+    };
+    if (parts.length === 2 && method === 'POST') {
+      const b = clean(body as Record<string, unknown>);
+      if (!b.name) throw new ApiError(400, 'invalid_request', 'An owner needs a name.');
+      const o = {
+        id: crypto.randomUUID(),
+        name: b.name as string,
+        company: (b.company as string | null) ?? null,
+        email: (b.email as string | null) ?? null,
+        phone: (b.phone as string | null) ?? null,
+        feeBasisPoints: (b.feeBasisPoints as number | undefined) ?? 0,
+        notes: (b.notes as string | null) ?? null,
+        createdAt: new Date().toISOString(),
+      };
+      list.push(o);
+      save();
+      return ownerView(operator, o);
+    }
+    const o = list.find((x) => x.id === parts[2]);
+    if (!o) throw new ApiError(404, 'owner_not_found', 'That owner is not in this workspace.');
+    if (parts.length === 3 && method === 'PATCH') {
+      Object.assign(o, clean(body as Record<string, unknown>));
+      for (const p of operator.properties) if (p.owner?.id === o.id) p.owner = { id: o.id, name: o.name };
+      save();
+      return ownerView(operator, o);
+    }
+    if (parts.length === 3 && method === 'DELETE') {
+      for (const p of operator.properties) if (p.owner?.id === o.id) p.owner = null;
+      operator.owners = list.filter((x) => x !== o);
+      save();
+      return null;
+    }
+    if (parts[3] === 'homes' && method === 'PUT') {
+      const ids = new Set((body as { propertyIds: string[] }).propertyIds);
+      for (const p of operator.properties) {
+        if (ids.has(p.id)) p.owner = { id: o.id, name: o.name };
+        else if (p.owner?.id === o.id) p.owner = null;
+      }
+      save();
+      return ownerView(operator, o);
+    }
+    if (parts[3] === 'month' && method === 'GET') {
+      const month = url.searchParams.get('month') ?? today().slice(0, 7);
+      const { first, next } = monthRange(month);
+      const owner = ownerView(operator, o);
+      const ids = new Set(owner.homes.map((h) => h.id));
+      const earned = new Map<string, { minor: number; nights: number }>();
+      for (const x of operator.calendar.stays) {
+        if (x.status !== 'confirmed' || x.totalMinor === null || !ids.has(x.propertyId)) continue;
+        const n = Math.max(1, Math.round((Date.parse(x.checkOut) - Date.parse(x.checkIn)) / 86_400_000));
+        for (let night = x.checkIn; night < x.checkOut; night = addDays(night, 1)) {
+          if (night < first || night >= next) continue;
+          const k = earned.get(x.propertyId) ?? { minor: 0, nights: 0 };
+          k.minor += x.totalMinor / n;
+          k.nights += 1;
+          earned.set(x.propertyId, k);
+        }
+      }
+      const spent = settleExpenses(operator).filter(
+        (e) =>
+          e.propertyId &&
+          ids.has(e.propertyId) &&
+          e.chargeTo === 'owner' &&
+          e.spentOn >= first &&
+          e.spentOn < next,
+      );
+      const expenses = await Promise.all(spent.map((e) => expenseView(operator, e)));
+      const homes = owner.homes.map((h) => ({
+        id: h.id,
+        name: h.name,
+        nights: earned.get(h.id)?.nights ?? 0,
+        earnedMinor: Math.round(earned.get(h.id)?.minor ?? 0),
+        expensesMinor: spent.filter((e) => e.propertyId === h.id).reduce((s2, e) => s2 + e.amountMinor, 0),
+      }));
+      const earnedMinor = homes.reduce((s2, h) => s2 + h.earnedMinor, 0);
+      const feeMinor = Math.round((earnedMinor * owner.feeBasisPoints) / 10_000);
+      const expensesMinor = spent.reduce((s2, e) => s2 + e.amountMinor, 0);
+      return {
+        owner,
+        month,
+        currency: operator.workspace.settings.currency,
+        homes,
+        earnedMinor,
+        feeMinor,
+        expensesMinor,
+        netMinor: earnedMinor - feeMinor - expensesMinor,
+        expenses: expenses.sort((a, b) => b.spentOn.localeCompare(a.spentOn)),
+      } satisfies OwnerMonth;
+    }
+  }
+  if (parts[1] === 'expenses') {
+    const { operator } = access(orgId, method === 'GET' ? 'expenses.read' : 'expenses.write');
+    const all = settleExpenses(operator);
+    if (parts.length === 2 && method === 'GET') {
+      const month = url.searchParams.get('month') ?? today().slice(0, 7);
+      const { first, next } = monthRange(month);
+      const propertyId = url.searchParams.get('propertyId');
+      const category = url.searchParams.get('category');
+      const rows = all
+        .filter(
+          (e) =>
+            e.spentOn >= first &&
+            e.spentOn < next &&
+            (!propertyId || e.propertyId === propertyId) &&
+            (!category || e.category === category),
+        )
+        .sort((a, b) => b.spentOn.localeCompare(a.spentOn) || b.createdAt.localeCompare(a.createdAt));
+      const views = await Promise.all(rows.map((e) => expenseView(operator, e)));
+      const sum = (keep: (e: DemoExpense) => boolean) =>
+        rows.filter(keep).reduce((s2, e) => s2 + e.amountMinor, 0);
+      return {
+        month,
+        currency: operator.workspace.settings.currency,
+        expenses: views,
+        totalMinor: sum(() => true),
+        ownerMinor: sum((e) => e.chargeTo === 'owner'),
+        companyMinor: sum((e) => e.chargeTo === 'company'),
+        byCategory: EXPENSE_CATEGORIES.map((c) => ({
+          category: c,
+          amountMinor: sum((e) => e.category === c),
+        }))
+          .filter((c) => c.amountMinor > 0)
+          .sort((a, b) => b.amountMinor - a.amountMinor),
+      } satisfies ExpenseList;
+    }
+    const checkHome = (id: unknown) => {
+      if (id && !operator.properties.some((p) => p.id === id))
+        throw new ApiError(400, 'property_not_found', 'That property is not in this workspace.');
+    };
+    if (parts.length === 2 && method === 'POST') {
+      const b = body as Partial<DemoExpense> & { vendor?: string | null };
+      checkHome(b.propertyId);
+      const e: DemoExpense = {
+        id: crypto.randomUUID(),
+        spentOn: b.spentOn ?? today(),
+        category: b.category ?? 'other',
+        description: (b.description ?? '').trim(),
+        vendor: b.vendor?.trim() ? b.vendor.trim() : null,
+        amountMinor: b.amountMinor ?? 0,
+        currency: operator.workspace.settings.currency,
+        chargeTo: b.propertyId ? (b.chargeTo ?? 'owner') : 'company',
+        propertyId: b.propertyId ?? null,
+        claimId: b.claimId ?? null,
+        receipt: null,
+        createdBy: 'Demo user',
+        createdAt: new Date().toISOString(),
+      };
+      all.push(e);
+      save();
+      return expenseView(operator, e);
+    }
+    const e = findExpense(operator, parts[2] ?? '');
+    if (parts.length === 3 && method === 'PATCH') {
+      const b = body as Partial<DemoExpense>;
+      checkHome(b.propertyId);
+      for (const [k, v] of Object.entries(b)) {
+        if (v === undefined) continue;
+        (e as unknown as Record<string, unknown>)[k] =
+          k === 'vendor' && typeof v === 'string' && !v.trim() ? null : v;
+      }
+      if (!e.propertyId) e.chargeTo = 'company';
+      save();
+      return expenseView(operator, e);
+    }
+    if (parts.length === 3 && method === 'DELETE') {
+      if (e.receipt?.url.startsWith('demo-photo:')) await deleteDemoPhoto(e.receipt.url.slice(11));
+      operator.expenses = all.filter((x) => x !== e);
+      save();
+      return null;
+    }
+    if (parts[3] === 'receipt' && method === 'DELETE') {
+      if (e.receipt?.url.startsWith('demo-photo:')) await deleteDemoPhoto(e.receipt.url.slice(11));
+      e.receipt = null;
+      save();
+      return expenseView(operator, e);
+    }
   }
   throw new ApiError(404, 'not_found', 'Nothing here.');
 }
@@ -3759,6 +4133,13 @@ export async function demoFetch<T>(
           throw new ApiError(400, 'not_a_member', 'That person has to be a member of this workspace.');
         delete changes.maintainerUserId;
         changes.maintainer = maintainer;
+      }
+      if ('ownerId' in changes) {
+        const who = changes.ownerId ? settleOwners(operator).find((o) => o.id === changes.ownerId) : null;
+        if (changes.ownerId && !who)
+          throw new ApiError(400, 'owner_not_found', 'That owner is not in this workspace.');
+        delete changes.ownerId;
+        changes.owner = who ? { id: who.id, name: who.name } : null;
       }
       const next = { ...property, ...changes } as PropertyDetail;
       checkListing(next);
@@ -4218,6 +4599,10 @@ export async function demoFetch<T>(
       save();
       return (await resolvedTask(task)) as T;
     }
+  }
+
+  if (/^\/v1\/(owners|expenses)(\/|\?|$)/.test(path)) {
+    return (await demoMoney(options.orgId, method, path, options.body)) as T;
   }
 
   if (path === '/v1/claims' || path.startsWith('/v1/claims?') || path.startsWith('/v1/claims/')) {

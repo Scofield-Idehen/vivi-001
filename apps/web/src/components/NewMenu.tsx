@@ -6,7 +6,9 @@ import {
   IconHome,
   IconMessage,
   IconPlus,
+  IconReceipt2,
   IconTool,
+  IconUserDollar,
 } from '@tabler/icons-react';
 import { addDays, can, type Permission, todayIn } from '@v01/shared';
 import { type ComponentType, useEffect, useRef, useState } from 'react';
@@ -24,6 +26,8 @@ import {
 } from '../lib/api.ts';
 import { useCurrentWorkspace } from '../lib/workspace.tsx';
 import { StartClaimSheet } from '../pages/claims/ClaimsPage.tsx';
+import { ExpenseSheet } from '../pages/money/ExpenseSheet.tsx';
+import { OwnerSheet } from '../pages/owners/OwnersPage.tsx';
 import { NewBookingSheet } from '../pages/reservations/NewBookingSheet.tsx';
 import { NewTaskSheet } from '../pages/tasks/TasksPage.tsx';
 import { DateField } from './DateField.tsx';
@@ -38,7 +42,7 @@ import { Button, Notice } from './ui.tsx';
  * Only what the person's role allows is listed; the field team gets "Report damage".
  */
 
-type Item = 'booking' | 'task' | 'block' | 'message' | 'claim' | 'damage' | 'property';
+type Item = 'booking' | 'task' | 'block' | 'message' | 'expense' | 'claim' | 'damage' | 'owner' | 'property';
 
 const ITEMS: {
   id: Item;
@@ -51,8 +55,10 @@ const ITEMS: {
   { id: 'task', label: 'Task', key: 't', Icon: IconChecklist, allowed: 'tasks.manage' },
   { id: 'block', label: 'Block dates', key: 'd', Icon: IconCalendarOff, allowed: 'calendar.write' },
   { id: 'message', label: 'Message a guest', key: 'm', Icon: IconMessage, allowed: 'inbox.write' },
+  { id: 'expense', label: 'Expense', key: 'e', Icon: IconReceipt2, allowed: 'expenses.write' },
   { id: 'claim', label: 'Damage claim', key: 'c', Icon: IconFileAlert, allowed: 'claims.write' },
   { id: 'damage', label: 'Report damage', key: 'r', Icon: IconTool, allowed: (role) => role === 'field' },
+  { id: 'owner', label: 'Owner', key: 'o', Icon: IconUserDollar, allowed: 'owners.write' },
   { id: 'property', label: 'Property', key: 'p', Icon: IconHome, allowed: 'properties.write' },
 ];
 
@@ -214,6 +220,17 @@ export function NewMenu() {
       ) : null}
       {sheet === 'message' ? <MessageGuestSheet orgId={orgId} onClose={() => setSheet(null)} /> : null}
       {sheet === 'claim' ? <StartClaimSheet onClose={() => setSheet(null)} /> : null}
+      {sheet === 'expense' ? (
+        <ExpenseSheet start={here ? { propertyId: here } : undefined} onClose={() => setSheet(null)} />
+      ) : null}
+      {sheet === 'owner' ? (
+        <OwnerSheet
+          onClose={(o) => {
+            setSheet(null);
+            if (o) navigate(`/owners/${o.id}`);
+          }}
+        />
+      ) : null}
       {sheet === 'damage' ? <ReportDamageSheet orgId={orgId} onClose={() => setSheet(null)} /> : null}
     </>
   );

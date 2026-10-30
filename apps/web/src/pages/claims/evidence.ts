@@ -52,6 +52,14 @@ export function claimText(claim: Claim, locale: string): string {
   lines.push('What was damaged');
   for (const i of claim.items) lines.push(`- ${i.description} (${m(i.amountMinor)})`);
   lines.push(`Total claimed: ${m(claim.claimedMinor)}`, '');
+  if (claim.costs.length) {
+    lines.push('Spent putting it right');
+    for (const e of claim.costs)
+      lines.push(
+        `- ${day(e.spentOn)}: ${e.description}${e.vendor ? `, ${e.vendor}` : ''} (${m(e.amountMinor)})`,
+      );
+    lines.push(`Spent so far: ${m(claim.costs.reduce((s, e) => s + e.amountMinor, 0))}`, '');
+  }
   if (claim.reports.length) {
     lines.push('Reported by the team');
     for (const r of claim.reports) lines.push(`- ${day(r.day)}${r.by ? `, ${r.by}` : ''}: ${r.what ?? ''}`);
@@ -62,6 +70,7 @@ export function claimText(claim: Claim, locale: string): string {
     `- before-the-stay/: ${claim.before.length} photos from the clean before the guest arrived`,
     `- after-the-stay/: ${claim.after.length} photos from the team's jobs after they left`,
     `- files/: ${claim.files.length} photos, videos, receipts and invoices, as uploaded`,
+    `- receipts/: receipts for the money spent putting it right`,
     '',
     'Photos from the team carry the time, the home and who took them, burned into the picture when it was taken.',
   );
@@ -97,6 +106,12 @@ export async function downloadEvidence(
       name: `after-the-stay/${String(i + 1).padStart(2, '0')} ${p.taskDay} ${p.stage}.${extensionOf('', p.url)}`,
       url: p.url,
     })),
+    ...claim.costs
+      .filter((e) => e.receipt)
+      .map((e, i) => ({
+        name: `receipts/${String(i + 1).padStart(2, '0')} ${safe(e.receipt?.fileName ?? 'receipt')}`,
+        url: e.receipt?.url ?? '',
+      })),
     ...claim.files.map((f, i) => {
       const base = safe(f.fileName);
       const named = /\.[a-z0-9]{2,4}$/i.test(base) ? base : `${base}.${extensionOf(f.contentType, f.url)}`;

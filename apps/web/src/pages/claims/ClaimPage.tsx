@@ -21,6 +21,7 @@ import {
   type ClaimPlace,
   type ClaimStatus,
   can,
+  type Expense,
   parseMajorToMinor,
   todayIn,
 } from '@v01/shared';
@@ -42,6 +43,7 @@ import {
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
 import { ChannelMark } from '../calendar/marks.tsx';
 import { NotFound } from '../misc.tsx';
+import { ExpenseSheet } from '../money/ExpenseSheet.tsx';
 import { currencySymbol, minorToInput, moneyText } from '../properties/money.ts';
 import { Countdown } from './ClaimsPage.tsx';
 import { downloadEvidence } from './evidence.ts';
@@ -441,6 +443,65 @@ function Items({ claim, write, locale }: { claim: Claim; write: boolean; locale:
   );
 }
 
+/** Money already spent putting it right, recorded as expenses for this claim. */
+function Costs({ claim, locale }: { claim: Claim; locale: string }) {
+  const { entry } = useCurrentWorkspace();
+  const [open, setOpen] = useState<Expense | 'new' | null>(null);
+  const write = can(entry.role, 'expenses.write');
+  const m = (minor: number) => moneyText(minor, claim.currency, locale);
+  const total = claim.costs.reduce((sum, e) => sum + e.amountMinor, 0);
+  if (!write && !claim.costs.length) return null;
+  return (
+    <Section
+      id="costs"
+      title="Spent putting it right"
+      sub="Expenses recorded for this claim, with their receipts. They go in the download too."
+      end={write ? <Button onClick={() => setOpen('new')}>Record a cost</Button> : undefined}
+    >
+      {open ? (
+        <ExpenseSheet
+          key={open === 'new' ? 'new' : open.id}
+          expense={open === 'new' ? undefined : open}
+          start={{ propertyId: claim.propertyId, claimId: claim.id, category: 'repairs' }}
+          onClose={() => setOpen(null)}
+        />
+      ) : null}
+      {claim.costs.length ? (
+        <ul className="divide-y divide-hairline border-y border-hairline">
+          {claim.costs.map((e) => (
+            <li key={e.id}>
+              <button
+                type="button"
+                disabled={!write}
+                onClick={() => setOpen(e)}
+                className="flex w-full items-center justify-between gap-4 py-2.5 text-left text-[14px] enabled:hover:bg-paper"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-ink">{e.description}</span>
+                  <span className="block truncate text-[12.5px] text-slate">
+                    {LONG.format(at(e.spentOn))}
+                    {e.vendor ? ` · ${e.vendor}` : ''}
+                    {e.receipt ? ' · receipt kept' : ' · no receipt yet'}
+                  </span>
+                </span>
+                <span className="shrink-0 text-ink tnum">{m(e.amountMinor)}</span>
+              </button>
+            </li>
+          ))}
+          <li className="flex items-center justify-between py-2.5 text-[14.5px] font-semibold">
+            <span className="text-ink">Spent so far</span>
+            <span className="text-ink tnum">{m(total)}</span>
+          </li>
+        </ul>
+      ) : (
+        <p className="text-[13.5px] text-slate">
+          Nothing recorded yet. Record repairs and replacements as you pay for them.
+        </p>
+      )}
+    </Section>
+  );
+}
+
 function PhotoGrid({ photos, empty }: { photos: ClaimEvidencePhoto[]; empty: string }) {
   if (!photos.length) return <p className="text-[13.5px] text-slate">{empty}</p>;
   return (
@@ -701,6 +762,7 @@ export function ClaimPage() {
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
             <div className="flex min-w-0 flex-col gap-6">
               <Items claim={c} write={write} locale={locale} />
+              <Costs claim={c} locale={locale} />
               <Evidence claim={c} write={write} />
             </div>
             <div className="order-first flex min-w-0 flex-col gap-6 lg:sticky lg:top-20 lg:order-none">

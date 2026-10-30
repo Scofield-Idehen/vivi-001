@@ -38,6 +38,7 @@ import { z } from 'zod';
 import { type RequestScope, toIso } from '../context.ts';
 import { HttpError } from '../errors.ts';
 import type { PhotoStore } from '../photos.ts';
+import { claimExpenses } from './owners.ts';
 
 /**
  * Damage claims (built 30 Oct 2026): one per booking. The team lists what was damaged and what it
@@ -272,6 +273,7 @@ async function loadClaim(tx: Tx, id: string, store: PhotoStore): Promise<Claim> 
     after: allPhotos.filter((_, i) => photoRows[i]?.side === 'after'),
     reports: reports.map((r) => ({ taskId: r.task_id, day: r.due_on, what: r.notes, by: r.by })),
     nextCheckIn: next,
+    costs: await claimExpenses(tx, id, store),
   };
 }
 

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { addDays } from './dates.ts';
 import { CHANNELS, type Channel } from './enums.ts';
+import { ExpenseSchema } from './owners.ts';
 import { IsoDate, Uuid } from './schemas.ts';
 
 /**
@@ -156,6 +157,8 @@ export const ClaimSchema = ClaimSummarySchema.extend({
   /** The next guest's check-in at the home, which closes Airbnb's window. */
   nextCheckIn: IsoDate.nullable(),
   createdBy: z.string().nullable(),
+  /** Money already spent putting it right, recorded as expenses for this claim. */
+  costs: z.array(ExpenseSchema),
 });
 export type Claim = z.infer<typeof ClaimSchema>;
 

@@ -3,6 +3,7 @@ import {
   channelAccounts,
   channelListings,
   memberships,
+  owners,
   properties,
   propertyAmenities,
   propertyPhotos,
@@ -179,6 +180,7 @@ async function loadDetail(tx: Tx, id: string, viewer: Viewer): Promise<PropertyD
     licenceNumber: row.licenceNumber,
     cleaner: await cleanerOf(tx, row.cleanerUserId),
     maintainer: await cleanerOf(tx, row.maintainerUserId),
+    owner: await ownerOf(tx, row.ownerId),
     rooms: rooms.map(toRoom),
     amenities: amenities.map((a) => a.code),
     photos: photos.map(toPhoto),
@@ -189,6 +191,15 @@ async function loadDetail(tx: Tx, id: string, viewer: Viewer): Promise<PropertyD
     links: await linksOf(tx, id),
     updatedAt: toIso(row.updatedAt),
   };
+}
+
+async function ownerOf(tx: Tx, ownerId: string | null): Promise<PropertyDetail['owner']> {
+  if (!ownerId) return null;
+  const [who] = await tx
+    .select({ id: owners.id, name: owners.name })
+    .from(owners)
+    .where(eq(owners.id, ownerId));
+  return who ?? null;
 }
 
 async function cleanerOf(tx: Tx, userId: string | null): Promise<PropertyDetail['cleaner']> {
@@ -422,6 +433,13 @@ export function propertyRoutes(
             .where(and(eq(memberships.organisationId, ctx.orgId), eq(memberships.userId, who)));
           if (!member)
             throw new HttpError(400, 'not_a_member', 'That person has to be a member of this workspace.');
+        }
+        if (changes.ownerId) {
+          const [owner] = await tx
+            .select({ id: owners.id })
+            .from(owners)
+            .where(eq(owners.id, changes.ownerId));
+          if (!owner) throw new HttpError(400, 'owner_not_found', 'That owner is not in this workspace.');
         }
         await tx
           .update(properties)

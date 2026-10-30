@@ -31,6 +31,10 @@ import type {
   DailyOverview,
   DamageReport,
   DoorCode,
+  Expense,
+  ExpenseInput,
+  ExpenseList,
+  ExpenseUpdate,
   GuestLink,
   GuestStay,
   Invitation,
@@ -49,6 +53,11 @@ import type {
   MessageTemplateUpdate,
   MeUpdate,
   OverviewRange,
+  Owner,
+  OwnerInput,
+  OwnerList,
+  OwnerMonth,
+  OwnerUpdate,
   PaymentCreate,
   PhotoStage,
   PhotoUploadTicket,
@@ -92,7 +101,7 @@ import type {
   WorkspaceSync,
 } from '@v01/shared';
 import { config } from './config.ts';
-import { demoAddClaimFile, demoAddPhoto, demoAddTaskPhoto, demoFetch } from './demo.ts';
+import { demoAddClaimFile, demoAddPhoto, demoAddTaskPhoto, demoFetch, demoSetReceipt } from './demo.ts';
 import { ApiError } from './errors.ts';
 import {
   PhotoError,
@@ -1471,4 +1480,152 @@ export function useAddClaimFiles(orgId: string | null, claimId: string) {
       return problems;
     },
   });
+}
+
+// Owners and expenses ---------------------------------------------------------------------------
+
+export function useOwners(orgId: string | null, enabled = true) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['owners', orgId],
+    enabled: Boolean(token && orgId && enabled),
+    queryFn: () => apiFetch<OwnerList>('/v1/owners', { token: token as string, orgId }),
+  });
+}
+
+export function useOwnerMonth(orgId: string | null, id: string | null, month: string) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['owner-month', orgId, id, month],
+    enabled: Boolean(token && orgId && id),
+    placeholderData: keepPreviousData,
+    queryFn: () =>
+      apiFetch<OwnerMonth>(`/v1/owners/${id}/month?month=${month}`, { token: token as string, orgId }),
+  });
+}
+
+function useOwnerMutation<V, R>(orgId: string | null, run: (token: string, v: V) => Promise<R>) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (v: V) => run(token as string, v),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['owners', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['owner-month', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['property', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['properties', orgId] });
+    },
+  });
+}
+
+export function useCreateOwner(orgId: string | null) {
+  return useOwnerMutation<OwnerInput, Owner>(orgId, (token, body) =>
+    apiFetch<Owner>('/v1/owners', { token, orgId, method: 'POST', body }),
+  );
+}
+
+export function useUpdateOwner(orgId: string | null, id: string) {
+  return useOwnerMutation<OwnerUpdate, Owner>(orgId, (token, body) =>
+    apiFetch<Owner>(`/v1/owners/${id}`, { token, orgId, method: 'PATCH', body }),
+  );
+}
+
+export function useRemoveOwner(orgId: string | null, id: string) {
+  return useOwnerMutation<void, void>(orgId, (token) =>
+    apiFetch<void>(`/v1/owners/${id}`, { token, orgId, method: 'DELETE' }),
+  );
+}
+
+export function useOwnerHomes(orgId: string | null, id: string) {
+  return useOwnerMutation<string[], Owner>(orgId, (token, propertyIds) =>
+    apiFetch<Owner>(`/v1/owners/${id}/homes`, { token, orgId, method: 'PUT', body: { propertyIds } }),
+  );
+}
+
+export function useExpenses(
+  orgId: string | null,
+  month: string,
+  filters: { propertyId?: string; category?: string } = {},
+  enabled = true,
+) {
+  const token = useToken();
+  const q = new URLSearchParams({ month });
+  if (filters.propertyId) q.set('propertyId', filters.propertyId);
+  if (filters.category) q.set('category', filters.category);
+  return useQuery({
+    queryKey: ['expenses', orgId, q.toString()],
+    enabled: Boolean(token && orgId && enabled),
+    placeholderData: keepPreviousData,
+    queryFn: () => apiFetch<ExpenseList>(`/v1/expenses?${q}`, { token: token as string, orgId }),
+  });
+}
+
+/** After any change to an expense: the lists, an owner's month, and a claim's costs. */
+function useExpenseMutation<V, R>(orgId: string | null, run: (token: string, v: V) => Promise<R>) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (v: V) => run(token as string, v),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['expenses', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['owner-month', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['claim', orgId] });
+    },
+  });
+}
+
+async function putReceipt(
+  token: string,
+  orgId: string | null,
+  expenseId: string,
+  file: File,
+): Promise<Expense> {
+  const contentType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : '');
+  if (config.demo) return demoSetReceipt(orgId, expenseId, file, contentType);
+  const ticket = await apiFetch<PhotoUploadTicket>(`/v1/expenses/${expenseId}/receipt/uploads`, {
+    token,
+    orgId,
+    method: 'POST',
+    body: { contentType, bytes: file.size },
+  });
+  let response: Response;
+  try {
+    response = await fetch(ticket.uploadUrl, { method: ticket.method, headers: ticket.headers, body: file });
+  } catch {
+    throw new ApiError(0, 'offline', 'Cannot reach file storage. Check your connection and try again.');
+  }
+  if (!response.ok)
+    throw new ApiError(response.status, 'upload_failed', 'The receipt could not be uploaded.');
+  return apiFetch<Expense>(`/v1/expenses/${expenseId}/receipt`, {
+    token,
+    orgId,
+    method: 'PUT',
+    body: { path: ticket.path, fileName: file.name.slice(0, 200), contentType, bytes: file.size },
+  });
+}
+
+/** Saves an expense (new or changed), then its receipt if one was chosen. */
+export function useSaveExpense(orgId: string | null) {
+  return useExpenseMutation<
+    { id?: string; body: ExpenseInput | ExpenseUpdate; receipt?: File | null },
+    Expense
+  >(orgId, async (token, { id, body, receipt }) => {
+    let saved = id
+      ? await apiFetch<Expense>(`/v1/expenses/${id}`, { token, orgId, method: 'PATCH', body })
+      : await apiFetch<Expense>('/v1/expenses', { token, orgId, method: 'POST', body });
+    if (receipt) saved = await putReceipt(token, orgId, saved.id, receipt);
+    return saved;
+  });
+}
+
+export function useRemoveExpense(orgId: string | null) {
+  return useExpenseMutation<string, void>(orgId, (token, id) =>
+    apiFetch<void>(`/v1/expenses/${id}`, { token, orgId, method: 'DELETE' }),
+  );
+}
+
+export function useRemoveReceipt(orgId: string | null) {
+  return useExpenseMutation<string, Expense>(orgId, (token, id) =>
+    apiFetch<Expense>(`/v1/expenses/${id}/receipt`, { token, orgId, method: 'DELETE' }),
+  );
 }

@@ -23,6 +23,8 @@ export * from './money.ts';
 export * from './money.ts';
 export * from './overview.ts';
 export * from './overview.ts';
+export * from './owners.ts';
+export * from './owners.ts';
 export * from './permissions.ts';
 export * from './permissions.ts';
 export * from './reservations.ts';

@@ -35,6 +35,12 @@ export const PERMISSIONS = {
   /** Damage claims: the office and accounts make and file them; guest comms and support read. */
   'claims.read': ['admin', 'operations', 'guest_comms', 'accounts', 'v01_support'],
   'claims.write': ['admin', 'operations', 'accounts'],
+  /** Owners of the homes, and their fee: the office and accounts. */
+  'owners.read': ['admin', 'operations', 'accounts', 'v01_support'],
+  'owners.write': ['admin', 'operations', 'accounts'],
+  /** Money spent on the homes, with receipts: the office and accounts. */
+  'expenses.read': ['admin', 'operations', 'accounts', 'v01_support'],
+  'expenses.write': ['admin', 'operations', 'accounts'],
   'channels.read': ['admin', 'operations', 'guest_comms', 'accounts', 'v01_support'],
   'channels.manage': ['admin'],
   'workspace.read': ['admin', 'operations', 'guest_comms', 'accounts', 'field', 'v01_support'],

@@ -8,6 +8,7 @@ export * from './guesty.ts';
 export * from './inbox.ts';
 export * from './locks.ts';
 export * from './operators.ts';
+export * from './owners.ts';
 export * from './platform.ts';
 export * from './properties.ts';
 export * from './tasks.ts';

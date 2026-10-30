@@ -253,6 +253,20 @@
       "when": 1793362856130,
       "tag": "0035_claims_security",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793364777654,
+      "tag": "0036_owners_expenses",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793364779808,
+      "tag": "0037_owners_expenses_security",
+      "breakpoints": true
     }
   ]
 }

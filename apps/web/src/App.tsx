@@ -20,6 +20,9 @@ import { ConsoleSupportLog } from './pages/console/SupportLog.tsx';
 import { ConsoleSync } from './pages/console/Sync.tsx';
 import { InboxPage } from './pages/inbox/InboxPage.tsx';
 import { About, ModuleToCome, NotFound, NoWorkspace } from './pages/misc.tsx';
+import { ExpensesPage } from './pages/money/ExpensesPage.tsx';
+import { OwnerPage } from './pages/owners/OwnerPage.tsx';
+import { OwnersPage } from './pages/owners/OwnersPage.tsx';
 import { ProfilePage } from './pages/ProfilePage.tsx';
 import { Properties } from './pages/Properties.tsx';
 import { NewPropertyPanel } from './pages/properties/NewPropertyPanel.tsx';
@@ -144,6 +147,9 @@ const routes = [
           { path: 'tasks', element: <TasksPage /> },
           { path: 'claims', element: <ClaimsPage /> },
           { path: 'claims/:id', element: <ClaimPage /> },
+          { path: 'owners', element: <OwnersPage /> },
+          { path: 'owners/:id', element: <OwnerPage /> },
+          { path: 'expenses', element: <ExpensesPage /> },
           { path: 'channels', element: <ChannelsPage /> },
           { path: 'workspace', element: <WorkspacePage /> },
           { path: 'profile', element: <ProfilePage /> },
