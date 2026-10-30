@@ -267,6 +267,13 @@
       "when": 1793364779808,
       "tag": "0037_owners_expenses_security",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1793366740989,
+      "tag": "0038_claim_photo_originals",
+      "breakpoints": true
     }
   ]
 }

@@ -104,6 +104,7 @@ import { config } from './config.ts';
 import { demoAddClaimFile, demoAddPhoto, demoAddTaskPhoto, demoFetch, demoSetReceipt } from './demo.ts';
 import { ApiError } from './errors.ts';
 import {
+  ACCEPTED,
   PhotoError,
   type PhotoStamp,
   type PreparedPhoto,
@@ -1428,36 +1429,79 @@ export function useRemoveClaimFile(orgId: string | null, id: string) {
   );
 }
 
-/** A file as the person chose it: no resizing, no re-encoding, so the original is what's kept. */
+/** Sends one file to storage with a ticket from the claim; answers with where it went. */
+async function sendClaimFile(
+  token: string,
+  orgId: string | null,
+  claimId: string,
+  body: Blob,
+  contentType: string,
+  name: string,
+): Promise<string> {
+  const ticket = await apiFetch<PhotoUploadTicket>(`/v1/claims/${claimId}/files/uploads`, {
+    token,
+    orgId,
+    method: 'POST',
+    body: { contentType, bytes: body.size },
+  });
+  let response: Response;
+  try {
+    response = await fetch(ticket.uploadUrl, { method: ticket.method, headers: ticket.headers, body });
+  } catch {
+    throw new ApiError(0, 'offline', 'Cannot reach file storage. Check your connection and try again.');
+  }
+  if (!response.ok) throw new ApiError(response.status, 'upload_failed', `${name} could not be uploaded.`);
+  return ticket.path;
+}
+
+/** Where and who for a claim photo's stamp; the time comes from the camera. */
+export interface ClaimStamp {
+  where: string;
+  who: string;
+}
+
+/**
+ * A file onto a claim. Receipts, PDFs and videos go up exactly as chosen. A photo goes up twice:
+ * the original untouched, and a copy with when, where and who burned in, the way the team's job
+ * photos are; the copy is what the claim shows. A photo the browser can't open (HEIC on some
+ * devices) goes up as it is, unstamped.
+ */
 async function addClaimFile(
   token: string,
   orgId: string | null,
   claimId: string,
   file: File,
   kind: ClaimFileKind,
+  where: ClaimStamp | null,
 ): Promise<Claim> {
   const contentType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : '');
-  if (config.demo) return demoAddClaimFile(orgId, claimId, file, kind, contentType);
-  const ticket = await apiFetch<PhotoUploadTicket>(`/v1/claims/${claimId}/files/uploads`, {
-    token,
-    orgId,
-    method: 'POST',
-    body: { contentType, bytes: file.size },
-  });
-  let response: Response;
-  try {
-    response = await fetch(ticket.uploadUrl, { method: ticket.method, headers: ticket.headers, body: file });
-  } catch {
-    throw new ApiError(0, 'offline', 'Cannot reach file storage. Check your connection and try again.');
+  let stamped: { photo: PreparedPhoto; text: string } | null = null;
+  if (kind === 'photo' && where && ACCEPTED.includes(contentType)) {
+    try {
+      const stamp: PhotoStamp = {
+        when: stampWhen(await takenAt(file), new Date()),
+        where: where.where,
+        who: where.who,
+      };
+      stamped = { photo: await stampPhoto(await preparePhoto(file, 2560), stamp), text: stampText(stamp) };
+    } catch {
+      stamped = null;
+    }
   }
-  if (!response.ok)
-    throw new ApiError(response.status, 'upload_failed', `${file.name} could not be uploaded.`);
-  return apiFetch<Claim>(`/v1/claims/${claimId}/files`, {
-    token,
-    orgId,
-    method: 'POST',
-    body: { path: ticket.path, kind, fileName: file.name.slice(0, 200), contentType, bytes: file.size },
-  });
+  if (config.demo) return demoAddClaimFile(orgId, claimId, file, kind, contentType, stamped);
+  const originalPath = await sendClaimFile(token, orgId, claimId, file, contentType, file.name);
+  const register = stamped
+    ? {
+        path: await sendClaimFile(token, orgId, claimId, stamped.photo.blob, 'image/jpeg', file.name),
+        kind,
+        fileName: file.name.slice(0, 200),
+        contentType: 'image/jpeg',
+        bytes: stamped.photo.blob.size,
+        stamp: stamped.text,
+        original: { path: originalPath, contentType, bytes: file.size },
+      }
+    : { path: originalPath, kind, fileName: file.name.slice(0, 200), contentType, bytes: file.size };
+  return apiFetch<Claim>(`/v1/claims/${claimId}/files`, { token, orgId, method: 'POST', body: register });
 }
 
 /** Uploads files one at a time; one that fails doesn't stop the rest. */
@@ -1465,11 +1509,19 @@ export function useAddClaimFiles(orgId: string | null, claimId: string) {
   const token = useToken();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ files, kind }: { files: File[]; kind: ClaimFileKind }) => {
+    mutationFn: async ({
+      files,
+      kind,
+      stamp,
+    }: {
+      files: File[];
+      kind: ClaimFileKind;
+      stamp?: ClaimStamp;
+    }) => {
       const problems: string[] = [];
       for (const file of files) {
         try {
-          const claim = await addClaimFile(token as string, orgId, claimId, file, kind);
+          const claim = await addClaimFile(token as string, orgId, claimId, file, kind, stamp ?? null);
           queryClient.setQueryData(['claim', orgId, claimId], claim);
         } catch (error) {
           problems.push(

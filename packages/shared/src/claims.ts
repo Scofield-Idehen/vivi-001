@@ -97,6 +97,10 @@ export const ClaimFileSchema = z.object({
   url: z.string(),
   uploadedBy: z.string().nullable(),
   createdAt: z.string(),
+  /** For a photo: the words burned into it (when, where, who). */
+  stamp: z.string().nullable(),
+  /** For a stamped photo: the file exactly as it came from the camera. */
+  original: z.object({ url: z.string(), contentType: z.string(), bytes: z.number().int() }).nullable(),
 });
 export type ClaimFile = z.infer<typeof ClaimFileSchema>;
 
@@ -215,5 +219,14 @@ export const ClaimFileRegisterSchema = z.object({
   fileName: z.string().trim().min(1).max(200),
   contentType: z.enum(CLAIM_FILE_TYPES),
   bytes: z.number().int().positive().max(CLAIM_FILE_MAX_BYTES),
+  /** A stamped photo: the words on it, and the untouched original uploaded beside it. */
+  stamp: z.string().trim().max(300).optional(),
+  original: z
+    .object({
+      path: z.string().min(1).max(300),
+      contentType: z.enum(CLAIM_FILE_TYPES),
+      bytes: z.number().int().positive().max(CLAIM_FILE_MAX_BYTES),
+    })
+    .optional(),
 });
 export type ClaimFileRegister = z.infer<typeof ClaimFileRegisterSchema>;

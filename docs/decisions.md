@@ -5,6 +5,20 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-30
 
+- **Photos added to a claim are stamped, and the original is kept beside each (Alpha, 30 Oct
+  2026: "why cant we pick claims images from timestamp as well").** A photo gets the time, the
+  home and who added it burned in, as the field team's job photos do; the time is the camera's
+  own, and a photo added more than an hour later says both ("Taken … · added …"), one without a
+  camera time says when it was added. The untouched original is uploaded too and kept with it
+  (Airbnb doesn't accept altered images, so the original answers any doubt); removing the photo
+  removes both. The claim shows the stamped copy with a link to the original, and the download
+  has both (files/ and files/originals/). On a phone, "Take a photo" opens the camera. Receipts,
+  PDFs, videos, and photos the browser can't open (some HEIC) are kept as uploaded, unstamped.
+- **Replies leave after the transaction commits (30 Oct 2026).** Routes were sending their reply
+  from inside the database transaction, so the next request could arrive before the save was
+  done: the cause of tests that failed now and then, and of a new booking or task briefly
+  missing. A test now checks every route.
+
 - **Owners and expenses (Alpha, 30 Oct 2026: "lets build it").** An owner has a name, company,
   email, phone, notes and a management fee (a percentage of what their homes earn); a home points
   at its owner, set on the owner's page ("Choose homes") or the property's Settings. An owner's

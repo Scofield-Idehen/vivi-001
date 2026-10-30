@@ -69,7 +69,8 @@ export function claimText(claim: Claim, locale: string): string {
     'In this download',
     `- before-the-stay/: ${claim.before.length} photos from the clean before the guest arrived`,
     `- after-the-stay/: ${claim.after.length} photos from the team's jobs after they left`,
-    `- files/: ${claim.files.length} photos, videos, receipts and invoices, as uploaded`,
+    `- files/: ${claim.files.length} photos, videos, receipts and invoices; photos stamped with when, where and who`,
+    `- files/originals/: each stamped photo exactly as it came from the camera`,
     `- receipts/: receipts for the money spent putting it right`,
     '',
     'Photos from the team carry the time, the home and who took them, burned into the picture when it was taken.',
@@ -112,8 +113,17 @@ export async function downloadEvidence(
         name: `receipts/${String(i + 1).padStart(2, '0')} ${safe(e.receipt?.fileName ?? 'receipt')}`,
         url: e.receipt?.url ?? '',
       })),
+    ...claim.files
+      .filter((f) => f.original)
+      .map((f, i) => ({
+        name: `files/originals/${String(i + 1).padStart(2, '0')} ${safe(f.fileName)}${/\.[a-z0-9]{2,4}$/i.test(f.fileName) ? '' : `.${extensionOf(f.original?.contentType ?? '', f.original?.url ?? '')}`}`,
+        url: f.original?.url ?? '',
+      })),
     ...claim.files.map((f, i) => {
-      const base = safe(f.fileName);
+      // A stamped photo is a JPEG whatever the camera made; name it so.
+      const base = f.original
+        ? `${safe(f.fileName).replace(/\.[a-z0-9]{2,4}$/i, '')} (stamped)`
+        : safe(f.fileName);
       const named = /\.[a-z0-9]{2,4}$/i.test(base) ? base : `${base}.${extensionOf(f.contentType, f.url)}`;
       return { name: `files/${String(i + 1).padStart(2, '0')} ${named}`, url: f.url };
     }),

@@ -273,6 +273,43 @@ describe('claims', () => {
     expect(wrong.status).toBe(400);
   });
 
+  it('keeps a stamped photo with its untouched original beside it', async () => {
+    const ticket = async (contentType: string) =>
+      (await call('POST', `/v1/claims/${claimId}/files/uploads`, asA(), { contentType, bytes: 3_000_000 }))
+        .body.path;
+    const original = await ticket('image/heic');
+    const stamped = await ticket('image/jpeg');
+    files.files.add(stamped);
+    const body = {
+      path: stamped,
+      kind: 'photo',
+      fileName: 'IMG_2041.HEIC',
+      contentType: 'image/jpeg',
+      bytes: 900_000,
+      stamp: 'Thu 15 Oct 2026, 11:04 · Harbour View Lodge · Alpha',
+      original: { path: original, contentType: 'image/heic', bytes: 3_000_000 },
+    };
+    // Not until the original has landed too.
+    expect((await call('POST', `/v1/claims/${claimId}/files`, asA(), body)).status).toBe(409);
+    files.files.add(original);
+    const added = await call('POST', `/v1/claims/${claimId}/files`, asA(), body);
+    expect(added.status).toBe(201);
+    const photo = added.body.files.find((f: { fileName: string }) => f.fileName === 'IMG_2041.HEIC');
+    expect(photo).toMatchObject({
+      stamp: 'Thu 15 Oct 2026, 11:04 · Harbour View Lodge · Alpha',
+      url: `https://photos.test/signed/${stamped}`,
+      original: {
+        url: `https://photos.test/signed/${original}`,
+        contentType: 'image/heic',
+        bytes: 3_000_000,
+      },
+    });
+    // Removing the photo removes both files.
+    await call('DELETE', `/v1/claims/${claimId}/files/${photo.id}`, asA());
+    expect(files.files.has(stamped)).toBe(false);
+    expect(files.files.has(original)).toBe(false);
+  });
+
   it('records filing and the outcome, and moves it to done when paid', async () => {
     const filed = await call('PATCH', `/v1/claims/${claimId}`, asA(), {
       status: 'filed',

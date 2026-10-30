@@ -172,6 +172,10 @@ async function loadClaim(tx: Tx, id: string, store: PhotoStore): Promise<Claim> 
       contentType: claimFiles.contentType,
       bytes: claimFiles.bytes,
       storagePath: claimFiles.storagePath,
+      stamp: claimFiles.stamp,
+      originalPath: claimFiles.originalPath,
+      originalType: claimFiles.originalType,
+      originalBytes: claimFiles.originalBytes,
       uploadedBy: personName,
       createdAt: claimFiles.createdAt,
     })
@@ -232,10 +236,18 @@ async function loadClaim(tx: Tx, id: string, store: PhotoStore): Promise<Claim> 
        order by t.due_on, t.created_at`)
   ).rows;
 
+  const originals = fileRows.filter((f) => f.originalPath);
   const signed = await store.viewUrls([
     ...fileRows.map((f) => f.storagePath),
     ...photoRows.map((p) => p.storage_path),
+    ...originals.map((f) => f.originalPath as string),
   ]);
+  const originalUrl = new Map(
+    originals.map((f, i) => [
+      f.id,
+      signed[fileRows.length + photoRows.length + i] ?? store.publicUrl(f.originalPath as string),
+    ]),
+  );
   const fileUrl = (i: number) => signed[i] ?? store.publicUrl(fileRows[i]?.storagePath ?? '');
   const photoUrl = (i: number) => signed[fileRows.length + i] ?? photoRows[i]?.url ?? '';
   const photo = (p: (typeof photoRows)[number], i: number) => ({
@@ -268,6 +280,14 @@ async function loadClaim(tx: Tx, id: string, store: PhotoStore): Promise<Claim> 
       url: fileUrl(i),
       uploadedBy: f.uploadedBy ?? null,
       createdAt: toIso(String(f.createdAt)),
+      stamp: f.stamp ?? null,
+      original: f.originalPath
+        ? {
+            url: originalUrl.get(f.id) ?? '',
+            contentType: f.originalType ?? 'application/octet-stream',
+            bytes: Number(f.originalBytes ?? 0),
+          }
+        : null,
     })),
     before: allPhotos.filter((_, i) => photoRows[i]?.side === 'before'),
     after: allPhotos.filter((_, i) => photoRows[i]?.side === 'after'),
@@ -552,6 +572,19 @@ export function claimRoutes(
         if (!(await deps.files.exists(path))) {
           throw new HttpError(409, 'file_not_uploaded', "The file hasn't finished uploading. Try again.");
         }
+        const original = req.body.original;
+        if (original) {
+          if (original.path === path || !claimFilePathBelongsTo(original.path, ctx.orgId, claim.id)) {
+            throw new HttpError(400, 'invalid_request', 'That original was not uploaded for this claim.');
+          }
+          if (!(await deps.files.exists(original.path))) {
+            throw new HttpError(
+              409,
+              'file_not_uploaded',
+              "The original hasn't finished uploading. Try again.",
+            );
+          }
+        }
         await tx.insert(claimFiles).values({
           organisationId: ctx.orgId,
           claimId: claim.id,
@@ -561,6 +594,10 @@ export function claimRoutes(
           contentType: req.body.contentType,
           bytes: req.body.bytes,
           uploadedBy: ctx.userId,
+          stamp: req.body.stamp || null,
+          originalPath: original?.path ?? null,
+          originalType: original?.contentType ?? null,
+          originalBytes: original?.bytes ?? null,
         });
         reply.code(201);
         return await loadClaim(tx, claim.id, deps.files);
@@ -574,12 +611,17 @@ export function claimRoutes(
       deps.scope.inOrg(req, 'claims.write', async (tx) => {
         const claim = await ownClaim(tx, req.params.id);
         const [file] = await tx
-          .select({ id: claimFiles.id, storagePath: claimFiles.storagePath })
+          .select({
+            id: claimFiles.id,
+            storagePath: claimFiles.storagePath,
+            originalPath: claimFiles.originalPath,
+          })
           .from(claimFiles)
           .where(and(eq(claimFiles.id, req.params.fileId), eq(claimFiles.claimId, claim.id)));
         if (!file) throw new HttpError(404, 'file_not_found', 'That file is not on this claim.');
         await tx.delete(claimFiles).where(eq(claimFiles.id, file.id));
         await deps.files.remove(file.storagePath).catch(() => {});
+        if (file.originalPath) await deps.files.remove(file.originalPath).catch(() => {});
         return loadClaim(tx, claim.id, deps.files);
       }),
   );

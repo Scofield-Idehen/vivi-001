@@ -1,5 +1,6 @@
 import {
   IconArrowLeft,
+  IconCamera,
   IconDownload,
   IconFile,
   IconFileTypePdf,
@@ -36,6 +37,7 @@ import {
   useAddClaimFiles,
   useClaim,
   useClaimItems,
+  useMe,
   useRemoveClaimFile,
   useUpdateClaim,
   useWorkspace,
@@ -546,14 +548,43 @@ function Evidence({ claim, write }: { claim: Claim; write: boolean }) {
   const { orgId } = useCurrentWorkspace();
   const addFiles = useAddClaimFiles(orgId, claim.id);
   const removeFile = useRemoveClaimFile(orgId, claim.id);
+  const me = useMe();
+  const cameraInput = useRef<HTMLInputElement>(null);
   const photosInput = useRef<HTMLInputElement>(null);
   const receiptsInput = useRef<HTMLInputElement>(null);
   const [problems, setProblems] = useState<string[]>([]);
+  // Photos are stamped with the home and who added them; the time comes from the camera.
+  const stamp = {
+    where: claim.propertyName,
+    who: me.data?.user.fullName ?? me.data?.user.email ?? 'The team',
+  };
   const pick = (kind: ClaimFileKind) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = [...(e.target.files ?? [])];
     e.target.value = '';
-    if (files.length) addFiles.mutate({ files, kind }, { onSuccess: setProblems });
+    if (files.length) addFiles.mutate({ files, kind, stamp }, { onSuccess: setProblems });
   };
+  const isPicture = (f: Claim['files'][number]) =>
+    f.kind === 'photo' && f.contentType.startsWith('image/') && f.contentType !== 'image/heic';
+  const pictures = claim.files.filter(isPicture);
+  const others = claim.files.filter((f) => !isPicture(f));
+  const removeButton = (f: Claim['files'][number], extra = '') => (
+    <button
+      type="button"
+      aria-label={`Remove ${f.fileName}`}
+      disabled={removeFile.isPending}
+      onClick={() => {
+        if (
+          window.confirm(
+            `Remove ${f.fileName} from this claim?${f.original ? ' Its original goes too.' : ''}`,
+          )
+        )
+          removeFile.mutate(f.id);
+      }}
+      className={`flex size-8 shrink-0 items-center justify-center rounded-full text-slate hover:bg-linen hover:text-urgent ${extra}`}
+    >
+      <IconTrash size={16} stroke={1.75} aria-hidden />
+    </button>
+  );
   return (
     <Section
       id="evidence"
@@ -595,6 +626,14 @@ function Evidence({ claim, write }: { claim: Claim; write: boolean }) {
           {write ? (
             <div className="flex flex-wrap gap-2">
               <input
+                ref={cameraInput}
+                type="file"
+                hidden
+                accept="image/*"
+                capture="environment"
+                onChange={pick('photo')}
+              />
+              <input
                 ref={photosInput}
                 type="file"
                 multiple
@@ -610,6 +649,13 @@ function Evidence({ claim, write }: { claim: Claim; write: boolean }) {
                 accept="application/pdf,image/*"
                 onChange={pick('receipt')}
               />
+              <Button
+                className="sm:hidden"
+                disabled={addFiles.isPending}
+                onClick={() => cameraInput.current?.click()}
+              >
+                <IconCamera size={16} stroke={1.75} aria-hidden /> Take a photo
+              </Button>
               <Button disabled={addFiles.isPending} onClick={() => photosInput.current?.click()}>
                 <IconPhoto size={16} stroke={1.75} aria-hidden /> Photos or videos
               </Button>
@@ -621,7 +667,7 @@ function Evidence({ claim, write }: { claim: Claim; write: boolean }) {
         </div>
         {addFiles.isPending ? (
           <p className="mb-3 inline-flex items-center gap-2 text-[13.5px] text-slate">
-            <Spinner size={14} /> Uploading, kept exactly as they are
+            <Spinner size={14} /> Uploading: photos are stamped, and every original is kept as it is
           </p>
         ) : null}
         {problems.length ? (
@@ -629,9 +675,44 @@ function Evidence({ claim, write }: { claim: Claim; write: boolean }) {
             <Notice tone="urgent">{problems.join(' ')}</Notice>
           </div>
         ) : null}
-        {claim.files.length ? (
+        {pictures.length ? (
+          <ul className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {pictures.map((f) => (
+              <li key={f.id} className="relative">
+                <a
+                  href={f.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group block overflow-hidden rounded-lg border border-hairline"
+                >
+                  <img
+                    src={f.url}
+                    alt={f.stamp ?? f.fileName}
+                    loading="lazy"
+                    className="aspect-[4/3] w-full object-cover transition-transform group-hover:scale-[1.02]"
+                  />
+                </a>
+                {write ? removeButton(f, 'absolute top-1.5 right-1.5 bg-canvas/90') : null}
+                <p className="mt-1 line-clamp-2 text-[11.5px] leading-snug text-slate">
+                  {f.stamp ?? `${f.fileName} · not stamped`}
+                </p>
+                {f.original ? (
+                  <a
+                    href={f.original.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="action -ml-2.5 !h-7 text-[12px]"
+                  >
+                    Original ({size(f.original.bytes)})
+                  </a>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {others.length ? (
           <ul className="divide-y divide-hairline border-y border-hairline">
-            {claim.files.map((f) => (
+            {others.map((f) => (
               <li key={f.id} className="flex items-center justify-between gap-3 py-2.5">
                 <a
                   href={f.url}
@@ -639,17 +720,9 @@ function Evidence({ claim, write }: { claim: Claim; write: boolean }) {
                   rel="noreferrer"
                   className="flex min-w-0 flex-1 items-center gap-3 rounded-md hover:bg-paper"
                 >
-                  {f.contentType.startsWith('image/') && f.contentType !== 'image/heic' ? (
-                    <img
-                      src={f.url}
-                      alt=""
-                      className="size-10 shrink-0 rounded-md border border-hairline object-cover"
-                    />
-                  ) : (
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-md border border-hairline">
-                      <FileIcon contentType={f.contentType} />
-                    </span>
-                  )}
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-md border border-hairline">
+                    <FileIcon contentType={f.contentType} />
+                  </span>
                   <span className="min-w-0">
                     <span className="block truncate text-[14px] text-ink">{f.fileName}</span>
                     <span className="block text-[12.5px] text-slate">
@@ -663,28 +736,17 @@ function Evidence({ claim, write }: { claim: Claim; write: boolean }) {
                     </span>
                   </span>
                 </a>
-                {write ? (
-                  <button
-                    type="button"
-                    aria-label={`Remove ${f.fileName}`}
-                    disabled={removeFile.isPending}
-                    onClick={() => {
-                      if (window.confirm(`Remove ${f.fileName} from this claim?`)) removeFile.mutate(f.id);
-                    }}
-                    className="flex size-8 shrink-0 items-center justify-center rounded-full text-slate hover:bg-linen hover:text-urgent"
-                  >
-                    <IconTrash size={16} stroke={1.75} aria-hidden />
-                  </button>
-                ) : null}
+                {write ? removeButton(f) : null}
               </li>
             ))}
           </ul>
-        ) : (
+        ) : null}
+        {claim.files.length === 0 ? (
           <p className="text-[13.5px] text-slate">
-            Nothing added yet. Receipts, repair quotes and your own photos or videos are kept exactly as
-            uploaded.
+            Nothing added yet. Photos get the time, the home and your name stamped on them, and the original
+            is kept untouched beside each one. Receipts and videos are kept exactly as uploaded.
           </p>
-        )}
+        ) : null}
       </div>
     </Section>
   );

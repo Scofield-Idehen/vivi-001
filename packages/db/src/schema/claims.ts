@@ -90,9 +90,15 @@ export const claimFiles = app.table(
     bytes: bigint('bytes', { mode: 'number' }).notNull(),
     uploadedBy: uuid('uploaded_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
+    /** A stamped photo's words, and the untouched original kept beside it. */
+    stamp: text('stamp'),
+    originalPath: text('original_path'),
+    originalType: text('original_type'),
+    originalBytes: bigint('original_bytes', { mode: 'number' }),
   },
   (t) => [
     index('claim_files_claim_idx').on(t.claimId),
+    check('claim_files_stamp_length', sql`${t.stamp} is null or char_length(${t.stamp}) <= 300`),
     unique('claim_files_storage_path_key').on(t.storagePath),
     check('claim_files_kind', sql`${t.kind} in ('photo', 'receipt', 'other')`),
     check('claim_files_name_length', sql`char_length(${t.fileName}) between 1 and 200`),

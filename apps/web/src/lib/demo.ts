@@ -3062,6 +3062,8 @@ interface DemoClaim {
     url: string;
     uploadedBy: string | null;
     createdAt: string;
+    stamp?: string | null;
+    original?: { url: string; contentType: string; bytes: number } | null;
   }[];
   createdBy: string | null;
   createdAt: string;
@@ -3260,7 +3262,13 @@ async function claimView(operator: DemoOperator, c: DemoClaim): Promise<Claim> {
     return out;
   };
   const files: Claim['files'] = [];
-  for (const f of c.files) files.push({ ...f, url: (await demoUrl(f.url)) ?? '' });
+  for (const f of c.files)
+    files.push({
+      ...f,
+      url: (await demoUrl(f.url)) ?? '',
+      stamp: f.stamp ?? null,
+      original: f.original ? { ...f.original, url: (await demoUrl(f.original.url)) ?? '' } : null,
+    });
   return {
     ...base,
     summary: c.summary,
@@ -3353,21 +3361,34 @@ export async function demoAddClaimFile(
   file: File,
   kind: ClaimFileKind,
   contentType: string,
+  stamped: { photo: { blob: Blob }; text: string } | null = null,
 ): Promise<Claim> {
   const { operator } = access(orgId, 'claims.write');
   const claim = findClaim(operator, claimId);
   if (claim.files.length >= 40) throw new ApiError(409, 'too_many_files', 'A claim can have up to 40 files.');
   const id = crypto.randomUUID();
-  await putDemoPhoto(id, file);
+  await putDemoPhoto(id, stamped ? stamped.photo.blob : file);
+  let original: DemoClaim['files'][number]['original'] = null;
+  if (stamped) {
+    const originalId = crypto.randomUUID();
+    await putDemoPhoto(originalId, file);
+    original = {
+      url: `demo-photo:${originalId}`,
+      contentType: contentType || 'application/octet-stream',
+      bytes: file.size,
+    };
+  }
   claim.files.push({
     id,
     kind,
     fileName: file.name.slice(0, 200),
-    contentType: contentType || 'application/octet-stream',
-    bytes: file.size,
+    contentType: stamped ? 'image/jpeg' : contentType || 'application/octet-stream',
+    bytes: stamped ? stamped.photo.blob.size : file.size,
     url: `demo-photo:${id}`,
     uploadedBy: 'Demo user',
     createdAt: new Date().toISOString(),
+    stamp: stamped?.text ?? null,
+    original,
   });
   claim.updatedAt = new Date().toISOString();
   save();
@@ -3473,6 +3494,7 @@ async function demoClaims(
     if (!file) throw new ApiError(404, 'file_not_found', 'That file is not on this claim.');
     claim.files = claim.files.filter((f) => f !== file);
     await deleteDemoPhoto(file.id);
+    if (file.original?.url.startsWith('demo-photo:')) await deleteDemoPhoto(file.original.url.slice(11));
     touch();
     return claimView(operator, claim);
   }
