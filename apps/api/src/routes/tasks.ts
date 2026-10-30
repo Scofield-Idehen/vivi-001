@@ -456,6 +456,8 @@ export function taskRoutes(
           .values({
             organisationId: ctx.orgId,
             propertyId: from.propertyId,
+            // Kept on the booking the job came from, so a claim for that stay finds the report.
+            reservationId: from.reservationId,
             kind: 'maintenance',
             source: 'report',
             title: 'Damage reported',

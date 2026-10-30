@@ -11,6 +11,12 @@ import type {
   ChannelAccountList,
   ChannexState,
   ChargeCreate,
+  Claim,
+  ClaimFileKind,
+  ClaimItemInput,
+  ClaimList,
+  ClaimUpdate,
+  ClaimView,
   CleaningState,
   CleaningUpdate,
   ConnectAllResult,
@@ -86,7 +92,7 @@ import type {
   WorkspaceSync,
 } from '@v01/shared';
 import { config } from './config.ts';
-import { demoAddPhoto, demoAddTaskPhoto, demoFetch } from './demo.ts';
+import { demoAddClaimFile, demoAddPhoto, demoAddTaskPhoto, demoFetch } from './demo.ts';
 import { ApiError } from './errors.ts';
 import {
   PhotoError,
@@ -1344,5 +1350,125 @@ export function useTrends(orgId: string | null, days: 7 | 30) {
     enabled: Boolean(token && orgId),
     queryFn: () => apiFetch<Trends>(`/v1/overview/trends?days=${days}`, { token: token as string, orgId }),
     placeholderData: keepPreviousData,
+  });
+}
+
+// Claims ----------------------------------------------------------------------------------------
+
+export function useClaims(orgId: string | null, view: ClaimView, enabled = true) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['claims', orgId, view],
+    enabled: Boolean(token && orgId && enabled),
+    placeholderData: keepPreviousData,
+    queryFn: () => apiFetch<ClaimList>(`/v1/claims?view=${view}`, { token: token as string, orgId }),
+  });
+}
+
+export function useClaim(orgId: string | null, id: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['claim', orgId, id],
+    enabled: Boolean(token && orgId && id),
+    queryFn: () => apiFetch<Claim>(`/v1/claims/${id}`, { token: token as string, orgId }),
+  });
+}
+
+/** Every change to a claim answers with the whole claim; keep it and refresh the lists and Today. */
+function useClaimMutation<V>(orgId: string | null, run: (token: string, v: V) => Promise<Claim>) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (v: V) => run(token as string, v),
+    onSuccess: (claim) => {
+      queryClient.setQueryData(['claim', orgId, claim.id], claim);
+      void queryClient.invalidateQueries({ queryKey: ['claims', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['today', orgId] });
+    },
+  });
+}
+
+export function useStartClaim(orgId: string | null) {
+  return useClaimMutation<string>(orgId, (token, reservationId) =>
+    apiFetch<Claim>('/v1/claims', { token, orgId, method: 'POST', body: { reservationId } }),
+  );
+}
+
+export function useUpdateClaim(orgId: string | null, id: string) {
+  return useClaimMutation<ClaimUpdate>(orgId, (token, body) =>
+    apiFetch<Claim>(`/v1/claims/${id}`, { token, orgId, method: 'PATCH', body }),
+  );
+}
+
+export function useClaimItems(orgId: string | null, id: string) {
+  const add = useClaimMutation<ClaimItemInput>(orgId, (token, body) =>
+    apiFetch<Claim>(`/v1/claims/${id}/items`, { token, orgId, method: 'POST', body }),
+  );
+  const change = useClaimMutation<{ itemId: string } & ClaimItemInput>(orgId, (token, { itemId, ...body }) =>
+    apiFetch<Claim>(`/v1/claims/${id}/items/${itemId}`, { token, orgId, method: 'PATCH', body }),
+  );
+  const remove = useClaimMutation<string>(orgId, (token, itemId) =>
+    apiFetch<Claim>(`/v1/claims/${id}/items/${itemId}`, { token, orgId, method: 'DELETE' }),
+  );
+  return { add, change, remove };
+}
+
+export function useRemoveClaimFile(orgId: string | null, id: string) {
+  return useClaimMutation<string>(orgId, (token, fileId) =>
+    apiFetch<Claim>(`/v1/claims/${id}/files/${fileId}`, { token, orgId, method: 'DELETE' }),
+  );
+}
+
+/** A file as the person chose it: no resizing, no re-encoding, so the original is what's kept. */
+async function addClaimFile(
+  token: string,
+  orgId: string | null,
+  claimId: string,
+  file: File,
+  kind: ClaimFileKind,
+): Promise<Claim> {
+  const contentType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : '');
+  if (config.demo) return demoAddClaimFile(orgId, claimId, file, kind, contentType);
+  const ticket = await apiFetch<PhotoUploadTicket>(`/v1/claims/${claimId}/files/uploads`, {
+    token,
+    orgId,
+    method: 'POST',
+    body: { contentType, bytes: file.size },
+  });
+  let response: Response;
+  try {
+    response = await fetch(ticket.uploadUrl, { method: ticket.method, headers: ticket.headers, body: file });
+  } catch {
+    throw new ApiError(0, 'offline', 'Cannot reach file storage. Check your connection and try again.');
+  }
+  if (!response.ok)
+    throw new ApiError(response.status, 'upload_failed', `${file.name} could not be uploaded.`);
+  return apiFetch<Claim>(`/v1/claims/${claimId}/files`, {
+    token,
+    orgId,
+    method: 'POST',
+    body: { path: ticket.path, kind, fileName: file.name.slice(0, 200), contentType, bytes: file.size },
+  });
+}
+
+/** Uploads files one at a time; one that fails doesn't stop the rest. */
+export function useAddClaimFiles(orgId: string | null, claimId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ files, kind }: { files: File[]; kind: ClaimFileKind }) => {
+      const problems: string[] = [];
+      for (const file of files) {
+        try {
+          const claim = await addClaimFile(token as string, orgId, claimId, file, kind);
+          queryClient.setQueryData(['claim', orgId, claimId], claim);
+        } catch (error) {
+          problems.push(
+            error instanceof ApiError ? `${file.name}: ${error.message}` : `${file.name} failed.`,
+          );
+        }
+      }
+      return problems;
+    },
   });
 }

@@ -32,6 +32,9 @@ export const PERMISSIONS = {
   'inbox.write': ['admin', 'operations', 'guest_comms'],
   /** Automatic messages and saved replies. */
   'inbox.manage': ['admin', 'operations', 'guest_comms'],
+  /** Damage claims: the office and accounts make and file them; guest comms and support read. */
+  'claims.read': ['admin', 'operations', 'guest_comms', 'accounts', 'v01_support'],
+  'claims.write': ['admin', 'operations', 'accounts'],
   'channels.read': ['admin', 'operations', 'guest_comms', 'accounts', 'v01_support'],
   'channels.manage': ['admin'],
   'workspace.read': ['admin', 'operations', 'guest_comms', 'accounts', 'field', 'v01_support'],

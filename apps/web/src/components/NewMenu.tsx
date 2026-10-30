@@ -2,6 +2,7 @@ import {
   IconCalendarOff,
   IconCalendarPlus,
   IconChecklist,
+  IconFileAlert,
   IconHome,
   IconMessage,
   IconPlus,
@@ -22,6 +23,7 @@ import {
   useWorkspace,
 } from '../lib/api.ts';
 import { useCurrentWorkspace } from '../lib/workspace.tsx';
+import { StartClaimSheet } from '../pages/claims/ClaimsPage.tsx';
 import { NewBookingSheet } from '../pages/reservations/NewBookingSheet.tsx';
 import { NewTaskSheet } from '../pages/tasks/TasksPage.tsx';
 import { DateField } from './DateField.tsx';
@@ -36,7 +38,7 @@ import { Button, Notice } from './ui.tsx';
  * Only what the person's role allows is listed; the field team gets "Report damage".
  */
 
-type Item = 'booking' | 'task' | 'block' | 'message' | 'damage' | 'property';
+type Item = 'booking' | 'task' | 'block' | 'message' | 'claim' | 'damage' | 'property';
 
 const ITEMS: {
   id: Item;
@@ -49,6 +51,7 @@ const ITEMS: {
   { id: 'task', label: 'Task', key: 't', Icon: IconChecklist, allowed: 'tasks.manage' },
   { id: 'block', label: 'Block dates', key: 'd', Icon: IconCalendarOff, allowed: 'calendar.write' },
   { id: 'message', label: 'Message a guest', key: 'm', Icon: IconMessage, allowed: 'inbox.write' },
+  { id: 'claim', label: 'Damage claim', key: 'c', Icon: IconFileAlert, allowed: 'claims.write' },
   { id: 'damage', label: 'Report damage', key: 'r', Icon: IconTool, allowed: (role) => role === 'field' },
   { id: 'property', label: 'Property', key: 'p', Icon: IconHome, allowed: 'properties.write' },
 ];
@@ -210,6 +213,7 @@ export function NewMenu() {
         <BlockDatesSheet orgId={orgId} today={today} propertyId={here} onClose={() => setSheet(null)} />
       ) : null}
       {sheet === 'message' ? <MessageGuestSheet orgId={orgId} onClose={() => setSheet(null)} /> : null}
+      {sheet === 'claim' ? <StartClaimSheet onClose={() => setSheet(null)} /> : null}
       {sheet === 'damage' ? <ReportDamageSheet orgId={orgId} onClose={() => setSheet(null)} /> : null}
     </>
   );

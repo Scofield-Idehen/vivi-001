@@ -19,6 +19,7 @@ import { NO_PHOTO_STORE, type PhotoStore, SupabasePhotoStore } from './photos.ts
 import { calendarRoutes } from './routes/calendar.ts';
 import { channelRoutes } from './routes/channels.ts';
 import { channexRoutes } from './routes/channex.ts';
+import { claimRoutes } from './routes/claims.ts';
 import { cleaningRoutes } from './routes/cleaning.ts';
 import { consoleRoutes } from './routes/console.ts';
 import { fieldRoutes } from './routes/fields.ts';
@@ -141,9 +142,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   cleaningRoutes(app, { scope });
   channexRoutes(app, { scope });
   channelRoutes(app, { scope });
-  todayRoutes(app, { scope });
+  todayRoutes(app, { scope, now: deps.now });
   overviewRoutes(app, { scope, now: deps.now });
   taskRoutes(app, { scope, photos: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, box });
+  claimRoutes(app, { scope, files: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, now: deps.now });
   inboxRoutes(app, { scope });
   const lockProvider =
     deps.locks !== undefined

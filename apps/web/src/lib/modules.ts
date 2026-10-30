@@ -97,7 +97,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
         path: 'claims',
         label: 'Claims',
         icon: IconFileAlert,
-        built: false,
+        built: true,
         design: 'D3',
         phase: 'Phase 3',
         summary: 'Damage claims from received to closed, with check-in and checkout photos side by side.',

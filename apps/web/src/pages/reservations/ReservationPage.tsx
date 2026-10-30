@@ -23,6 +23,7 @@ import {
 import { config } from '../../lib/config.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
 import { Facts, Missing } from '../properties/Section.tsx';
+import { ClaimButton } from './ClaimButton.tsx';
 import { Money } from './Money.tsx';
 import { contactRoutes, dayLabel, partyLabel, stayTimes, whenLabel } from './model.ts';
 import { MessageGuest, ReservationEditor, StatusLabel } from './parts.tsx';
@@ -296,6 +297,7 @@ export function ReservationPage() {
             </Button>
           ) : null}
           <MessageGuest reservation={r} routes={contactRoutes(r)} />
+          {r.status === 'confirmed' && r.checkIn <= r.today ? <ClaimButton reservationId={r.id} /> : null}
           {canEdit && r.channel === 'direct' && r.status !== 'cancelled' && !editing ? (
             <Button variant="quiet" className="action-urgent" onClick={() => setCancelling(true)}>
               Cancel booking

@@ -20,6 +20,14 @@ import {
   type ChannexState,
   type Charge,
   ChargeCreateSchema,
+  CLAIM_DAYS,
+  type Claim,
+  type ClaimFileKind,
+  type ClaimItem,
+  type ClaimList,
+  type ClaimPlace,
+  type ClaimStatus,
+  type ClaimSummary,
   type CleaningState,
   CleaningUpdateSchema,
   type ConsoleOperator,
@@ -32,6 +40,8 @@ import {
   CustomFieldCreateSchema,
   CustomFieldUpdateSchema,
   can,
+  claimDeadline,
+  claimPlaceFor,
   countBeds,
   type DailyOverview,
   DamageReportSchema,
@@ -222,6 +232,8 @@ interface DemoOperator {
   /** Tasks for the field team, and what each kind starts with. Missing in older saved states. */
   tasks?: Task[];
   taskTemplates?: TaskTemplate[];
+  /** Damage claims, one per booking. Missing in older saved states. */
+  claims?: DemoClaim[];
   /** Open invitations to the team. Missing in older saved states. */
   invitations?: Invitation[];
   /** The Inbox: a thread per booking, and the automatic messages and saved replies. Missing in older saved states. */
@@ -1543,7 +1555,7 @@ export async function demoAddTaskPhoto(
 async function resolvedTask(task: Task): Promise<Task> {
   const photos: Task['photos'] = [];
   for (const p of task.photos) {
-    const url = p.url.startsWith('demo-photo:') ? await demoPhotoUrl(p.url.slice(11)) : p.url;
+    const url = await demoUrl(p.url);
     if (url) photos.push({ ...p, url });
   }
   return { ...task, photos };
@@ -2763,6 +2775,26 @@ function demoToday(operator: DemoOperator, role: WorkspaceRole): Today {
       });
     }
   }
+  if (can(role, 'claims.read')) {
+    for (const c of settleClaims(operator)) {
+      if (c.status !== 'open' || c.deadline > addDays(today, 3)) continue;
+      const v = claimSummary(operator, c);
+      if (!v) continue;
+      const left = Math.round((Date.parse(c.deadline) - Date.parse(today)) / 86_400_000);
+      attention.push({
+        id: `claim:${c.id}`,
+        severity: left <= 1 ? 'urgent' : 'warning',
+        title:
+          left < 0
+            ? "A claim's deadline has passed"
+            : left === 0
+              ? 'A claim must be filed today'
+              : `A claim must be filed within ${left} ${left === 1 ? 'day' : 'days'}`,
+        detail: `${v.guestName ? `${v.guestName}, ` : ''}${v.propertyName}.`,
+        to: `/claims/${c.id}`,
+      });
+    }
+  }
   attention.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'urgent' ? -1 : 1));
 
   // At a glance, worked out the way the API does.
@@ -2989,6 +3021,446 @@ function demoTrends(operator: DemoOperator, days: 7 | 30): Trends {
       occupancy: pct(occupiedSum, homes * days),
     },
   };
+}
+
+/** A stored address as something the browser can show: this browser's uploads, or a drawn room. */
+async function demoUrl(url: string): Promise<string | null> {
+  if (url.startsWith('demo-photo:')) return demoPhotoUrl(url.slice(11));
+  if (url.startsWith('sample-photo:')) return SAMPLE_PHOTOS[url.slice(13)] ?? null;
+  return url;
+}
+
+interface DemoClaim {
+  id: string;
+  reservationId: string;
+  status: ClaimStatus;
+  place: ClaimPlace;
+  deadline: string;
+  summary: string | null;
+  filedOn: string | null;
+  filedReference: string | null;
+  receivedMinor: number | null;
+  outcome: string | null;
+  items: ClaimItem[];
+  files: {
+    id: string;
+    kind: ClaimFileKind;
+    fileName: string;
+    contentType: string;
+    bytes: number;
+    url: string;
+    uploadedBy: string | null;
+    createdAt: string;
+  }[];
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function nextArrival(operator: DemoOperator, propertyId: string, checkOut: string): string | null {
+  return (
+    operator.calendar.stays
+      .filter((x) => x.status === 'confirmed' && x.propertyId === propertyId && x.checkIn >= checkOut)
+      .map((x) => x.checkIn)
+      .sort()[0] ?? null
+  );
+}
+
+/**
+ * The demo's claims. The first time, one is laid in for a guest who left a few days ago: the clean
+ * before they came and the one after (with drawn photos), a damage report, and two lines.
+ */
+function settleClaims(operator: DemoOperator): DemoClaim[] {
+  const tasks = settleTasks(operator);
+  if (operator.claims) return operator.claims;
+  operator.claims = [];
+  const today = todayIn(operator.workspace.settings.timeZone);
+  const left = operator.calendar.stays
+    .filter((x) => x.status === 'confirmed' && x.checkOut < today && x.checkOut >= addDays(today, -6))
+    .sort((a, b) => b.checkOut.localeCompare(a.checkOut))[0];
+  const property = left ? operator.properties.find((p) => p.id === left.propertyId) : undefined;
+  if (!left || !property) return operator.claims;
+  const who = { id: 'demo-cleaner', name: 'Sam Okafor' };
+  const tz = operator.workspace.settings.timeZone;
+  const job = (over: Partial<Task>): Task => ({
+    id: crypto.randomUUID(),
+    propertyId: property.id,
+    propertyName: property.name,
+    propertyAddress: null,
+    access: [],
+    reservationId: null,
+    kind: 'cleaning',
+    source: 'check_out',
+    title: 'Clean after check-out',
+    notes: null,
+    status: 'done',
+    dueOn: today,
+    dueTime: null,
+    assignee: who,
+    checklist: [],
+    photos: [],
+    guestLeavesAt: null,
+    nextArrivalAt: null,
+    doneBy: who.name,
+    doneAt: null,
+    createdAt: new Date().toISOString(),
+    ...over,
+  });
+  const shot = (
+    key: string,
+    stage: 'before' | 'after' | 'found',
+    day: string,
+    time: string,
+    what: string,
+  ) => ({
+    id: crypto.randomUUID(),
+    url: `sample-photo:${key}`,
+    width: 1600,
+    height: 1200,
+    takenBy: who.name,
+    stage,
+    stamp: `${new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${day}T12:00:00`))}, ${time} · ${property.name} · ${who.name}${what ? ` · ${what}` : ''}`,
+    at: zonedInstant(day, time, tz).toISOString(),
+  });
+  tasks.push(
+    job({
+      dueOn: left.checkIn,
+      doneAt: zonedInstant(left.checkIn, '13:10', tz).toISOString(),
+      photos: [
+        shot('room1', 'after', left.checkIn, '13:05', ''),
+        shot('room2', 'after', left.checkIn, '13:08', ''),
+      ],
+    }),
+    job({
+      reservationId: left.id,
+      dueOn: left.checkOut,
+      doneAt: zonedInstant(left.checkOut, '14:20', tz).toISOString(),
+      photos: [
+        shot('room1', 'before', left.checkOut, '11:02', ''),
+        shot('room3', 'found', left.checkOut, '11:06', 'rug'),
+      ],
+    }),
+    job({
+      reservationId: left.id,
+      kind: 'maintenance',
+      source: 'report',
+      title: 'Damage reported',
+      status: 'open',
+      assignee: null,
+      doneBy: null,
+      dueOn: left.checkOut,
+      notes: 'Red wine on the living-room rug, soaked in. One dining chair leg split at the joint.',
+    }),
+  );
+  const now = new Date().toISOString();
+  operator.claims.push({
+    id: crypto.randomUUID(),
+    reservationId: left.id,
+    status: 'open',
+    place: claimPlaceFor(left.channel),
+    deadline: claimDeadline(
+      left.channel,
+      left.checkOut,
+      nextArrival(operator, left.propertyId, left.checkOut),
+    ),
+    summary: 'Wine spilt on the living-room rug and a dining chair broken during the stay.',
+    filedOn: null,
+    filedReference: null,
+    receivedMinor: null,
+    outcome: null,
+    items: [
+      { id: crypto.randomUUID(), description: 'Rug: professional deep clean', amountMinor: 8500 },
+      { id: crypto.randomUUID(), description: 'Dining chair: replacement', amountMinor: 12000 },
+    ],
+    files: [],
+    createdBy: 'Demo user',
+    createdAt: now,
+    updatedAt: now,
+  });
+  save();
+  return operator.claims;
+}
+
+function claimSummary(operator: DemoOperator, c: DemoClaim): ClaimSummary | null {
+  const stay = operator.calendar.stays.find((x) => x.id === c.reservationId);
+  const property = stay ? operator.properties.find((p) => p.id === stay.propertyId) : undefined;
+  if (!stay || !property) return null;
+  return {
+    id: c.id,
+    reservationId: stay.id,
+    propertyId: property.id,
+    propertyName: property.name,
+    guestName: stay.guestName,
+    channel: stay.channel,
+    channelReference: stay.channelReference,
+    checkIn: stay.checkIn,
+    checkOut: stay.checkOut,
+    status: c.status,
+    place: c.place,
+    deadline: c.deadline,
+    currency: stay.currency ?? operator.workspace.settings.currency,
+    claimedMinor: c.items.reduce((sum, i) => sum + i.amountMinor, 0),
+    receivedMinor: c.receivedMinor,
+    createdAt: c.createdAt,
+  };
+}
+
+async function claimView(operator: DemoOperator, c: DemoClaim): Promise<Claim> {
+  const base = claimSummary(operator, c);
+  if (!base) throw new ApiError(404, 'claim_not_found', 'That claim does not exist in this workspace.');
+  const tasks = settleTasks(operator);
+  const next = nextArrival(operator, base.propertyId, base.checkOut);
+  const cap = addDays(base.checkOut, CLAIM_DAYS);
+  const until = next && next < cap ? next : cap;
+  const prior = tasks
+    .filter(
+      (t) =>
+        t.propertyId === base.propertyId &&
+        t.kind === 'cleaning' &&
+        t.dueOn <= base.checkIn &&
+        t.dueOn >= addDays(base.checkIn, -60) &&
+        t.photos.length,
+    )
+    .sort((a, b) => b.dueOn.localeCompare(a.dueOn))[0];
+  const around = tasks.filter(
+    (t) =>
+      t !== prior &&
+      t.propertyId === base.propertyId &&
+      (t.reservationId === base.reservationId || (t.dueOn >= base.checkOut && t.dueOn <= until)),
+  );
+  const photosOf = async (list: Task[]) => {
+    const out: Claim['before'] = [];
+    for (const t of list)
+      for (const p of t.photos) {
+        const url = await demoUrl(p.url);
+        if (url)
+          out.push({
+            id: p.id,
+            url,
+            stage: p.stage,
+            stamp: p.stamp,
+            takenAt: p.at,
+            takenBy: p.takenBy,
+            taskId: t.id,
+            taskTitle: t.title,
+            taskDay: t.dueOn,
+          });
+      }
+    return out;
+  };
+  const files: Claim['files'] = [];
+  for (const f of c.files) files.push({ ...f, url: (await demoUrl(f.url)) ?? '' });
+  return {
+    ...base,
+    summary: c.summary,
+    filedOn: c.filedOn,
+    filedReference: c.filedReference,
+    outcome: c.outcome,
+    createdBy: c.createdBy,
+    items: c.items,
+    files,
+    before: prior ? await photosOf([prior]) : [],
+    after: await photosOf(around),
+    reports: around
+      .filter((t) => t.source === 'report')
+      .map((t) => ({ taskId: t.id, day: t.dueOn, what: t.notes, by: t.assignee?.name ?? 'The field team' })),
+    nextCheckIn: next,
+  };
+}
+
+function findClaim(operator: DemoOperator, id: string): DemoClaim {
+  const claim = settleClaims(operator).find((c) => c.id === id);
+  if (!claim) throw new ApiError(404, 'claim_not_found', 'That claim does not exist in this workspace.');
+  return claim;
+}
+
+function demoClaimList(operator: DemoOperator, view: string): ClaimList {
+  const all = settleClaims(operator);
+  const today = todayIn(operator.workspace.settings.timeZone);
+  const active = (c: DemoClaim) => c.status === 'open' || c.status === 'filed';
+  const rows = all
+    .filter((c) => (view === 'done' ? !active(c) : active(c)))
+    .map((c) => claimSummary(operator, c))
+    .filter((c): c is ClaimSummary => c !== null)
+    .sort((a, b) =>
+      view === 'done' ? b.createdAt.localeCompare(a.createdAt) : a.deadline.localeCompare(b.deadline),
+    );
+  const claimed = new Set(all.map((c) => c.reservationId));
+  const confirmed = operator.calendar.stays.filter((x) => x.status === 'confirmed');
+  const counts = new Map<string, number>();
+  for (const t of settleTasks(operator)) {
+    if (t.source !== 'report' || t.dueOn < addDays(today, -(CLAIM_DAYS + 7))) continue;
+    const stay =
+      (t.reservationId ? confirmed.find((x) => x.id === t.reservationId) : undefined) ??
+      confirmed
+        .filter(
+          (x) =>
+            x.propertyId === t.propertyId &&
+            x.checkOut <= t.dueOn &&
+            x.checkOut >= addDays(t.dueOn, -CLAIM_DAYS),
+        )
+        .sort((a, b) => b.checkOut.localeCompare(a.checkOut))[0];
+    if (stay && stay.checkOut <= today && !claimed.has(stay.id))
+      counts.set(stay.id, (counts.get(stay.id) ?? 0) + 1);
+  }
+  const suggestions = [...counts].flatMap(([id, reports]) => {
+    const stay = confirmed.find((x) => x.id === id);
+    const property = stay ? operator.properties.find((p) => p.id === stay.propertyId) : undefined;
+    if (!stay || !property) return [];
+    return [
+      {
+        reservationId: stay.id,
+        propertyName: property.name,
+        guestName: stay.guestName,
+        channel: stay.channel,
+        checkOut: stay.checkOut,
+        deadline: claimDeadline(
+          stay.channel,
+          stay.checkOut,
+          nextArrival(operator, stay.propertyId, stay.checkOut),
+        ),
+        reports,
+      },
+    ];
+  });
+  return {
+    today,
+    claims: rows,
+    suggestions,
+    counts: { active: all.filter(active).length, done: all.filter((c) => !active(c)).length },
+  };
+}
+
+export async function demoAddClaimFile(
+  orgId: string | null,
+  claimId: string,
+  file: File,
+  kind: ClaimFileKind,
+  contentType: string,
+): Promise<Claim> {
+  const { operator } = access(orgId, 'claims.write');
+  const claim = findClaim(operator, claimId);
+  if (claim.files.length >= 40) throw new ApiError(409, 'too_many_files', 'A claim can have up to 40 files.');
+  const id = crypto.randomUUID();
+  await putDemoPhoto(id, file);
+  claim.files.push({
+    id,
+    kind,
+    fileName: file.name.slice(0, 200),
+    contentType: contentType || 'application/octet-stream',
+    bytes: file.size,
+    url: `demo-photo:${id}`,
+    uploadedBy: 'Demo user',
+    createdAt: new Date().toISOString(),
+  });
+  claim.updatedAt = new Date().toISOString();
+  save();
+  return claimView(operator, claim);
+}
+
+async function demoClaims(
+  orgId: string | null | undefined,
+  method: string,
+  path: string,
+  body: unknown,
+): Promise<unknown> {
+  const url = new URL(path, 'https://demo.invalid');
+  const parts = url.pathname.split('/').filter(Boolean); // v1, claims, id?, items|files?, sub?
+  if (method === 'GET' && parts.length === 2) {
+    const { operator } = access(orgId, 'claims.read');
+    return demoClaimList(operator, url.searchParams.get('view') ?? 'active');
+  }
+  if (method === 'POST' && parts.length === 2) {
+    const { operator } = access(orgId, 'claims.write');
+    const { reservationId } = body as { reservationId: string };
+    const stay = operator.calendar.stays.find((x) => x.id === reservationId);
+    if (!stay)
+      throw new ApiError(404, 'reservation_not_found', 'That booking does not exist in this workspace.');
+    const claims = settleClaims(operator);
+    const existing = claims.find((c) => c.reservationId === stay.id);
+    if (existing) return claimView(operator, existing);
+    const now = new Date().toISOString();
+    const claim: DemoClaim = {
+      id: crypto.randomUUID(),
+      reservationId: stay.id,
+      status: 'open',
+      place: claimPlaceFor(stay.channel),
+      deadline: claimDeadline(
+        stay.channel,
+        stay.checkOut,
+        nextArrival(operator, stay.propertyId, stay.checkOut),
+      ),
+      summary: null,
+      filedOn: null,
+      filedReference: null,
+      receivedMinor: null,
+      outcome: null,
+      items: [],
+      files: [],
+      createdBy: 'Demo user',
+      createdAt: now,
+      updatedAt: now,
+    };
+    claims.push(claim);
+    save();
+    return claimView(operator, claim);
+  }
+  const id = parts[2] ?? '';
+  const read = method === 'GET';
+  const { operator } = access(orgId, read ? 'claims.read' : 'claims.write');
+  const claim = findClaim(operator, id);
+  const touch = () => {
+    claim.updatedAt = new Date().toISOString();
+    save();
+  };
+  if (parts.length === 3) {
+    if (method === 'GET') return claimView(operator, claim);
+    if (method === 'PATCH') {
+      const b = body as Partial<DemoClaim>;
+      const blank = (v: string | null | undefined) => (v?.trim() ? v.trim() : null);
+      if (b.status !== undefined) {
+        if (b.status === 'filed' && !claim.filedOn && b.filedOn === undefined)
+          claim.filedOn = todayIn(operator.workspace.settings.timeZone);
+        claim.status = b.status;
+      }
+      if (b.place !== undefined) claim.place = b.place;
+      if (b.deadline !== undefined) claim.deadline = b.deadline;
+      if (b.summary !== undefined) claim.summary = blank(b.summary);
+      if (b.filedOn !== undefined) claim.filedOn = b.filedOn;
+      if (b.filedReference !== undefined) claim.filedReference = blank(b.filedReference);
+      if (b.receivedMinor !== undefined) claim.receivedMinor = b.receivedMinor;
+      if (b.outcome !== undefined) claim.outcome = blank(b.outcome);
+      touch();
+      return claimView(operator, claim);
+    }
+  }
+  if (parts[3] === 'items') {
+    const b = body as { description: string; amountMinor: number };
+    if (method === 'POST' && parts.length === 4) {
+      claim.items.push({
+        id: crypto.randomUUID(),
+        description: b.description.trim(),
+        amountMinor: b.amountMinor,
+      });
+    } else {
+      const item = claim.items.find((i) => i.id === parts[4]);
+      if (!item) throw new ApiError(404, 'item_not_found', 'That line is not on this claim.');
+      if (method === 'PATCH')
+        Object.assign(item, { description: b.description.trim(), amountMinor: b.amountMinor });
+      if (method === 'DELETE') claim.items = claim.items.filter((i) => i !== item);
+    }
+    touch();
+    return claimView(operator, claim);
+  }
+  if (parts[3] === 'files' && method === 'DELETE') {
+    const file = claim.files.find((f) => f.id === parts[4]);
+    if (!file) throw new ApiError(404, 'file_not_found', 'That file is not on this claim.');
+    claim.files = claim.files.filter((f) => f !== file);
+    await deleteDemoPhoto(file.id);
+    touch();
+    return claimView(operator, claim);
+  }
+  throw new ApiError(404, 'not_found', 'Nothing here.');
 }
 
 function findStay(operator: DemoOperator, id: string): DemoStay {
@@ -3746,6 +4218,10 @@ export async function demoFetch<T>(
       save();
       return (await resolvedTask(task)) as T;
     }
+  }
+
+  if (path === '/v1/claims' || path.startsWith('/v1/claims?') || path.startsWith('/v1/claims/')) {
+    return (await demoClaims(options.orgId, method, path, options.body)) as T;
   }
 
   if (method === 'GET' && path === '/v1/today') {

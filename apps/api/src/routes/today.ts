@@ -42,7 +42,7 @@ const clock = (time: string | null) => (time ? time.slice(0, 5) : null);
  * Today: arrivals, departures, cleans due and everything that needs a person. Each role sees what it
  * may: the field team sees cleans and arrivals without guest names; accounts see no channel problems.
  */
-export function todayRoutes(app: FastifyInstance, deps: { scope: RequestScope }) {
+export function todayRoutes(app: FastifyInstance, deps: { scope: RequestScope; now?: () => Date }) {
   app
     .withTypeProvider<ZodTypeProvider>()
     .get('/v1/today', { schema: { response: { 200: TodaySchema } } }, async (req) =>
@@ -50,7 +50,7 @@ export function todayRoutes(app: FastifyInstance, deps: { scope: RequestScope })
         const [settings] = await tx
           .select({ timeZone: organisationSettings.timeZone })
           .from(organisationSettings);
-        const today = todayIn(settings?.timeZone ?? 'Europe/London');
+        const today = todayIn(settings?.timeZone ?? 'Europe/London', deps.now?.());
         const seesGuests = can(ctx.role, 'reservations.read');
         const seesChannels = can(ctx.role, 'channels.read');
         const seesProperties = can(ctx.role, 'properties.read');
@@ -398,6 +398,40 @@ export function todayRoutes(app: FastifyInstance, deps: { scope: RequestScope })
                     ? `The longest for ${Math.floor(hours)} ${Math.floor(hours) === 1 ? 'hour' : 'hours'}.`
                     : 'Within the hour.',
               to: '/inbox',
+            });
+          }
+        }
+
+        // Claims still being got ready, with the deadline three days off or less.
+        if (can(ctx.role, 'claims.read')) {
+          const due = (
+            await tx.execute<{
+              id: string;
+              deadline: string;
+              property_name: string;
+              guest_name: string | null;
+            }>(sql`
+              select c.id, c.deadline::text, p.name as property_name, g.full_name as guest_name
+                from app.claims c
+                join app.reservations r on r.id = c.reservation_id
+                join app.properties p on p.id = r.property_id
+                left join app.guests g on g.id = r.guest_id
+               where c.status = 'open' and c.deadline <= ${today}::date + 3
+               order by c.deadline`)
+          ).rows;
+          for (const c of due) {
+            const left = Math.round((Date.parse(c.deadline) - Date.parse(today)) / 86_400_000);
+            attention.push({
+              id: `claim:${c.id}`,
+              severity: left <= 1 ? 'urgent' : 'warning',
+              title:
+                left < 0
+                  ? `A claim's deadline has passed`
+                  : left === 0
+                    ? 'A claim must be filed today'
+                    : `A claim must be filed within ${left} ${left === 1 ? 'day' : 'days'}`,
+              detail: `${c.guest_name ? `${c.guest_name}, ` : ''}${c.property_name}.`,
+              to: `/claims/${c.id}`,
             });
           }
         }

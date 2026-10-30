@@ -3,6 +3,28 @@
 Newest first. Each entry says what was decided and why. Product decisions also live in the
 V-01 Build Playbook and Design Roadmap.
 
+## 2026-10-30
+
+- **Claims, built in V-01, one per booking (design roadmap Phase 2; Alpha, 30 Oct 2026: "lets
+  build").** A claim holds what was damaged and what each thing costs, a short account, and the
+  evidence: the photos from the last clean before the guest arrived and from every job at the home
+  after they left (read from Tasks, not copied), the team's damage reports, and files added to the
+  claim (photos, videos, receipts, invoices) kept exactly as uploaded in the private bucket, up to
+  40 per claim and 100 MB each. "Download evidence" gives one zip: a written summary, the before
+  and after photos, and the files. Statuses: getting ready, filed (records the day and their
+  reference), paid (with the amount received), closed (with the outcome). Nothing is filed from
+  V-01; a person files it on the channel or with the guest.
+- **The deadline is worked out, and can be moved.** 14 days after check-out; for Airbnb, also
+  before the next guest checks in, whichever comes first (Airbnb's and Booking.com's published
+  terms, checked 30 Oct 2026). Today and the bell warn three days before; the Claims list is
+  ordered by deadline. Bookings where the team reported damage and there is no claim yet are
+  offered at the top of Claims. A damage report from a job now keeps that job's booking.
+- **Who:** admins, operations and accounts make and file claims; guest comms and V-01 support read
+  them; the field team doesn't see them (they report damage from their jobs). Started from a
+  booking's page ("Damage claim"), from Claims, or from the New menu (C).
+- **Damage protection from a provider such as Truvi stays a separate decision.** Claims don't
+  depend on it; a provider would receive the same claim.
+
 ## 2026-10-29
 
 - **Today follows Guesty's dashboard (Alpha, 29 Oct 2026: "see how today has notifications profile

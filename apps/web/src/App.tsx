@@ -11,6 +11,8 @@ import { signOut, useSession } from './lib/session.tsx';
 import { WorkspaceProvider, workspaceEntries } from './lib/workspace.tsx';
 import { ChannelsPage } from './pages/ChannelsPage.tsx';
 import { CalendarPage } from './pages/calendar/CalendarPage.tsx';
+import { ClaimPage } from './pages/claims/ClaimPage.tsx';
+import { ClaimsPage } from './pages/claims/ClaimsPage.tsx';
 import { ConsoleOperatorDetail } from './pages/console/OperatorDetail.tsx';
 import { ConsoleOperators } from './pages/console/Operators.tsx';
 import { ConsoleOverview } from './pages/console/Overview.tsx';
@@ -140,6 +142,8 @@ const routes = [
           { path: 'properties/:id', element: <PropertyPage /> },
           { path: 'inbox', element: <InboxPage /> },
           { path: 'tasks', element: <TasksPage /> },
+          { path: 'claims', element: <ClaimsPage /> },
+          { path: 'claims/:id', element: <ClaimPage /> },
           { path: 'channels', element: <ChannelsPage /> },
           { path: 'workspace', element: <WorkspacePage /> },
           { path: 'profile', element: <ProfilePage /> },

@@ -239,6 +239,20 @@
       "when": 1792941556142,
       "tag": "0033_locks",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793362853965,
+      "tag": "0034_claims",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1793362856130,
+      "tag": "0035_claims_security",
+      "breakpoints": true
     }
   ]
 }
