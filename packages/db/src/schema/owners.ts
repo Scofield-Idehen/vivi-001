@@ -1,5 +1,17 @@
 import { sql } from 'drizzle-orm';
-import { bigint, char, check, date, index, integer, text, uuid } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  char,
+  check,
+  date,
+  index,
+  integer,
+  jsonb,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { claims } from './claims.ts';
 import { app, createdAt, updatedAt } from './common.ts';
 import { appUsers, organisations } from './operators.ts';
@@ -70,5 +82,46 @@ export const expenses = app.table(
     check('expenses_charge_to', sql`${t.chargeTo} in ('owner', 'company')`),
     check('expenses_description_length', sql`char_length(${t.description}) between 1 and 300`),
     check('expenses_amount', sql`${t.amountMinor} >= 0`),
+  ],
+);
+
+/**
+ * An owner's statement for a month, once finalised: the figures as they were then (`snapshot`),
+ * so later changes to bookings or expenses don't move a statement already sent. Paid adds the day
+ * and reference. No row means the month is still a draft, worked out live.
+ */
+export const ownerStatements = app.table(
+  'owner_statements',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => owners.id, { onDelete: 'cascade' }),
+    month: text('month').notNull(),
+    status: text('status').notNull().default('final'),
+    snapshot: jsonb('snapshot').notNull(),
+    earnedMinor: bigint('earned_minor', { mode: 'number' }).notNull(),
+    feeMinor: bigint('fee_minor', { mode: 'number' }).notNull(),
+    expensesMinor: bigint('expenses_minor', { mode: 'number' }).notNull(),
+    netMinor: bigint('net_minor', { mode: 'number' }).notNull(),
+    finalisedAt: timestamp('finalised_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+    finalisedBy: uuid('finalised_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    paidOn: date('paid_on', { mode: 'string' }),
+    paidReference: text('paid_reference'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('owner_statements_owner_month_key').on(t.ownerId, t.month),
+    index('owner_statements_org_month_idx').on(t.organisationId, t.month),
+    check('owner_statements_status', sql`${t.status} in ('final', 'paid')`),
+    check('owner_statements_month', sql`${t.month} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+    check(
+      'owner_statements_reference_length',
+      sql`${t.paidReference} is null or char_length(${t.paidReference}) <= 120`,
+    ),
   ],
 );

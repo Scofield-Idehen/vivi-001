@@ -1,6 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { appUsers, claims, expenses, organisationSettings, owners, properties, type Tx } from '@v01/db';
 import {
+  appUsers,
+  claims,
+  expenses,
+  organisationSettings,
+  ownerStatements,
+  owners,
+  properties,
+  type Tx,
+} from '@v01/db';
+import {
+  type Channel,
   type Expense,
   ExpenseInputSchema,
   type ExpenseList,
@@ -21,6 +31,10 @@ import {
   OwnerSchema,
   OwnerUpdateSchema,
   PhotoUploadTicketSchema,
+  type StatementList,
+  StatementListSchema,
+  StatementMonthSchema,
+  StatementPaidSchema,
   todayIn,
 } from '@v01/shared';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, type SQL, sql } from 'drizzle-orm';
@@ -38,6 +52,7 @@ import type { PhotoStore } from '../photos.ts';
  */
 
 const Params = z.object({ id: z.uuid() });
+const StatementParams = z.object({ id: z.uuid(), month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) });
 
 const RECEIPT_EXT: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -170,6 +185,139 @@ async function checkLinks(tx: Tx, propertyId?: string | null, claimId?: string |
   }
 }
 
+/** The month worked out live from bookings and expenses: what a draft statement shows. */
+async function computeMonth(
+  tx: Tx,
+  owner: Owner,
+  month: string,
+  currency: string,
+  store: PhotoStore,
+  options: { lines?: boolean } = {},
+): Promise<OwnerMonth> {
+  const { first, next } = monthOf(month);
+  const ids = owner.homes.map((h) => h.id);
+  // Each confirmed booking's money spread evenly over its nights; the nights in this month count.
+  const stays = ids.length
+    ? (
+        await tx.execute<{
+          id: string;
+          property_id: string;
+          guest_name: string | null;
+          channel: Channel;
+          check_in: string;
+          check_out: string;
+          nights: number;
+          minor: number;
+        }>(sql`
+          select r.id, r.property_id, g.full_name as guest_name, r.channel, r.check_in::text, r.check_out::text,
+                 count(*)::int as nights,
+                 round(sum(r.total_minor::numeric / greatest(r.check_out - r.check_in, 1)))::bigint::int as minor
+            from app.reservations r
+            left join app.guests g on g.id = r.guest_id
+            cross join lateral generate_series(r.check_in, r.check_out - 1, interval '1 day') n
+           where r.status = 'confirmed' and r.total_minor is not null
+             and r.property_id in ${ids}
+             and n >= ${first}::date and n < ${next}::date
+           group by r.id, g.full_name
+           order by r.check_in`)
+      ).rows
+    : [];
+  const list =
+    ids.length && options.lines !== false
+      ? await loadExpenses(
+          tx,
+          and(
+            inArray(expenses.propertyId, ids),
+            eq(expenses.chargeTo, 'owner'),
+            gte(expenses.spentOn, first),
+            lt(expenses.spentOn, next),
+          ),
+          store,
+        )
+      : [];
+  const spentRows =
+    ids.length && options.lines === false
+      ? await tx
+          .select({ propertyId: expenses.propertyId, amount: expenses.amountMinor })
+          .from(expenses)
+          .where(
+            and(
+              inArray(expenses.propertyId, ids),
+              eq(expenses.chargeTo, 'owner'),
+              gte(expenses.spentOn, first),
+              lt(expenses.spentOn, next),
+            ),
+          )
+      : list.map((e) => ({ propertyId: e.propertyId, amount: e.amountMinor }));
+  const homes = owner.homes.map((h) => {
+    const mine = stays.filter((x) => x.property_id === h.id);
+    return {
+      id: h.id,
+      name: h.name,
+      nights: mine.reduce((t, x) => t + x.nights, 0),
+      earnedMinor: mine.reduce((t, x) => t + Number(x.minor), 0),
+      expensesMinor: spentRows.filter((x) => x.propertyId === h.id).reduce((t, x) => t + Number(x.amount), 0),
+    };
+  });
+  const earnedMinor = homes.reduce((t, h) => t + h.earnedMinor, 0);
+  const feeMinor = Math.round((earnedMinor * owner.feeBasisPoints) / 10_000);
+  const expensesMinor = spentRows.reduce((t, x) => t + Number(x.amount), 0);
+  const nameOf = new Map(owner.homes.map((h) => [h.id, h.name]));
+  return {
+    owner,
+    month,
+    currency,
+    homes,
+    earnedMinor,
+    feeMinor,
+    expensesMinor,
+    netMinor: earnedMinor - feeMinor - expensesMinor,
+    expenses: list,
+    bookings: stays.map((x) => ({
+      reservationId: x.id,
+      propertyId: x.property_id,
+      propertyName: nameOf.get(x.property_id) ?? '',
+      guestName: x.guest_name,
+      channel: x.channel,
+      checkIn: x.check_in,
+      checkOut: x.check_out,
+      nights: x.nights,
+      earnedMinor: Number(x.minor),
+    })),
+    statement: null,
+  };
+}
+
+/** A finalised statement as saved, with receipt addresses signed afresh (they only last a while). */
+async function savedStatement(
+  tx: Tx,
+  ownerId: string,
+  month: string,
+  store: PhotoStore,
+): Promise<OwnerMonth | null> {
+  const [row] = await tx
+    .select({ s: ownerStatements, by: sql<string | null>`coalesce(${appUsers.fullName}, ${appUsers.email})` })
+    .from(ownerStatements)
+    .leftJoin(appUsers, eq(appUsers.id, ownerStatements.finalisedBy))
+    .where(and(eq(ownerStatements.ownerId, ownerId), eq(ownerStatements.month, month)));
+  if (!row) return null;
+  const snap = row.s.snapshot as Omit<OwnerMonth, 'statement'>;
+  const ids = snap.expenses.map((e) => e.id);
+  const fresh = ids.length ? await loadExpenses(tx, inArray(expenses.id, ids), store) : [];
+  const receiptOf = new Map(fresh.map((e) => [e.id, e.receipt]));
+  return {
+    ...snap,
+    expenses: snap.expenses.map((e) => ({ ...e, receipt: receiptOf.get(e.id) ?? null })),
+    statement: {
+      status: row.s.status as 'final' | 'paid',
+      finalisedAt: toIso(String(row.s.finalisedAt)),
+      finalisedBy: row.by ?? null,
+      paidOn: row.s.paidOn,
+      paidReference: row.s.paidReference,
+    },
+  };
+}
+
 export function ownerRoutes(
   app: FastifyInstance,
   deps: { scope: RequestScope; files: PhotoStore; bucket: string; now?: () => Date },
@@ -268,7 +416,7 @@ export function ownerRoutes(
       }),
   );
 
-  /** An owner's month: the draft of their statement. Earnings are spread over the nights booked. */
+  /** An owner's month: the draft of their statement, or the statement as finalised. */
   typed.get(
     '/v1/owners/:id/month',
     { schema: { params: Params, querystring: OwnerMonthQuerySchema, response: { 200: OwnerMonthSchema } } },
@@ -277,56 +425,149 @@ export function ownerRoutes(
         const owner = await oneOwner(tx, req.params.id);
         const { today, currency } = await settingsOf(tx, deps.now?.());
         const month = req.query.month ?? today.slice(0, 7);
-        const { first, next } = monthOf(month);
-        const ids = owner.homes.map((h) => h.id);
-        const earned = ids.length
-          ? (
-              await tx.execute<{ property_id: string; minor: number; nights: number }>(sql`
-                select r.property_id, round(sum(r.total_minor::numeric / greatest(r.check_out - r.check_in, 1)))::bigint::int as minor,
-                       count(*)::int as nights
-                  from app.reservations r
-                  cross join lateral generate_series(r.check_in, r.check_out - 1, interval '1 day') n
-                 where r.status = 'confirmed' and r.total_minor is not null
-                   and r.property_id in ${ids}
-                   and n >= ${first}::date and n < ${next}::date
-                 group by r.property_id`)
-            ).rows
-          : [];
-        const list = ids.length
-          ? await loadExpenses(
-              tx,
-              and(
-                inArray(expenses.propertyId, ids),
-                eq(expenses.chargeTo, 'owner'),
-                gte(expenses.spentOn, first),
-                lt(expenses.spentOn, next),
-              ),
-              deps.files,
-            )
-          : [];
-        const homes = owner.homes.map((h) => {
-          const e = earned.find((x) => x.property_id === h.id);
-          return {
-            id: h.id,
-            name: h.name,
-            nights: e?.nights ?? 0,
-            earnedMinor: Number(e?.minor ?? 0),
-            expensesMinor: list.filter((x) => x.propertyId === h.id).reduce((s, x) => s + x.amountMinor, 0),
-          };
+        return (
+          (await savedStatement(tx, owner.id, month, deps.files)) ??
+          computeMonth(tx, owner, month, currency, deps.files)
+        );
+      }),
+  );
+
+  /** Finalise: save the month's figures as they are now; later changes don't move them. */
+  typed.post(
+    '/v1/owners/:id/statements',
+    { schema: { params: Params, body: StatementMonthSchema, response: { 201: OwnerMonthSchema } } },
+    async (req, reply) =>
+      deps.scope.inOrg(req, 'owners.write', async (tx, ctx) => {
+        const owner = await oneOwner(tx, req.params.id);
+        const { month } = req.body;
+        const [existing] = await tx
+          .select({ id: ownerStatements.id })
+          .from(ownerStatements)
+          .where(and(eq(ownerStatements.ownerId, owner.id), eq(ownerStatements.month, month)));
+        if (existing) throw new HttpError(409, 'statement_final', 'That month is already finalised.');
+        const { currency } = await settingsOf(tx);
+        const live = await computeMonth(tx, owner, month, currency, deps.files);
+        const { statement: _none, ...snapshot } = live;
+        await tx.insert(ownerStatements).values({
+          organisationId: ctx.orgId,
+          ownerId: owner.id,
+          month,
+          snapshot,
+          earnedMinor: live.earnedMinor,
+          feeMinor: live.feeMinor,
+          expensesMinor: live.expensesMinor,
+          netMinor: live.netMinor,
+          finalisedBy: ctx.userId,
         });
-        const earnedMinor = homes.reduce((s, h) => s + h.earnedMinor, 0);
-        const feeMinor = Math.round((earnedMinor * owner.feeBasisPoints) / 10_000);
-        const expensesMinor = list.reduce((s, x) => s + x.amountMinor, 0);
+        reply.code(201);
+        return (await savedStatement(tx, owner.id, month, deps.files)) as OwnerMonth;
+      }),
+  );
+
+  /** Paid: the day the money went to the owner, and the bank reference. */
+  typed.put(
+    '/v1/owners/:id/statements/:month/paid',
+    { schema: { params: StatementParams, body: StatementPaidSchema, response: { 200: OwnerMonthSchema } } },
+    async (req) =>
+      deps.scope.inOrg(req, 'owners.write', async (tx) => {
+        await oneOwner(tx, req.params.id);
+        const done = await tx
+          .update(ownerStatements)
+          .set({
+            status: 'paid',
+            paidOn: req.body.paidOn,
+            paidReference: req.body.paidReference?.trim() || null,
+          })
+          .where(and(eq(ownerStatements.ownerId, req.params.id), eq(ownerStatements.month, req.params.month)))
+          .returning({ id: ownerStatements.id });
+        if (!done.length)
+          throw new HttpError(409, 'statement_draft', 'Finalise the statement before marking it paid.');
+        return (await savedStatement(tx, req.params.id, req.params.month, deps.files)) as OwnerMonth;
+      }),
+  );
+
+  typed.delete(
+    '/v1/owners/:id/statements/:month/paid',
+    { schema: { params: StatementParams, response: { 200: OwnerMonthSchema } } },
+    async (req) =>
+      deps.scope.inOrg(req, 'owners.write', async (tx) => {
+        await oneOwner(tx, req.params.id);
+        await tx
+          .update(ownerStatements)
+          .set({ status: 'final', paidOn: null, paidReference: null })
+          .where(
+            and(eq(ownerStatements.ownerId, req.params.id), eq(ownerStatements.month, req.params.month)),
+          );
+        return (await savedStatement(tx, req.params.id, req.params.month, deps.files)) as OwnerMonth;
+      }),
+  );
+
+  /** Reopen: back to a live draft. Not once it's paid. */
+  typed.delete(
+    '/v1/owners/:id/statements/:month',
+    { schema: { params: StatementParams, response: { 200: OwnerMonthSchema } } },
+    async (req) =>
+      deps.scope.inOrg(req, 'owners.write', async (tx) => {
+        const owner = await oneOwner(tx, req.params.id);
+        const [row] = await tx
+          .select({ status: ownerStatements.status })
+          .from(ownerStatements)
+          .where(and(eq(ownerStatements.ownerId, owner.id), eq(ownerStatements.month, req.params.month)));
+        if (row?.status === 'paid')
+          throw new HttpError(409, 'statement_paid', 'It’s marked paid. Mark it unpaid before reopening it.');
+        await tx
+          .delete(ownerStatements)
+          .where(and(eq(ownerStatements.ownerId, owner.id), eq(ownerStatements.month, req.params.month)));
+        const { currency } = await settingsOf(tx);
+        return computeMonth(tx, owner, req.params.month, currency, deps.files);
+      }),
+  );
+
+  /** Every owner's month: what's still a draft, what's final, what's paid. */
+  typed.get(
+    '/v1/statements',
+    { schema: { querystring: OwnerMonthQuerySchema, response: { 200: StatementListSchema } } },
+    async (req) =>
+      deps.scope.inOrg(req, 'owners.read', async (tx): Promise<StatementList> => {
+        const { today, currency } = await settingsOf(tx, deps.now?.());
+        const month = req.query.month ?? today.slice(0, 7);
+        const all = await loadOwners(tx);
+        const saved = await tx.select().from(ownerStatements).where(eq(ownerStatements.month, month));
+        const rows: StatementList['statements'] = [];
+        for (const o of all) {
+          const s = saved.find((x) => x.ownerId === o.id);
+          const f = s
+            ? {
+                earnedMinor: Number(s.earnedMinor),
+                feeMinor: Number(s.feeMinor),
+                expensesMinor: Number(s.expensesMinor),
+                netMinor: Number(s.netMinor),
+              }
+            : await computeMonth(tx, o, month, currency, deps.files, { lines: false });
+          rows.push({
+            ownerId: o.id,
+            ownerName: o.name,
+            homes: o.homes.length,
+            earnedMinor: f.earnedMinor,
+            feeMinor: f.feeMinor,
+            expensesMinor: f.expensesMinor,
+            netMinor: f.netMinor,
+            status: (s?.status ?? 'draft') as StatementList['statements'][number]['status'],
+            paidOn: s?.paidOn ?? null,
+          });
+        }
+        const sum = (k: 'earnedMinor' | 'feeMinor' | 'expensesMinor' | 'netMinor') =>
+          rows.reduce((t, r) => t + r[k], 0);
         return {
-          owner,
           month,
           currency,
-          homes,
-          earnedMinor,
-          feeMinor,
-          expensesMinor,
-          netMinor: earnedMinor - feeMinor - expensesMinor,
-          expenses: list,
+          statements: rows,
+          totals: {
+            earnedMinor: sum('earnedMinor'),
+            feeMinor: sum('feeMinor'),
+            expensesMinor: sum('expensesMinor'),
+            netMinor: sum('netMinor'),
+          },
         };
       }),
   );

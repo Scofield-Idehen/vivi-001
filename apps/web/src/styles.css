@@ -175,3 +175,25 @@ dialog.sheet::backdrop {
     background-color: rgb(21 24 27 / 0);
   }
 }
+
+/* Printing a statement: only the document, on white, nothing of the app around it. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
+  body {
+    background: #fff;
+  }
+  @page {
+    margin: 16mm;
+  }
+}

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CHANNELS } from './enums.ts';
 import { IsoDate, Uuid } from './schemas.ts';
 
 /**
@@ -195,5 +196,71 @@ export const OwnerMonthSchema = z.object({
   /** Earned, less the fee and the expenses charged to the owner. */
   netMinor: z.number().int(),
   expenses: z.array(ExpenseSchema),
+  /** Each stay with nights in the month, and what those nights earned. */
+  bookings: z.array(
+    z.object({
+      reservationId: Uuid,
+      propertyId: Uuid,
+      propertyName: z.string(),
+      guestName: z.string().nullable(),
+      channel: z.enum(CHANNELS),
+      checkIn: IsoDate,
+      checkOut: IsoDate,
+      /** Nights of the stay that fall in this month. */
+      nights: z.number().int(),
+      earnedMinor: z.number().int(),
+    }),
+  ),
+  /**
+   * Null while it's a draft, worked out live. Once finalised, the figures are the ones saved then
+   * and later changes to bookings or expenses don't move them.
+   */
+  statement: z
+    .object({
+      status: z.enum(['final', 'paid']),
+      finalisedAt: z.string(),
+      finalisedBy: z.string().nullable(),
+      paidOn: IsoDate.nullable(),
+      paidReference: z.string().nullable(),
+    })
+    .nullable(),
 });
 export type OwnerMonth = z.infer<typeof OwnerMonthSchema>;
+
+export const STATEMENT_STATUSES = ['draft', 'final', 'paid'] as const;
+export type StatementStatus = (typeof STATEMENT_STATUSES)[number];
+
+const Month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Expected a month as YYYY-MM');
+
+export const StatementMonthSchema = z.object({ month: Month });
+
+export const StatementPaidSchema = z.object({
+  paidOn: IsoDate,
+  paidReference: z.string().trim().max(120).optional(),
+});
+
+/** Every owner's month at a glance: the run of statements to finalise and pay. */
+export const StatementListSchema = z.object({
+  month: z.string(),
+  currency: z.string(),
+  statements: z.array(
+    z.object({
+      ownerId: Uuid,
+      ownerName: z.string(),
+      homes: z.number().int(),
+      earnedMinor: z.number().int(),
+      feeMinor: z.number().int(),
+      expensesMinor: z.number().int(),
+      netMinor: z.number().int(),
+      status: z.enum(STATEMENT_STATUSES),
+      paidOn: IsoDate.nullable(),
+    }),
+  ),
+  totals: z.object({
+    earnedMinor: z.number().int(),
+    feeMinor: z.number().int(),
+    expensesMinor: z.number().int(),
+    netMinor: z.number().int(),
+  }),
+});
+export type StatementList = z.infer<typeof StatementListSchema>;

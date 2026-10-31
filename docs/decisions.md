@@ -3,6 +3,18 @@
 Newest first. Each entry says what was decided and why. Product decisions also live in the
 V-01 Build Playbook and Design Roadmap.
 
+## 2026-10-31
+
+- **Owner statements (Alpha, 31 Oct 2026: "whats next to build … lets get building").** An owner's
+  month is a draft, worked out live from bookings and expenses, until someone finalises it; then
+  its figures are saved as they were (migration 0039) and later bookings or expenses don't move
+  them. A finalised statement is marked paid with the day and the bank reference; paid can be
+  undone, and an unpaid one reopened back to a live draft. "Print or save PDF" prints the
+  statement alone: the summary (earned, fee, expenses, due to them, or owed by them when expenses
+  are larger), every stay with its nights and money in the month, and the expenses charged. The
+  Owners page has a Statements tab: every owner for a month (last month by default), what's due,
+  and how far each statement has got. Sending statements by email waits for the domain.
+
 ## 2026-10-30
 
 - **Photos added to a claim are stamped, and the original is kept beside each (Alpha, 30 Oct

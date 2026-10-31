@@ -241,6 +241,67 @@ describe('owners and expenses', () => {
     ).toBe(400);
   });
 
+  it('lists each stay on the month, with its nights and money in that month', async () => {
+    const r = await call('GET', `/v1/owners/${ellis}/month?month=2026-10`, asA());
+    expect(r.body.statement).toBeNull();
+    expect(r.body.bookings).toEqual([
+      expect.objectContaining({ checkIn: '2026-09-28', nights: 2, earnedMinor: 20000, channel: 'airbnb' }),
+      expect.objectContaining({ checkIn: '2026-10-10', nights: 2, earnedMinor: 30000 }),
+    ]);
+  });
+
+  it('finalises a statement: the figures stay as they were, then it is marked paid', async () => {
+    const done = await call('POST', `/v1/owners/${ellis}/statements`, asA(), { month: '2026-10' });
+    expect(done.status).toBe(201);
+    expect(done.body.statement).toMatchObject({ status: 'final', paidOn: null });
+    expect(done.body.netMinor).toBe(31000);
+    expect((await call('POST', `/v1/owners/${ellis}/statements`, asA(), { month: '2026-10' })).status).toBe(
+      409,
+    );
+
+    // A late expense doesn't move a finalised statement.
+    await call('POST', '/v1/expenses', asA(), {
+      spentOn: '2026-10-20',
+      category: 'repairs',
+      description: 'Late invoice',
+      amountMinor: 5000,
+      propertyId: lodge,
+    });
+    const still = await call('GET', `/v1/owners/${ellis}/month?month=2026-10`, asA());
+    expect(still.body).toMatchObject({ netMinor: 31000, expensesMinor: 9000 });
+    // The receipt address is signed afresh.
+    expect(still.body.expenses[0].receipt.url).toMatch(/^https:\/\/photos\.test\/signed\//);
+
+    const list = await call('GET', '/v1/statements?month=2026-10', asA());
+    expect(list.body.statements).toEqual([
+      expect.objectContaining({ ownerName: 'Ellis Morgan', status: 'final', netMinor: 31000 }),
+    ]);
+
+    const paid = await call('PUT', `/v1/owners/${ellis}/statements/2026-10/paid`, asA(), {
+      paidOn: '2026-11-03',
+      paidReference: 'BACS 4471',
+    });
+    expect(paid.body.statement).toMatchObject({
+      status: 'paid',
+      paidOn: '2026-11-03',
+      paidReference: 'BACS 4471',
+    });
+    // Paid can't be reopened until it's marked unpaid.
+    expect((await call('DELETE', `/v1/owners/${ellis}/statements/2026-10`, asA())).status).toBe(409);
+    await call('DELETE', `/v1/owners/${ellis}/statements/2026-10/paid`, asA());
+    const reopened = await call('DELETE', `/v1/owners/${ellis}/statements/2026-10`, asA());
+    expect(reopened.body).toMatchObject({ statement: null, expensesMinor: 14000, netMinor: 26000 });
+  });
+
+  it("doesn't let another workspace near a statement", async () => {
+    expect((await call('POST', `/v1/owners/${ellis}/statements`, asB(), { month: '2026-10' })).status).toBe(
+      404,
+    );
+    const theirs = (await call('GET', '/v1/statements?month=2026-10', asB())).body.statements;
+    expect(theirs.map((x: { ownerName: string }) => x.ownerName)).toEqual(['Someone']);
+    expect((await call('GET', '/v1/statements', guestComms)).status).toBe(403);
+  });
+
   it('removing an owner leaves their homes with nobody recorded', async () => {
     expect((await call('DELETE', `/v1/owners/${ellis}`, asA())).status).toBe(204);
     expect((await call('GET', `/v1/properties/${lodge}`, asA())).body.owner).toBeNull();

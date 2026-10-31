@@ -1,12 +1,21 @@
-import { can, type Owner } from '@v01/shared';
+import { can, type Owner, type StatementStatus, todayIn } from '@v01/shared';
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { TextArea, TextField } from '../../components/fields.tsx';
+import { MonthPicker, monthName, shiftMonth } from '../../components/MonthPicker.tsx';
 import { Sheet } from '../../components/Sheet.tsx';
 import { Spinner } from '../../components/Spinner.tsx';
 import { Button, Notice, PageHeader } from '../../components/ui.tsx';
-import { ApiError, useCreateOwner, useOwners, useUpdateOwner } from '../../lib/api.ts';
+import {
+  ApiError,
+  useCreateOwner,
+  useOwners,
+  useStatements,
+  useUpdateOwner,
+  useWorkspace,
+} from '../../lib/api.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
+import { moneyText } from '../properties/money.ts';
 
 /**
  * Owners (built 30 Oct 2026): whose homes the team runs, how to reach them, and the management
@@ -113,6 +122,8 @@ export function OwnersPage() {
   const [adding, setAdding] = useState(false);
   const write = can(entry.role, 'owners.write');
   const d = list.data;
+  const [params, setParams] = useSearchParams();
+  const view = params.get('view') === 'statements' ? 'statements' : 'owners';
   return (
     <>
       <PageHeader
@@ -134,7 +145,28 @@ export function OwnersPage() {
           }}
         />
       ) : null}
-      {list.isPending ? (
+      <div role="tablist" aria-label="Owners or statements" className="mb-5 flex gap-2">
+        {(
+          [
+            ['owners', 'Owners'],
+            ['statements', 'Statements'],
+          ] as const
+        ).map(([v, label]) => (
+          <button
+            key={v}
+            type="button"
+            role="tab"
+            aria-selected={view === v}
+            onClick={() => setParams(v === 'owners' ? {} : { view: v }, { replace: true })}
+            className={`h-9 rounded-full border px-4 text-[13.5px] transition-colors ${view === v ? 'border-ink bg-ink text-canvas' : 'border-hairline text-ink hover:border-edge'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {view === 'statements' ? (
+        <Statements />
+      ) : list.isPending ? (
         <Spinner size={16} />
       ) : !d ? (
         <Notice tone="urgent">{explain(list.error)}</Notice>
@@ -178,5 +210,110 @@ export function OwnersPage() {
         </div>
       )}
     </>
+  );
+}
+
+const STATUS: Record<StatementStatus, { label: string; tone: string }> = {
+  draft: { label: 'Draft', tone: 'text-pending-text' },
+  final: { label: 'Finalised', tone: 'text-accent' },
+  paid: { label: 'Paid', tone: 'text-done-text' },
+};
+
+/** The month's run: every owner, what's due to them, and how far each statement has got. */
+function Statements() {
+  const { orgId } = useCurrentWorkspace();
+  const workspace = useWorkspace(orgId);
+  const locale = workspace.data?.settings.locale ?? 'en-GB';
+  // Statements are for a month that has ended: start on last month.
+  const thisMonth = todayIn(workspace.data?.settings.timeZone ?? 'Europe/London').slice(0, 7);
+  const [month, setMonth] = useState(shiftMonth(thisMonth, -1));
+  const list = useStatements(orgId, month);
+  const d = list.data;
+  const m = (minor: number) => moneyText(minor, d?.currency ?? 'GBP', locale);
+  const left = d ? d.statements.filter((x) => x.status !== 'paid' && x.homes > 0).length : 0;
+  return (
+    <section aria-label="Statements">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <MonthPicker value={month} onChange={setMonth} />
+        {d ? (
+          <p className="text-[13.5px] text-slate">
+            {left ? `${left} still to finalise or pay` : 'All paid'} · {m(d.totals.netMinor)} due to owners in{' '}
+            {monthName(d.month)}
+          </p>
+        ) : null}
+      </div>
+      {!d ? (
+        list.isPending ? (
+          <Spinner size={16} />
+        ) : (
+          <Notice tone="urgent">{explain(list.error)}</Notice>
+        )
+      ) : d.statements.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-hairline px-5 py-10 text-center text-[14px] text-slate">
+          No owners yet.
+        </p>
+      ) : (
+        <div
+          className={`overflow-x-auto rounded-2xl border border-hairline bg-canvas ${list.isPlaceholderData ? 'opacity-60' : ''}`}
+        >
+          <table className="w-full min-w-[640px] text-[14px]">
+            <thead>
+              <tr className="border-b border-hairline text-left text-[12.5px] text-slate">
+                <th className="px-4 py-2.5 font-normal">Owner</th>
+                <th className="px-4 py-2.5 text-right font-normal">Earned</th>
+                <th className="px-4 py-2.5 text-right font-normal">Fee</th>
+                <th className="px-4 py-2.5 text-right font-normal">Expenses</th>
+                <th className="px-4 py-2.5 text-right font-normal">Due to them</th>
+                <th className="px-4 py-2.5 font-normal">Statement</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-hairline">
+              {d.statements.map((x) => (
+                <tr key={x.ownerId} className="hover:bg-paper">
+                  <td className="px-4 py-3">
+                    <Link
+                      to={`/owners/${x.ownerId}?month=${d.month}`}
+                      className="font-medium text-ink hover:text-accent"
+                    >
+                      {x.ownerName}
+                    </Link>
+                    <span className="block text-[12.5px] text-slate">
+                      {x.homes} {x.homes === 1 ? 'home' : 'homes'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right text-ink tnum">{m(x.earnedMinor)}</td>
+                  <td className="px-4 py-3 text-right text-slate tnum">{m(x.feeMinor)}</td>
+                  <td className="px-4 py-3 text-right text-slate tnum">{m(x.expensesMinor)}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-ink tnum">{m(x.netMinor)}</td>
+                  <td className={`px-4 py-3 text-[13px] font-medium ${STATUS[x.status].tone}`}>
+                    {STATUS[x.status].label}
+                    {x.paidOn ? (
+                      <span className="block text-[12px] font-normal text-slate">
+                        {new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(
+                          new Date(`${x.paidOn}T12:00:00`),
+                        )}
+                      </span>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-hairline font-semibold">
+                <td className="px-4 py-3 text-ink">Total</td>
+                <td className="px-4 py-3 text-right text-ink tnum">{m(d.totals.earnedMinor)}</td>
+                <td className="px-4 py-3 text-right text-ink tnum">{m(d.totals.feeMinor)}</td>
+                <td className="px-4 py-3 text-right text-ink tnum">{m(d.totals.expensesMinor)}</td>
+                <td className="px-4 py-3 text-right text-ink tnum">{m(d.totals.netMinor)}</td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+      <p className="mt-2 text-[12px] text-mist">
+        Drafts are worked out live; open an owner to finalise, print or mark it paid.
+      </p>
+    </section>
   );
 }

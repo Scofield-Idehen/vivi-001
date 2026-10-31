@@ -109,6 +109,7 @@ import {
   type Revenue,
   RoomsUpdateSchema,
   renderTemplate,
+  type StatementList,
   SUPPORT_ROLE,
   SupportAccessStartSchema,
   type SupportGrant,
@@ -243,6 +244,7 @@ interface DemoOperator {
   /** Owners (homes point at them through `owner` on the property) and money spent. Missing in older saved states. */
   owners?: Omit<Owner, 'homes'>[];
   expenses?: DemoExpense[];
+  statements?: DemoStatement[];
   /** Open invitations to the team. Missing in older saved states. */
   invitations?: Invitation[];
   /** The Inbox: a thread per booking, and the automatic messages and saved replies. Missing in older saved states. */
@@ -3651,6 +3653,104 @@ export async function demoSetReceipt(
   return expenseView(operator, e);
 }
 
+interface DemoStatement {
+  ownerId: string;
+  month: string;
+  status: 'final' | 'paid';
+  snapshot: Omit<OwnerMonth, 'statement'>;
+  finalisedAt: string;
+  paidOn: string | null;
+  paidReference: string | null;
+}
+
+/** An owner's month worked out from the demo's stays and expenses, as the API does. */
+async function demoComputeMonth(
+  operator: DemoOperator,
+  o: Omit<Owner, 'homes'>,
+  month: string,
+): Promise<OwnerMonth> {
+  const { first, next } = monthRange(month);
+  const owner = ownerView(operator, o);
+  const ids = new Set(owner.homes.map((h) => h.id));
+  const nameOf = new Map(owner.homes.map((h) => [h.id, h.name]));
+  const bookings: OwnerMonth['bookings'] = [];
+  for (const x of operator.calendar.stays) {
+    if (x.status !== 'confirmed' || x.totalMinor === null || !ids.has(x.propertyId)) continue;
+    const n = Math.max(1, Math.round((Date.parse(x.checkOut) - Date.parse(x.checkIn)) / 86_400_000));
+    let nights = 0;
+    for (let night = x.checkIn; night < x.checkOut; night = addDays(night, 1)) {
+      if (night >= first && night < next) nights += 1;
+    }
+    if (!nights) continue;
+    bookings.push({
+      reservationId: x.id,
+      propertyId: x.propertyId,
+      propertyName: nameOf.get(x.propertyId) ?? '',
+      guestName: x.guestName,
+      channel: x.channel,
+      checkIn: x.checkIn,
+      checkOut: x.checkOut,
+      nights,
+      earnedMinor: Math.round((x.totalMinor * nights) / n),
+    });
+  }
+  bookings.sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+  const spent = settleExpenses(operator).filter(
+    (e) =>
+      e.propertyId &&
+      ids.has(e.propertyId) &&
+      e.chargeTo === 'owner' &&
+      e.spentOn >= first &&
+      e.spentOn < next,
+  );
+  const expenses = await Promise.all(spent.map((e) => expenseView(operator, e)));
+  const homes = owner.homes.map((h) => {
+    const mine = bookings.filter((b) => b.propertyId === h.id);
+    return {
+      id: h.id,
+      name: h.name,
+      nights: mine.reduce((t, b) => t + b.nights, 0),
+      earnedMinor: mine.reduce((t, b) => t + b.earnedMinor, 0),
+      expensesMinor: spent.filter((e) => e.propertyId === h.id).reduce((t, e) => t + e.amountMinor, 0),
+    };
+  });
+  const earnedMinor = homes.reduce((t, h) => t + h.earnedMinor, 0);
+  const feeMinor = Math.round((earnedMinor * owner.feeBasisPoints) / 10_000);
+  const expensesMinor = spent.reduce((t, e) => t + e.amountMinor, 0);
+  return {
+    owner,
+    month,
+    currency: operator.workspace.settings.currency,
+    homes,
+    earnedMinor,
+    feeMinor,
+    expensesMinor,
+    netMinor: earnedMinor - feeMinor - expensesMinor,
+    expenses: expenses.sort((a, b) => b.spentOn.localeCompare(a.spentOn)),
+    bookings,
+    statement: null,
+  };
+}
+
+async function demoSavedStatement(
+  operator: DemoOperator,
+  ownerId: string,
+  month: string,
+): Promise<OwnerMonth | null> {
+  const saved = operator.statements?.find((x) => x.ownerId === ownerId && x.month === month);
+  if (!saved) return null;
+  return {
+    ...saved.snapshot,
+    statement: {
+      status: saved.status,
+      finalisedAt: saved.finalisedAt,
+      finalisedBy: 'Demo user',
+      paidOn: saved.paidOn,
+      paidReference: saved.paidReference,
+    },
+  };
+}
+
 async function demoMoney(
   orgId: string | null | undefined,
   method: string,
@@ -3722,52 +3822,85 @@ async function demoMoney(
     }
     if (parts[3] === 'month' && method === 'GET') {
       const month = url.searchParams.get('month') ?? today().slice(0, 7);
-      const { first, next } = monthRange(month);
-      const owner = ownerView(operator, o);
-      const ids = new Set(owner.homes.map((h) => h.id));
-      const earned = new Map<string, { minor: number; nights: number }>();
-      for (const x of operator.calendar.stays) {
-        if (x.status !== 'confirmed' || x.totalMinor === null || !ids.has(x.propertyId)) continue;
-        const n = Math.max(1, Math.round((Date.parse(x.checkOut) - Date.parse(x.checkIn)) / 86_400_000));
-        for (let night = x.checkIn; night < x.checkOut; night = addDays(night, 1)) {
-          if (night < first || night >= next) continue;
-          const k = earned.get(x.propertyId) ?? { minor: 0, nights: 0 };
-          k.minor += x.totalMinor / n;
-          k.nights += 1;
-          earned.set(x.propertyId, k);
-        }
-      }
-      const spent = settleExpenses(operator).filter(
-        (e) =>
-          e.propertyId &&
-          ids.has(e.propertyId) &&
-          e.chargeTo === 'owner' &&
-          e.spentOn >= first &&
-          e.spentOn < next,
+      return (
+        (await demoSavedStatement(operator, o.id, month)) ?? (await demoComputeMonth(operator, o, month))
       );
-      const expenses = await Promise.all(spent.map((e) => expenseView(operator, e)));
-      const homes = owner.homes.map((h) => ({
-        id: h.id,
-        name: h.name,
-        nights: earned.get(h.id)?.nights ?? 0,
-        earnedMinor: Math.round(earned.get(h.id)?.minor ?? 0),
-        expensesMinor: spent.filter((e) => e.propertyId === h.id).reduce((s2, e) => s2 + e.amountMinor, 0),
-      }));
-      const earnedMinor = homes.reduce((s2, h) => s2 + h.earnedMinor, 0);
-      const feeMinor = Math.round((earnedMinor * owner.feeBasisPoints) / 10_000);
-      const expensesMinor = spent.reduce((s2, e) => s2 + e.amountMinor, 0);
-      return {
-        owner,
-        month,
-        currency: operator.workspace.settings.currency,
-        homes,
-        earnedMinor,
-        feeMinor,
-        expensesMinor,
-        netMinor: earnedMinor - feeMinor - expensesMinor,
-        expenses: expenses.sort((a, b) => b.spentOn.localeCompare(a.spentOn)),
-      } satisfies OwnerMonth;
     }
+    if (parts[3] === 'statements') {
+      operator.statements ??= [];
+      const month = (parts[4] ?? (body as { month?: string } | undefined)?.month ?? '') as string;
+      const saved = operator.statements.find((x) => x.ownerId === o.id && x.month === month);
+      if (parts.length === 4 && method === 'POST') {
+        if (saved) throw new ApiError(409, 'statement_final', 'That month is already finalised.');
+        const { statement: _none, ...snapshot } = await demoComputeMonth(operator, o, month);
+        operator.statements.push({
+          ownerId: o.id,
+          month,
+          status: 'final',
+          snapshot,
+          finalisedAt: new Date().toISOString(),
+          paidOn: null,
+          paidReference: null,
+        });
+        save();
+        return demoSavedStatement(operator, o.id, month);
+      }
+      if (parts[5] === 'paid') {
+        if (!saved)
+          throw new ApiError(409, 'statement_draft', 'Finalise the statement before marking it paid.');
+        if (method === 'PUT') {
+          const b = body as { paidOn: string; paidReference?: string };
+          Object.assign(saved, {
+            status: 'paid',
+            paidOn: b.paidOn,
+            paidReference: b.paidReference?.trim() || null,
+          });
+        } else Object.assign(saved, { status: 'final', paidOn: null, paidReference: null });
+        save();
+        return demoSavedStatement(operator, o.id, month);
+      }
+      if (parts.length === 5 && method === 'DELETE') {
+        if (saved?.status === 'paid')
+          throw new ApiError(409, 'statement_paid', 'It’s marked paid. Mark it unpaid before reopening it.');
+        operator.statements = operator.statements.filter((x) => x !== saved);
+        save();
+        return demoComputeMonth(operator, o, month);
+      }
+    }
+  }
+  if (parts[1] === 'statements' && method === 'GET') {
+    const { operator } = access(orgId, 'owners.read');
+    const month = url.searchParams.get('month') ?? today().slice(0, 7);
+    const rows: StatementList['statements'] = [];
+    for (const o of settleOwners(operator)) {
+      const saved = operator.statements?.find((x) => x.ownerId === o.id && x.month === month);
+      const f = saved ? saved.snapshot : await demoComputeMonth(operator, o, month);
+      rows.push({
+        ownerId: o.id,
+        ownerName: o.name,
+        homes: ownerView(operator, o).homes.length,
+        earnedMinor: f.earnedMinor,
+        feeMinor: f.feeMinor,
+        expensesMinor: f.expensesMinor,
+        netMinor: f.netMinor,
+        status: saved?.status ?? 'draft',
+        paidOn: saved?.paidOn ?? null,
+      });
+    }
+    rows.sort((a, b) => a.ownerName.localeCompare(b.ownerName));
+    const sum = (k: 'earnedMinor' | 'feeMinor' | 'expensesMinor' | 'netMinor') =>
+      rows.reduce((t, r) => t + r[k], 0);
+    return {
+      month,
+      currency: operator.workspace.settings.currency,
+      statements: rows,
+      totals: {
+        earnedMinor: sum('earnedMinor'),
+        feeMinor: sum('feeMinor'),
+        expensesMinor: sum('expensesMinor'),
+        netMinor: sum('netMinor'),
+      },
+    } satisfies StatementList;
   }
   if (parts[1] === 'expenses') {
     const { operator } = access(orgId, method === 'GET' ? 'expenses.read' : 'expenses.write');
@@ -4623,7 +4756,7 @@ export async function demoFetch<T>(
     }
   }
 
-  if (/^\/v1\/(owners|expenses)(\/|\?|$)/.test(path)) {
+  if (/^\/v1\/(owners|expenses|statements)(\/|\?|$)/.test(path)) {
     return (await demoMoney(options.orgId, method, path, options.body)) as T;
   }
 

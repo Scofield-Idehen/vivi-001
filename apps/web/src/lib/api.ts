@@ -77,6 +77,7 @@ import type {
   ReservationView,
   Revenue,
   RoomInput,
+  StatementList,
   SupportAccessStart,
   SupportGrant,
   SupportGrantList,
@@ -1680,4 +1681,51 @@ export function useRemoveReceipt(orgId: string | null) {
   return useExpenseMutation<string, Expense>(orgId, (token, id) =>
     apiFetch<Expense>(`/v1/expenses/${id}/receipt`, { token, orgId, method: 'DELETE' }),
   );
+}
+
+// Owner statements ------------------------------------------------------------------------------
+
+export function useStatements(orgId: string | null, month: string, enabled = true) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['statements', orgId, month],
+    enabled: Boolean(token && orgId && enabled),
+    placeholderData: keepPreviousData,
+    queryFn: () =>
+      apiFetch<StatementList>(`/v1/statements?month=${month}`, { token: token as string, orgId }),
+  });
+}
+
+type StatementAction =
+  | { kind: 'finalise' }
+  | { kind: 'paid'; paidOn: string; paidReference?: string }
+  | { kind: 'unpaid' }
+  | { kind: 'reopen' };
+
+/** Finalise, mark paid or unpaid, or reopen an owner's month. Answers with the month as it now stands. */
+export function useStatementAction(orgId: string | null, ownerId: string, month: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (a: StatementAction) => {
+      const base = `/v1/owners/${ownerId}/statements`;
+      const t = token as string;
+      if (a.kind === 'finalise')
+        return apiFetch<OwnerMonth>(base, { token: t, orgId, method: 'POST', body: { month } });
+      if (a.kind === 'paid')
+        return apiFetch<OwnerMonth>(`${base}/${month}/paid`, {
+          token: t,
+          orgId,
+          method: 'PUT',
+          body: { paidOn: a.paidOn, ...(a.paidReference ? { paidReference: a.paidReference } : {}) },
+        });
+      if (a.kind === 'unpaid')
+        return apiFetch<OwnerMonth>(`${base}/${month}/paid`, { token: t, orgId, method: 'DELETE' });
+      return apiFetch<OwnerMonth>(`${base}/${month}`, { token: t, orgId, method: 'DELETE' });
+    },
+    onSuccess: (m) => {
+      queryClient.setQueryData(['owner-month', orgId, ownerId, month], m);
+      void queryClient.invalidateQueries({ queryKey: ['statements', orgId] });
+    },
+  });
 }
