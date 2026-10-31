@@ -25,6 +25,7 @@ import { consoleRoutes } from './routes/console.ts';
 import { fieldRoutes } from './routes/fields.ts';
 import { guestRoutes } from './routes/guest.ts';
 import { inboxRoutes } from './routes/inbox.ts';
+import { insightRoutes } from './routes/insights.ts';
 import { lockRoutes } from './routes/locks.ts';
 import { meRoutes } from './routes/me.ts';
 import { memberRoutes } from './routes/members.ts';
@@ -147,6 +148,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   overviewRoutes(app, { scope, now: deps.now });
   taskRoutes(app, { scope, photos: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, box });
   claimRoutes(app, { scope, files: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, now: deps.now });
+  insightRoutes(app, { scope });
   ownerRoutes(app, { scope, files: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, now: deps.now });
   inboxRoutes(app, { scope });
   const lockProvider =

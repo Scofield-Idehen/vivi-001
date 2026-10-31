@@ -37,6 +37,7 @@ import type {
   ExpenseUpdate,
   GuestLink,
   GuestStay,
+  Insights,
   Invitation,
   InvitationList,
   Invite,
@@ -1727,5 +1728,18 @@ export function useStatementAction(orgId: string | null, ownerId: string, month:
       queryClient.setQueryData(['owner-month', orgId, ownerId, month], m);
       void queryClient.invalidateQueries({ queryKey: ['statements', orgId] });
     },
+  });
+}
+
+// Insights --------------------------------------------------------------------------------------
+
+export function useInsights(orgId: string | null, from: string, to: string, enabled = true) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['insights', orgId, from, to],
+    enabled: Boolean(token && orgId && enabled && from && to),
+    placeholderData: keepPreviousData,
+    queryFn: () =>
+      apiFetch<Insights>(`/v1/insights?from=${from}&to=${to}`, { token: token as string, orgId }),
   });
 }

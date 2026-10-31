@@ -41,6 +41,8 @@ export const PERMISSIONS = {
   /** Money spent on the homes, with receipts: the office and accounts. */
   'expenses.read': ['admin', 'operations', 'accounts', 'v01_support'],
   'expenses.write': ['admin', 'operations', 'accounts'],
+  /** Insights: occupancy, rates, revenue, expenses and claims across the homes. */
+  'insights.read': ['admin', 'operations', 'accounts', 'v01_support'],
   'channels.read': ['admin', 'operations', 'guest_comms', 'accounts', 'v01_support'],
   'channels.manage': ['admin'],
   'workspace.read': ['admin', 'operations', 'guest_comms', 'accounts', 'field', 'v01_support'],

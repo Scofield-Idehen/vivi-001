@@ -15,6 +15,8 @@ export * from './guest.ts';
 export * from './guest.ts';
 export * from './inbox.ts';
 export * from './inbox.ts';
+export * from './insights.ts';
+export * from './insights.ts';
 export * from './listing.ts';
 export * from './listing.ts';
 export * from './locks.ts';

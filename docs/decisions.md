@@ -5,6 +5,15 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-10-31
 
+- **Insights (Alpha, 31 Oct 2026: "yes lets go").** For a period (this month, last month, the last
+  30 or 90 days, this year; up to a year) against the same length just before: occupancy (booked
+  out of available nights; blocked nights aren't available), nightly rate, revenue, revenue per
+  available night, arrivals, average stay, expenses (going up shows as bad), and damage claimed and
+  received. The twelve months to the period's end as two charts, revenue and occupancy, one
+  measure each rather than two scales on one chart. Every home, owner or area side by side,
+  sortable by any column; the channels with their share of revenue, nightly rate and how far ahead
+  guests book. Money is each confirmed booking spread over its nights, as on Today and the owner
+  statements, so all three agree. Admins, operations, accounts and V-01 support see it.
 - **Owner statements (Alpha, 31 Oct 2026: "whats next to build … lets get building").** An owner's
   month is a draft, worked out live from bookings and expenses, until someone finalises it; then
   its figures are saved as they were (migration 0039) and later bookings or expenses don't move

@@ -53,6 +53,7 @@ import {
   formatMoney,
   type GuestLink,
   type GuestStay,
+  type Insights,
   type Invitation,
   InviteSchema,
   isWebAddress,
@@ -3751,6 +3752,182 @@ async function demoSavedStatement(
   };
 }
 
+/** GET /v1/insights, worked out from the demo's own stays, blocks, expenses and claims. */
+function demoInsights(operator: DemoOperator, from: string, to: string): Insights {
+  if (to < from) throw new ApiError(400, 'invalid_request', 'The period ends before it starts.');
+  const days = Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000) + 1;
+  if (days > 366) throw new ApiError(400, 'invalid_request', 'Choose a period of a year or less.');
+  const end = addDays(to, 1);
+  const owners = settleOwners(operator);
+  const expenses = settleExpenses(operator);
+  const claims = settleClaims(operator);
+  const stays = operator.calendar.stays.filter((x) => x.status === 'confirmed');
+  const nightsOf = (x: DemoStay, a: string, b: string) => {
+    let n = 0;
+    for (let d = x.checkIn > a ? x.checkIn : a; d < x.checkOut && d < b; d = addDays(d, 1)) n += 1;
+    return n;
+  };
+  const length = (x: DemoStay) =>
+    Math.max(1, Math.round((Date.parse(x.checkOut) - Date.parse(x.checkIn)) / 86_400_000));
+  const blockedIn = (propertyId: string, a: string, b: string) =>
+    operator.calendar.blocks
+      .filter((k) => k.propertyId === propertyId)
+      .reduce((t, k) => {
+        const s0 = k.startsOn > a ? k.startsOn : a;
+        const e0 = k.endsOn < b ? k.endsOn : b;
+        return t + Math.max(0, Math.round((Date.parse(e0) - Date.parse(s0)) / 86_400_000));
+      }, 0);
+  type Base = {
+    id: string;
+    name: string;
+    area: string | null;
+    ownerId: string | null;
+    ownerName: string | null;
+    blocked: number;
+    bookedNights: number;
+    revenueMinor: number;
+    bookings: number;
+    stayNights: number;
+    expensesMinor: number;
+    claimedMinor: number;
+    claimReceivedMinor: number;
+  };
+  const rows: Base[] = operator.properties.map((p) => {
+    const mine = stays.filter((x) => x.propertyId === p.id);
+    const arriving = mine.filter((x) => x.checkIn >= from && x.checkIn < end);
+    const theirClaims = claims.filter((c) => {
+      const x = stays.find((st) => st.id === c.reservationId);
+      return x && x.propertyId === p.id && x.checkOut >= from && x.checkOut < end;
+    });
+    return {
+      id: p.id,
+      name: p.name,
+      area: p.area,
+      ownerId: p.owner?.id ?? null,
+      ownerName: p.owner ? (owners.find((o) => o.id === p.owner?.id)?.name ?? p.owner.name) : null,
+      blocked: blockedIn(p.id, from, end),
+      bookedNights: mine.reduce((t, x) => t + nightsOf(x, from, end), 0),
+      revenueMinor: Math.round(
+        mine.reduce((t, x) => t + ((x.totalMinor ?? 0) * nightsOf(x, from, end)) / length(x), 0),
+      ),
+      bookings: arriving.length,
+      stayNights: arriving.reduce((t, x) => t + length(x), 0),
+      expensesMinor: expenses
+        .filter((e) => e.propertyId === p.id && e.spentOn >= from && e.spentOn < end)
+        .reduce((t, e) => t + e.amountMinor, 0),
+      claimedMinor: theirClaims.reduce((t, c) => t + c.items.reduce((u, i) => u + i.amountMinor, 0), 0),
+      claimReceivedMinor: theirClaims.reduce((t, c) => t + (c.receivedMinor ?? 0), 0),
+    };
+  });
+  const figures = (rs: Base[]) => {
+    const sum = (k: keyof Base) => rs.reduce((t, r) => t + Number(r[k] ?? 0), 0);
+    const available = Math.max(0, rs.length * days - sum('blocked'));
+    const booked = sum('bookedNights');
+    const revenue = sum('revenueMinor');
+    const bookings = sum('bookings');
+    return {
+      availableNights: available,
+      bookedNights: booked,
+      occupancy: available ? Math.round((Math.min(booked, available) / available) * 1000) / 10 : 0,
+      revenueMinor: revenue,
+      adrMinor: booked ? Math.round(revenue / booked) : null,
+      revparMinor: available ? Math.round(revenue / available) : null,
+      bookings,
+      averageStay: bookings ? Math.round((sum('stayNights') / bookings) * 10) / 10 : null,
+      expensesMinor: sum('expensesMinor'),
+      claimedMinor: sum('claimedMinor'),
+      claimReceivedMinor: sum('claimReceivedMinor'),
+    };
+  };
+  const group = (key: (r: Base) => string, name: (r: Base) => string) => {
+    const g = new Map<string, Base[]>();
+    for (const r of rows) g.set(key(r), [...(g.get(key(r)) ?? []), r]);
+    return [...g]
+      .map(([id, rs]) => ({
+        id,
+        name: name(rs[0] as Base),
+        sub: `${rs.length} ${rs.length === 1 ? 'home' : 'homes'}`,
+        ...figures(rs),
+      }))
+      .sort((a, b) => b.revenueMinor - a.revenueMinor);
+  };
+  const channels = [...new Set(stays.map((x) => x.channel))]
+    .map((channel) => {
+      const mine = stays.filter(
+        (x) => x.channel === channel && operator.properties.some((p) => p.id === x.propertyId),
+      );
+      const arriving = mine.filter((x) => x.checkIn >= from && x.checkIn < end);
+      const nights = mine.reduce((t, x) => t + nightsOf(x, from, end), 0);
+      const revenue = Math.round(
+        mine.reduce((t, x) => t + ((x.totalMinor ?? 0) * nightsOf(x, from, end)) / length(x), 0),
+      );
+      const lead = arriving.length
+        ? Math.round(
+            arriving.reduce(
+              (t, x) => t + (Date.parse(x.checkIn) - Date.parse(x.createdAt.slice(0, 10))) / 86_400_000,
+              0,
+            ) / arriving.length,
+          )
+        : null;
+      return {
+        channel,
+        bookings: arriving.length,
+        bookedNights: nights,
+        revenueMinor: revenue,
+        adrMinor: nights ? Math.round(revenue / nights) : null,
+        leadDays: lead,
+      };
+    })
+    .filter((c) => c.bookings || c.bookedNights)
+    .sort((a, b) => b.revenueMinor - a.revenueMinor);
+  const last = to.slice(0, 7);
+  const months: string[] = [last];
+  while (months.length < 12) months.unshift(previousMonth(months[0] as string));
+  const series = months.map((m) => {
+    const [y, mo] = m.split('-').map(Number) as [number, number];
+    const inMonth = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+    const a = `${m}-01`;
+    const b = addDays(a, inMonth);
+    const nights = rows.length
+      ? stays
+          .filter((x) => operator.properties.some((p) => p.id === x.propertyId))
+          .reduce((t, x) => t + nightsOf(x, a, b), 0)
+      : 0;
+    const revenue = Math.round(
+      stays
+        .filter((x) => operator.properties.some((p) => p.id === x.propertyId))
+        .reduce((t, x) => t + ((x.totalMinor ?? 0) * nightsOf(x, a, b)) / length(x), 0),
+    );
+    const blocked = operator.properties.reduce((t, p) => t + blockedIn(p.id, a, b), 0);
+    const available = Math.max(0, rows.length * inMonth - blocked);
+    return {
+      month: m,
+      revenueMinor: revenue,
+      occupancy: available ? Math.round((Math.min(nights, available) / available) * 1000) / 10 : 0,
+      adrMinor: nights ? Math.round(revenue / nights) : null,
+    };
+  });
+  return {
+    from,
+    to,
+    currency: operator.workspace.settings.currency,
+    totals: figures(rows),
+    homes: rows
+      .map((r) => ({ id: r.id, name: r.name, sub: r.ownerName ?? r.area, ...figures([r]) }))
+      .sort((a, b) => b.revenueMinor - a.revenueMinor),
+    owners: group(
+      (r) => r.ownerId ?? 'none',
+      (r) => r.ownerName ?? 'No owner recorded',
+    ),
+    areas: group(
+      (r) => r.area?.trim().toLowerCase() || 'none',
+      (r) => r.area?.trim() || 'No area',
+    ),
+    channels,
+    months: series,
+  };
+}
+
 async function demoMoney(
   orgId: string | null | undefined,
   method: string,
@@ -4754,6 +4931,12 @@ export async function demoFetch<T>(
       save();
       return (await resolvedTask(task)) as T;
     }
+  }
+
+  if (method === 'GET' && path.startsWith('/v1/insights?')) {
+    const { operator } = access(options.orgId, 'insights.read');
+    const q = new URL(path, 'https://demo.invalid').searchParams;
+    return demoInsights(operator, q.get('from') ?? '', q.get('to') ?? '') as T;
   }
 
   if (/^\/v1\/(owners|expenses|statements)(\/|\?|$)/.test(path)) {

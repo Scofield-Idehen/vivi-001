@@ -19,6 +19,7 @@ import { ConsoleOverview } from './pages/console/Overview.tsx';
 import { ConsoleSupportLog } from './pages/console/SupportLog.tsx';
 import { ConsoleSync } from './pages/console/Sync.tsx';
 import { InboxPage } from './pages/inbox/InboxPage.tsx';
+import { InsightsPage } from './pages/insights/InsightsPage.tsx';
 import { About, ModuleToCome, NotFound, NoWorkspace } from './pages/misc.tsx';
 import { ExpensesPage } from './pages/money/ExpensesPage.tsx';
 import { OwnerPage } from './pages/owners/OwnerPage.tsx';
@@ -150,6 +151,7 @@ const routes = [
           { path: 'owners', element: <OwnersPage /> },
           { path: 'owners/:id', element: <OwnerPage /> },
           { path: 'expenses', element: <ExpensesPage /> },
+          { path: 'insights', element: <InsightsPage /> },
           { path: 'channels', element: <ChannelsPage /> },
           { path: 'workspace', element: <WorkspacePage /> },
           { path: 'profile', element: <ProfilePage /> },

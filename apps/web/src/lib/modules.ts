@@ -124,7 +124,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
         path: 'insights',
         label: 'Insights',
         icon: IconChartBar,
-        built: false,
+        built: true,
         design: 'D4',
         phase: 'Phase 4',
         summary: 'Occupancy, ADR, review scores and claim costs by property, area, channel and account.',

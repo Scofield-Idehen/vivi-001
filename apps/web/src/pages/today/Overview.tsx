@@ -299,7 +299,7 @@ const H = 200;
 const PAD = { l: 56, r: 8, t: 10, b: 24 };
 
 /** The chart's own width in CSS pixels, so text stays its real size whatever the card's width. */
-function useWidth(): [RefObject<HTMLDivElement | null>, number] {
+export function useWidth(): [RefObject<HTMLDivElement | null>, number] {
   const ref = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(560);
   useEffect(() => {
@@ -314,7 +314,7 @@ function useWidth(): [RefObject<HTMLDivElement | null>, number] {
   return [ref, w];
 }
 
-function ticks(max: number): number[] {
+export function ticks(max: number): number[] {
   if (max <= 0) return [0];
   const step = 10 ** Math.floor(Math.log10(max / 3));
   const nice = [1, 2, 2.5, 5, 10].map((k) => k * step).find((s) => max / s <= 4) ?? step * 10;
