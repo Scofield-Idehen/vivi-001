@@ -1,0 +1,36 @@
+name: Diagnose
+
+# Read-only counts for one workspace (homes, owners, bookings by status and month), to explain
+# figures that look wrong. Numbers only; no names or guest details are printed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      org:
+        description: The operator's slug in V-01
+        default: vivistays
+        required: true
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Write the worker's settings
+        env:
+          WORKER_ENV: ${{ secrets.WORKER_ENV }}
+        run: printf '%s\n' "$WORKER_ENV" | tr -d '\r' > apps/worker/.env
+      - name: Count
+        working-directory: apps/worker
+        run: pnpm diagnose --org "${{ inputs.org }}"
+      - name: Remove the settings file
+        if: always()
+        run: rm -f apps/worker/.env
