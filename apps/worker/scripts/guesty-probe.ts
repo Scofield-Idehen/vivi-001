@@ -44,6 +44,94 @@ try {
       }
       return out;
     };
+    if (process.argv.includes('--deep')) {
+      const users: Record<string, unknown>[] = [];
+      for await (const u of guesty.pages<Record<string, unknown>>('/v1/users')) users.push(u);
+      const roles = users.flatMap((u) =>
+        Array.isArray(u.roles) ? (u.roles as Record<string, unknown>[]) : [],
+      );
+      const roleShape = [...new Set(roles.flatMap((r) => Object.keys(r)))].sort();
+      const roleIds = tally(roles.map((r) => r.roleId));
+      const roleNames = tally(roles.map((r) => r.name ?? r.roleName ?? r.title));
+      const listingScoped = roles.filter(
+        (r) => Array.isArray(r.listingIds) || Array.isArray(r.listings) || r.listingsFilter,
+      ).length;
+      console.log(
+        JSON.stringify(
+          {
+            users: users.length,
+            roleShape,
+            roleIds,
+            roleNames,
+            listingScoped,
+            rolesPerUser: tally(users.map((u) => (Array.isArray(u.roles) ? u.roles.length : 0))),
+            titles: tally(users.map((u) => (typeof u.title === 'string' && u.title ? 'has title' : 'none'))),
+            titleWords: tally(
+              users.map(
+                (u) =>
+                  String(u.title ?? '')
+                    .toLowerCase()
+                    .match(/clean|house|maint|ops|manag|admin/)?.[0] ?? '-',
+              ),
+            ),
+            tags: tally(users.flatMap((u) => (Array.isArray(u.tags) ? u.tags : []))),
+            settingsKeys: [
+              ...new Set(users.flatMap((u) => Object.keys((u.settings as object) ?? {}))),
+            ].sort(),
+            isAuthZ: tally(users.map((u) => u.isAuthZ)),
+            lastActive: tally(users.map((u) => String(u.lastActivityTime ?? 'never').slice(0, 4))),
+          },
+          null,
+          2,
+        ),
+      );
+      for (const path of [
+        '/v1/roles',
+        '/v1/accounts/me/roles',
+        '/v1/tasks',
+        '/v1/tasks-open-api/tasks?columns=_id',
+      ]) {
+        try {
+          const page = await guesty.get<Record<string, unknown>>(
+            path.split('?')[0] as string,
+            path.includes('?')
+              ? { columns: '_id listingId assigneeId type status', limit: 25 }
+              : { limit: 25 },
+          );
+          const items = (page.results ??
+            page.data ??
+            page.items ??
+            (Array.isArray(page) ? page : [])) as Record<string, unknown>[];
+          console.log(
+            JSON.stringify(
+              {
+                path,
+                topKeys: Object.keys(page).slice(0, 20),
+                count: page.count ?? page.total ?? items.length,
+                fields: keysOf(items),
+                names: path.includes('roles') ? items.map((r) => r.name ?? r.title) : undefined,
+                types: path.includes('task') ? tally(items.map((i) => i.type)) : undefined,
+              },
+              null,
+              2,
+            ),
+          );
+        } catch (error) {
+          console.log(JSON.stringify({ path, error: String(error).slice(0, 200) }));
+        }
+      }
+      // Listing fields that might hold a cleaner or a default assignee.
+      const page = await guesty.get<{ results?: Record<string, unknown>[] }>('/v1/listings', { limit: 5 });
+      const keys = [...new Set((page.results ?? []).flatMap((l) => Object.keys(l)))];
+      console.log(
+        JSON.stringify({
+          listingKeysAboutPeople: keys.filter((k) =>
+            /clean|assign|staff|user|contact|house|team|owner|manag/i.test(k),
+          ),
+        }),
+      );
+      process.exit(0);
+    }
     const tries: [string, Record<string, string | number>][] = [
       ['/v1/users', {}],
       ['/v1/contacts', {}],

@@ -54,7 +54,7 @@ jobs:
       - name: Guesty cleaners, counts only
         if: inputs.probe_cleaners
         working-directory: apps/worker
-        run: pnpm guesty:probe --cleaners
+        run: pnpm guesty:probe --cleaners --deep
       - name: Remove the settings file
         if: always()
         run: rm -f apps/worker/.env
