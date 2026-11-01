@@ -182,7 +182,17 @@ export function Cards({
   const release = useCardAction<string>(orgId, r.id, (id) => `/v1/card-requests/${id}/release`);
   const demoPay = useCardAction<string>(orgId, r.id, (id) => `/v1/card-requests/${id}/demo-pay`);
   const list = cards.data;
-  if (!list) return null;
+  if (!list) {
+    // Say why the card section isn't there, rather than leaving a gap.
+    return cards.error ? (
+      <div className="mt-4 border-t border-hairline pt-3">
+        <p className="text-[13px] text-slate">Card</p>
+        <div className="mt-2">
+          <Notice tone="urgent">{explain(cards.error)}</Notice>
+        </div>
+      </div>
+    ) : null;
+  }
   const requests = list.requests;
   if (!list.enabled && requests.length === 0) {
     return canWrite ? (
