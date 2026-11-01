@@ -60,13 +60,13 @@ function NewRequest({
         }
       />
       {make.error ? <Notice tone="urgent">{explain(make.error)}</Notice> : null}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="primary"
           disabled={!ready}
           onClick={() => make.mutate(parsed.minor as number, { onSuccess: onDone })}
         >
-          {kind === 'payment' ? 'Make payment link' : 'Make deposit link'}
+          Make link
         </Button>
         <Button variant="quiet" onClick={onDone}>
           Cancel
@@ -112,7 +112,7 @@ function Keep({
       />
       <TextField label="What for" value={reason} onChange={setReason} max={80} placeholder="Broken lamp" />
       {keep.error ? <Notice tone="urgent">{explain(keep.error)}</Notice> : null}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="primary"
           disabled={!ready}

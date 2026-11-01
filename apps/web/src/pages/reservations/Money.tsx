@@ -69,7 +69,7 @@ function AddCharge({
         hint="A minus makes it a discount."
       />
       {add.error ? <Notice tone="urgent">{explain(add.error)}</Notice> : null}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="primary"
           disabled={!ready}
@@ -154,7 +154,7 @@ function AddPayment({
       <DateField label="Received on" value={paidOn} onChange={setPaidOn} today={r.today} max={r.today} />
       <TextField label="Note" value={note} onChange={setNote} max={400} placeholder="Deposit" />
       {add.error ? <Notice tone="urgent">{explain(add.error)}</Notice> : null}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="primary"
           disabled={!ready}
