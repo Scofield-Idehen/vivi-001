@@ -10,6 +10,10 @@ on:
         description: The operator's slug in V-01
         default: vivistays
         required: true
+      probe_documents:
+        description: Count the owners' documents in Guesty (contracts and others; counts only)
+        type: boolean
+        default: false
       probe_guesty:
         description: Also read the shape of a few Guesty bookings' money (field names only)
         type: boolean
@@ -39,6 +43,10 @@ jobs:
         if: inputs.probe_guesty
         working-directory: apps/worker
         run: pnpm guesty:probe
+      - name: Guesty owner documents, counts only
+        if: inputs.probe_documents
+        working-directory: apps/worker
+        run: pnpm guesty:probe --documents
       - name: Remove the settings file
         if: always()
         run: rm -f apps/worker/.env

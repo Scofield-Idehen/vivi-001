@@ -32,6 +32,44 @@ function shape(value: unknown, depth = 0): unknown {
 }
 
 try {
+  if (process.argv.includes('--documents')) {
+    // Owner documents: counts only, never names or file names.
+    let owners = 0;
+    let withDocs = 0;
+    let withContract = 0;
+    const byType: Record<string, number> = {};
+    let dated = 0;
+    let shared = 0;
+    for await (const o of guesty.owners()) {
+      owners += 1;
+      const page = await guesty.get<{
+        results?: { type?: string; startDate?: string; endDate?: string; isShared?: boolean }[];
+      }>(`/v1/owners/${o._id}/documents`, { limit: 100, isExpired: 'true' });
+      const docs = page.results ?? [];
+      if (docs.length) withDocs += 1;
+      if (docs.some((d) => d.type === 'CONTRACT')) withContract += 1;
+      for (const d of docs) {
+        byType[d.type ?? '?'] = (byType[d.type ?? '?'] ?? 0) + 1;
+        if (d.startDate || d.endDate) dated += 1;
+        if (d.isShared) shared += 1;
+      }
+    }
+    console.log(
+      JSON.stringify(
+        {
+          owners,
+          ownersWithDocuments: withDocs,
+          ownersWithAContract: withContract,
+          documentsByType: byType,
+          documentsWithDates: dated,
+          sharedWithOwner: shared,
+        },
+        null,
+        2,
+      ),
+    );
+    process.exit(0);
+  }
   for (const fields of ['money status', undefined]) {
     const page = await guesty.get<{ results?: Record<string, unknown>[] }>('/v1/reservations', {
       limit: 2,
