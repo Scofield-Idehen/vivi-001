@@ -443,6 +443,17 @@ export function reservationStatusOf(status: string | null | undefined): Reservat
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * What the stay costs, from whichever of Guesty's figures the booking has: the total, else the
+ * subtotal (the stay and cleaning before taxes, which most bookings carry), else the stay plus cleaning.
+ */
+export function totalOf(money: GuestyReservation['money']): number | null {
+  if (!money) return null;
+  const positive = (v: number | null | undefined) => (typeof v === 'number' && v > 0 ? v : null);
+  const parts = (positive(money.fareAccommodation) ?? 0) + (positive(money.fareCleaning) ?? 0);
+  return positive(money.totalPrice) ?? positive(money.subTotalPrice) ?? (parts > 0 ? parts : null);
+}
+
 /** A V-01 booking from a Guesty reservation, or why it can't be one. */
 export function reservationFrom(
   r: GuestyReservation,
@@ -479,7 +490,7 @@ export function reservationFrom(
       children: Math.max(0, party?.numberOfChildren ?? 0),
       infants: Math.max(0, party?.numberOfInfants ?? 0),
       currency,
-      totalMinor: minorOf(r.money?.totalPrice, currency ?? org.currency),
+      totalMinor: minorOf(totalOf(r.money), currency ?? org.currency),
       payoutMinor: minorOf(r.money?.hostPayout ?? r.money?.netIncome, currency ?? org.currency),
       checkInTime: timeOf(r.plannedArrival),
       checkOutTime: timeOf(r.plannedDeparture),

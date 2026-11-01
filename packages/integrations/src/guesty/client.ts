@@ -499,9 +499,16 @@ export interface GuestyReservation {
   platform?: string | null;
   integration?: { platform?: string | null } | null;
   confirmationCode?: string | null;
+  /**
+   * Guesty's money for the stay. Most bookings carry `subTotalPrice` (the stay and cleaning, before
+   * taxes) and no `totalPrice` (found 1 Nov 2026), so the import reads them in that order.
+   */
   money?: {
     currency?: string | null;
     totalPrice?: number | null;
+    subTotalPrice?: number | null;
+    fareAccommodation?: number | null;
+    fareCleaning?: number | null;
     hostPayout?: number | null;
     netIncome?: number | null;
   } | null;

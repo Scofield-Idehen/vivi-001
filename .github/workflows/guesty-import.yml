@@ -21,6 +21,10 @@ on:
         description: Owners only (who owns which homes; the homes must be imported already)
         type: boolean
         default: false
+      prices_only:
+        description: Prices only (each booking's price and payout, on bookings already imported)
+        type: boolean
+        default: false
 
 concurrency:
   group: guesty-import
@@ -59,9 +63,11 @@ jobs:
           ORG: ${{ inputs.org }}
           REHEARSE: ${{ inputs.rehearse }}
           OWNERS_ONLY: ${{ inputs.owners_only }}
+          PRICES_ONLY: ${{ inputs.prices_only }}
         run: |
           flags=""
           if [ "$OWNERS_ONLY" = "true" ]; then flags="$flags --owners-only"; fi
+          if [ "$PRICES_ONLY" = "true" ]; then flags="$flags --prices-only"; fi
           if [ "$REHEARSE" = "true" ]; then flags="$flags --dry-run"; fi
           pnpm guesty:import --org "$ORG" $flags
       - name: Remove the settings file

@@ -1,6 +1,7 @@
 import { GuestyClient, SecretBox } from '@v01/integrations';
 import { type ImportSummary, importFromGuesty } from '../src/guesty/import.ts';
 import { importGuestyOwners } from '../src/guesty/owners.ts';
+import { refreshGuestyPrices } from '../src/guesty/prices.ts';
 import { liveDeps } from '../src/live-deps.ts';
 
 /**
@@ -12,6 +13,9 @@ import { liveDeps } from '../src/live-deps.ts';
  * and the account map for the move-over. Reads GUESTY_CLIENT_ID and GUESTY_CLIENT_SECRET (and
  * FIELD_SECRET_KEY for lock codes) from apps/worker/.env. Run again any time: it updates.
  * --dry-run does everything and keeps nothing, so the report can be read first.
+ *
+ * --prices-only puts each booking's price and payout from Guesty on the bookings already
+ * imported (bookings leaving from --bookings-days-back ago, 400 by default).
  *
  * --owners-only brings just the owners and which homes are theirs (one owner can have many),
  * for a workspace whose homes are already imported. Quick, and it updates on every run.
@@ -65,6 +69,23 @@ try {
     console.warn(
       'FIELD_SECRET_KEY is not set: lock codes and other secret fields will be reported, not stored.',
     );
+  }
+  if (args.includes('--prices-only')) {
+    console.log(`${dryRun ? 'Rehearsing' : 'Refreshing'} booking prices from Guesty for ${org.name}…`);
+    const from = new Date(Date.now() - Number(daysBack ?? 400) * 86_400_000).toISOString().slice(0, 10);
+    const p = await refreshGuestyPrices(deps, {
+      orgId: org.id,
+      guesty,
+      checkOutFrom: from,
+      defaultCurrency: 'GBP',
+      dryRun,
+    });
+    console.log('');
+    console.log(dryRun ? `Dry run for ${org.name}: nothing was kept.` : `Prices saved for ${org.name}.`);
+    console.log(
+      `Bookings read from Guesty: ${p.read}; matched here: ${p.matched}; prices set or changed: ${p.updated}; still with no price in Guesty: ${p.stillWithoutPrice}.`,
+    );
+    process.exit(0);
   }
   if (args.includes('--owners-only')) {
     console.log(`${dryRun ? 'Rehearsing' : 'Bringing'} the owners from Guesty for ${org.name}…`);

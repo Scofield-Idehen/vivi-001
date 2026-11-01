@@ -22,8 +22,10 @@ import {
   propertyTypeOf,
   reservationFrom,
   reservationStatusOf,
+  totalOf,
 } from '../src/guesty/mapping.ts';
 import { importGuestyOwners } from '../src/guesty/owners.ts';
+import { refreshGuestyPrices } from '../src/guesty/prices.ts';
 import { GuestySnapshot } from '../src/guesty/snapshot.ts';
 
 /**
@@ -287,6 +289,14 @@ function stubGuesty(
 }
 
 describe('Guesty words into V-01 words', () => {
+  it('reads a booking’s price from the total, else the subtotal, else the stay and cleaning', () => {
+    expect(totalOf({ totalPrice: 540, subTotalPrice: 500 })).toBe(540);
+    expect(totalOf({ subTotalPrice: 500, fareAccommodation: 420, fareCleaning: 80 })).toBe(500);
+    expect(totalOf({ fareAccommodation: 420, fareCleaning: 80 })).toBe(500);
+    expect(totalOf({ totalPrice: 0 })).toBeNull();
+    expect(totalOf(null)).toBeNull();
+  });
+
   it('reads a Guesty message: who wrote it, by what, as plain text; leaves log lines and notes', () => {
     expect(
       messageFromPost(
@@ -789,6 +799,28 @@ describe('importing an account', () => {
     expect(
       await owner('select name from app.owners where organisation_id = $1 order by name', [op.orgId]),
     ).toEqual([{ name: 'Ellis Grant' }, { name: 'Sam Cole' }]);
+  });
+
+  it('prices only: puts Guesty’s subtotal on bookings already imported', async () => {
+    const { client } = stubGuesty({
+      reservations: [
+        {
+          ...(RESERVATIONS[0] as GuestyReservation),
+          money: { currency: 'GBP', subTotalPrice: 640, hostPayout: 590 },
+        },
+      ],
+    });
+    const summary = await refreshGuestyPrices(deps(), {
+      orgId: op.orgId,
+      guesty: client,
+      checkOutFrom: '2020-01-01',
+      defaultCurrency: 'GBP',
+    });
+    expect(summary).toEqual({ read: 1, matched: 1, updated: 1, stillWithoutPrice: 0 });
+    const [booking] = await owner<{ total_minor: number; payout_minor: number }>(
+      "select total_minor::int as total_minor, payout_minor::int as payout_minor from app.reservations where channel_reference = 'HMGUESTY01'",
+    );
+    expect(booking).toEqual({ total_minor: 64_000, payout_minor: 59_000 });
   });
 
   it('owners only: updates them, moves a home Guesty moved, and keeps one given by hand', async () => {
