@@ -59,16 +59,18 @@ export async function refreshGuestyPrices(
         const currency = r.money?.currency?.toUpperCase() || options.defaultCurrency;
         const total = minorOf(totalOf(r.money), currency);
         const payout = minorOf(r.money?.hostPayout ?? r.money?.netIncome, currency);
+        const cleaning = minorOf(r.money?.fareCleaning, currency);
         if (total === null) {
           summary.stillWithoutPrice += 1;
           continue;
         }
         const done = await tx
           .update(reservations)
-          .set({ totalMinor: total, payoutMinor: payout, currency })
+          .set({ totalMinor: total, payoutMinor: payout, cleaningMinor: cleaning, currency })
           .where(
             sql`${eq(reservations.id, id)} and (${reservations.totalMinor} is distinct from ${total}
-                or ${reservations.payoutMinor} is distinct from ${payout})`,
+                or ${reservations.payoutMinor} is distinct from ${payout}
+                or ${reservations.cleaningMinor} is distinct from ${cleaning})`,
           )
           .returning({ id: reservations.id });
         summary.updated += done.length;

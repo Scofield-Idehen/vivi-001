@@ -26,6 +26,8 @@ export const claims = app.table(
     filedOn: date('filed_on', { mode: 'string' }),
     filedReference: text('filed_reference'),
     receivedMinor: bigint('received_minor', { mode: 'number' }),
+    /** When the money came in; it goes back to the owner on that month's statement. */
+    receivedOn: date('received_on', { mode: 'string' }),
     outcome: text('outcome'),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: createdAt(),

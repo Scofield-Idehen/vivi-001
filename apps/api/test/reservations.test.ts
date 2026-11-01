@@ -610,7 +610,7 @@ describe('money on a booking, and cancelling one', () => {
     expect(paid.body).toMatchObject({ chargesMinor: 4500, paidMinor: 20000, balanceMinor: 14500 });
     const refund = await call('POST', `/v1/reservations/${id}/payments`, {
       as: asA(),
-      body: { amountMinor: -5000, method: 'bank_transfer', paidOn: day(0) },
+      body: { amountMinor: -5000, method: 'bank_transfer', paidOn: day(0), refundFor: 'stay' },
     });
     expect(refund.body).toMatchObject({ paidMinor: 15000, balanceMinor: 19500 });
     const less = await call('DELETE', `/v1/reservations/${id}/charges/${charged.body.charges[0].id}`, {

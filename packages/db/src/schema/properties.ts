@@ -1,6 +1,7 @@
 import type { Bed } from '@v01/shared';
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   char,
   check,
@@ -116,6 +117,8 @@ export const properties = app.table(
     /** Who maintenance tasks at this property go to unless someone else is chosen. */
     maintainerUserId: uuid('maintainer_user_id').references(() => appUsers.id, { onDelete: 'set null' }),
     /** Whose home it is (owners.ts); the API checks it is in the same workspace. */
+    /** What the cleaner is paid for one clean of this home; logged as the company's cost when a clean is done. */
+    cleaningCostMinor: bigint('cleaning_cost_minor', { mode: 'number' }),
     ownerId: uuid('owner_id'),
     archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'string' }),
     createdAt: createdAt(),

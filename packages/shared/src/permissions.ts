@@ -38,6 +38,9 @@ export const PERMISSIONS = {
   /** Owners of the homes, and their fee: the office and accounts. */
   'owners.read': ['admin', 'operations', 'accounts', 'v01_support'],
   'owners.write': ['admin', 'operations', 'accounts'],
+  /** Who is paid for each home and their bank details: admins and accounts only. */
+  'payees.read': ['admin', 'accounts'],
+  'payees.write': ['admin', 'accounts'],
   /** Money spent on the homes, with receipts: the office and accounts. */
   'expenses.read': ['admin', 'operations', 'accounts', 'v01_support'],
   'expenses.write': ['admin', 'operations', 'accounts'],

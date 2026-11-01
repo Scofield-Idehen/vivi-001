@@ -14,6 +14,7 @@ import {
   ApiError,
   useOwnerHomes,
   useOwnerMonth,
+  useOwnerSetup,
   useOwners,
   useProperties,
   useRemoveOwner,
@@ -26,6 +27,7 @@ import { useCurrentWorkspace } from '../../lib/workspace.tsx';
 import { NotFound } from '../misc.tsx';
 import { moneyText } from '../properties/money.ts';
 import { OwnerLogin } from './OwnerLogin.tsx';
+import { SetupBanner, TermsSection } from './OwnerSetup.tsx';
 import { feeText, OwnerSheet } from './OwnersPage.tsx';
 import { StatementDocument } from './StatementDocument.tsx';
 
@@ -260,6 +262,7 @@ export function OwnerPage() {
   const [editing, setEditing] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const write = can(entry.role, 'owners.write');
+  const setup = useOwnerSetup(orgId, id ?? null);
 
   if (data.error instanceof ApiError && data.error.status === 404) return <NotFound />;
   const d = data.data;
@@ -340,10 +343,7 @@ export function OwnerPage() {
               </div>
             ) : null}
           </header>
-          {o.notes ? (
-            <p className="mb-6 max-w-[70ch] text-[14px] leading-relaxed text-slate">{o.notes}</p>
-          ) : null}
-          <OwnerLogin ownerId={o.id} write={write} />
+          {setup.data ? <SetupBanner setup={setup.data} notes={o.notes} /> : null}
 
           <section aria-labelledby="month" className={data.isPlaceholderData ? 'opacity-60' : ''}>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -360,13 +360,13 @@ export function OwnerPage() {
               from={workspace.data?.brand.displayName ?? entry.organisationName}
             />
 
-            <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
               {(
                 [
-                  ['Earned', d.earnedMinor, null],
-                  [`Fee (${feeText(o.feeBasisPoints)})`, -d.feeMinor, null],
+                  ['The stays brought in', d.earnedMinor, null],
+                  ['Their part', d.ownerShareMinor ?? d.earnedMinor - d.feeMinor, null],
                   ['Expenses charged', -d.expensesMinor, null],
-                  [d.netMinor < 0 ? 'Owed by the owner' : 'To the owner', d.netMinor, 'net'],
+                  [d.netMinor < 0 ? 'Owed by the owner' : 'Due to them', d.netMinor, 'net'],
                 ] as const
               ).map(([label, value, tone]) => (
                 <div
@@ -380,6 +380,8 @@ export function OwnerPage() {
                 </div>
               ))}
             </div>
+
+            <WorkedOut d={d} m={m} />
 
             <div className="grid items-start gap-6 lg:grid-cols-2">
               <div className="rounded-2xl border border-hairline bg-canvas p-5">
@@ -397,22 +399,23 @@ export function OwnerPage() {
                       <tr className="text-left text-[12.5px] text-slate">
                         <th className="pb-2 font-normal">Home</th>
                         <th className="pb-2 text-right font-normal">Nights</th>
-                        <th className="pb-2 text-right font-normal">Earned</th>
-                        <th className="pb-2 text-right font-normal">Expenses</th>
+                        <th className="pb-2 text-right font-normal">Brought in</th>
+                        <th className="pb-2 text-right font-normal">Their part</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-hairline border-t border-hairline">
                       {d.homes.map((h) => (
                         <tr key={h.id}>
                           <td className="py-2.5">
-                            <Link to={`/properties/${h.id}`} className="text-ink hover:text-accent">
+                            <Link to={`/properties/${h.id}`} className="block text-ink hover:text-accent">
                               {h.name}
                             </Link>
+                            <span className="text-[12px] text-slate">{dealLine(h, o.feeBasisPoints, m)}</span>
                           </td>
                           <td className="py-2.5 text-right text-slate tnum">{h.nights}</td>
                           <td className="py-2.5 text-right text-ink tnum">{m(h.earnedMinor)}</td>
                           <td className="py-2.5 text-right text-ink tnum">
-                            {h.expensesMinor ? m(h.expensesMinor) : '—'}
+                            {m(h.ownerShareMinor ?? h.earnedMinor)}
                           </td>
                         </tr>
                       ))}
@@ -422,7 +425,7 @@ export function OwnerPage() {
                   <p className="text-[14px] text-slate">No homes chosen yet.</p>
                 )}
                 <p className="mt-3 text-[12px] text-mist">
-                  Confirmed bookings, each spread over the nights it covers.
+                  What each confirmed stay paid out, spread over its nights, less cleaning and stay refunds.
                 </p>
               </div>
 
@@ -489,8 +492,74 @@ export function OwnerPage() {
               )}
             </div>
           </section>
+
+          <div className="mt-12">
+            <TermsSection ownerId={o.id} ownerFee={o.feeBasisPoints} notes={o.notes} write={write} />
+            <OwnerLogin ownerId={o.id} write={write} />
+            {o.notes ? (
+              <details className="mb-8 rounded-2xl border border-hairline bg-canvas px-5 py-3.5">
+                <summary className="cursor-pointer text-[14.5px] font-medium text-ink">Notes</summary>
+                <p className="mt-2 max-w-[70ch] whitespace-pre-wrap text-[14px] leading-relaxed text-slate">
+                  {o.notes}
+                </p>
+              </details>
+            ) : null}
+          </div>
         </>
       )}
     </>
+  );
+}
+
+function dealLine(h: OwnerMonth['homes'][number], ownerFee: number, m: (minor: number) => string): string {
+  switch (h.deal) {
+    case 'percentage':
+      return `${feeText(h.feeBasisPoints ?? 0)} fee`;
+    case 'fixed_rent':
+      return `Fixed rent ${m(h.rentMinor ?? 0)}`;
+    case 'no_fee':
+      return 'No fee (board)';
+    default:
+      return `${feeText(h.feeBasisPoints ?? ownerFee)} fee (owner’s)`;
+  }
+}
+
+/** How the month is worked out, line by line, from what guests paid to what's due. */
+function WorkedOut({ d, m }: { d: OwnerMonth; m: (minor: number) => string }) {
+  const rent = d.rentMinor ?? 0;
+  const lines: [string, number, string?][] = [
+    ['Guests paid for the nights', d.grossMinor ?? d.earnedMinor],
+    ['Channel fees', -(d.channelFeesMinor ?? 0)],
+    ['Cleaning fees (ours, for the cleaner)', -(d.cleaningMinor ?? 0)],
+    ['Stay refunds', -(d.refundsMinor ?? 0)],
+    ['The stays brought in', d.earnedMinor, 'sum'],
+    ['Management fee', -d.feeMinor],
+  ];
+  if (rent)
+    lines.push([
+      'Fixed rent homes: rent instead of earnings',
+      (d.ownerShareMinor ?? 0) - (d.earnedMinor - d.feeMinor),
+    ]);
+  lines.push(['Their part', d.ownerShareMinor ?? d.earnedMinor - d.feeMinor, 'sum']);
+  lines.push(['Expenses charged to them', -d.expensesMinor]);
+  if (d.claimCreditsMinor) lines.push(['Claim money paid back', d.claimCreditsMinor]);
+  lines.push([d.netMinor < 0 ? 'Owed by them' : 'Due to them', d.netMinor, 'total']);
+  return (
+    <details className="mb-6 rounded-2xl border border-hairline bg-canvas px-5 py-3.5">
+      <summary className="cursor-pointer text-[14.5px] font-medium text-ink">How it’s worked out</summary>
+      <dl className="mt-3 max-w-[560px] text-[14px]">
+        {lines
+          .filter(([, v, kind]) => kind || v !== 0)
+          .map(([label, v, kind]) => (
+            <div
+              key={label}
+              className={`flex justify-between gap-4 py-1.5 ${kind ? 'border-t border-hairline font-medium text-ink' : 'text-slate'} ${kind === 'total' ? 'text-[15px]' : ''}`}
+            >
+              <dt>{label}</dt>
+              <dd className="tnum text-ink">{v < 0 ? `− ${m(-v)}` : m(v)}</dd>
+            </div>
+          ))}
+      </dl>
+    </details>
   );
 }

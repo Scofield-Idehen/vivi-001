@@ -38,5 +38,6 @@ export * from './tasks.ts';
 export * from './tasks.ts';
 export * from './team.ts';
 export * from './team.ts';
+export * from './terms.ts';
 export * from './today.ts';
 export * from './today.ts';

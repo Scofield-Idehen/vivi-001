@@ -36,6 +36,7 @@ import {
   type ConsoleOverview,
   type ConsoleSync,
   type ConsoleSyncRow,
+  type Contract,
   type CustomField,
   CustomFieldCreateSchema,
   CustomFieldUpdateSchema,
@@ -53,6 +54,7 @@ import {
   formatMoney,
   type GuestLink,
   type GuestStay,
+  type HomeTerms,
   type Insights,
   type Invitation,
   InviteSchema,
@@ -79,6 +81,7 @@ import {
   type Owner,
   type OwnerList,
   type OwnerMonth,
+  type OwnerSetup,
   type Payment,
   PaymentCreateSchema,
   type Permission,
@@ -246,6 +249,14 @@ interface DemoOperator {
   claims?: DemoClaim[];
   /** Owners (homes point at them through `owner` on the property) and money spent. Missing in older saved states. */
   owners?: DemoOwner[];
+  /** Owners' contracts, each home's terms (newest first), payees and cleaning costs, as the API keeps them. */
+  contracts?: Record<string, DemoContract[]>;
+  homeTerms?: Record<string, HomeTerms[]>;
+  payees?: Record<
+    string,
+    { payeeName: string; reference: string | null; sortCode: string | null; accountNumber: string | null }
+  >;
+  cleaningCosts?: Record<string, number | null>;
   /** In the demo, which owner the owner's log-in view shows. */
   demoOwnerId?: string;
   expenses?: DemoExpense[];
@@ -285,8 +296,10 @@ interface DemoThread {
   messages: Message[];
 }
 
+type DemoContract = Contract & { fileUrl?: string };
+
 /** An owner as the demo keeps them; log-ins and invitations are added as they are made. */
-type DemoOwner = Omit<Owner, 'homes' | 'logins' | 'invited'> & {
+type DemoOwner = Omit<Owner, 'homes' | 'logins' | 'invited' | 'setup'> & {
   logins?: Owner['logins'];
   invited?: Owner['invited'];
 };
@@ -294,6 +307,8 @@ type DemoOwner = Omit<Owner, 'homes' | 'logins' | 'invited'> & {
 /** A booking as the API keeps it: what the calendar shows, and what the reservation page adds. */
 interface DemoStay extends Omit<CalendarStay, 'status'> {
   status: ReservationStatus;
+  /** The cleaning fee inside the total. */
+  cleaningMinor?: number | null;
   /** The key in the guest's link, made the first time the link is asked for. */
   guestKey?: string;
   adults: number;
@@ -3675,6 +3690,12 @@ function ownerView(operator: DemoOperator, o: DemoOwner): Owner {
     ...o,
     logins: o.logins ?? [],
     invited: o.invited ?? [],
+    setup: {
+      contract: Boolean(operator.contracts?.[o.id]?.length),
+      homesWithoutTerms: operator.properties.filter(
+        (p) => p.owner?.id === o.id && !operator.homeTerms?.[p.id]?.length,
+      ).length,
+    },
     homes: operator.properties
       .filter((p) => p.owner?.id === o.id)
       .map((p) => ({ id: p.id, name: p.name }))
@@ -3754,6 +3775,136 @@ function findExpense(operator: DemoOperator, id: string): DemoExpense {
   return e;
 }
 
+export async function demoSetContractFile(
+  orgId: string | null,
+  ownerId: string,
+  contractId: string,
+  file: File,
+  contentType: string,
+): Promise<Contract> {
+  const { operator } = access(orgId, 'owners.write');
+  const c = operator.contracts?.[ownerId]?.find((x) => x.id === contractId);
+  if (!c) throw new ApiError(404, 'contract_not_found', 'That contract is not on this owner.');
+  const id = crypto.randomUUID();
+  await putDemoPhoto(id, file);
+  c.file = { name: file.name.slice(0, 200), contentType: contentType || 'application/pdf', bytes: file.size };
+  c.fileUrl = `demo-photo:${id}`;
+  save();
+  const { fileUrl: _hidden, ...view } = c;
+  return view;
+}
+
+/** The demo's version of an owner's set-up. */
+function demoOwnerSetup(operator: DemoOperator, o: DemoOwner): OwnerSetup {
+  const month = todayIn(operator.workspace.settings.timeZone).slice(0, 7);
+  const role = operator.role ?? SUPPORT_ROLE;
+  const seePayees = can(role, 'payees.read');
+  const homes = operator.properties
+    .filter((p) => p.owner?.id === o.id)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((p) => {
+      const history = operator.homeTerms?.[p.id] ?? [];
+      const payee = operator.payees?.[p.id];
+      return {
+        id: p.id,
+        name: p.name,
+        terms: history.find((t) => t.from <= month) ?? null,
+        history,
+        payee: !seePayees
+          ? null
+          : payee
+            ? {
+                payeeName: payee.payeeName,
+                reference: payee.reference,
+                accountHint: payee.accountNumber?.slice(-4) ?? null,
+                hasBank: Boolean(payee.accountNumber),
+              }
+            : null,
+        cleaningCostMinor: operator.cleaningCosts?.[p.id] ?? null,
+      };
+    });
+  const contracts = (operator.contracts?.[o.id] ?? []).map(({ fileUrl: _hidden, ...c }) => c);
+  return {
+    contracts,
+    homes,
+    missing: {
+      contract: contracts.length === 0,
+      homesWithoutTerms: homes.filter((h) => h.history.length === 0).length,
+      homesWithoutPayee: seePayees ? homes.filter((h) => !h.payee).length : null,
+    },
+  };
+}
+
+function demoHomeSetup(
+  orgId: string | null | undefined,
+  method: string,
+  propertyId: string,
+  what: string,
+  body: unknown,
+): unknown {
+  const permission =
+    what === 'payee/bank' ? 'payees.read' : what === 'payee' ? 'payees.write' : 'owners.write';
+  const { operator } = access(orgId, permission);
+  const b = (body ?? {}) as Record<string, unknown>;
+  if (what === 'terms' && method === 'PUT') {
+    operator.homeTerms ??= {};
+    const list = operator.homeTerms[propertyId] ?? [];
+    const deal = b.deal as HomeTerms['deal'];
+    const row: HomeTerms = {
+      id: crypto.randomUUID(),
+      from: String(b.from),
+      deal,
+      feeBasisPoints: deal === 'percentage' ? Number(b.feeBasisPoints ?? 0) : null,
+      rentMinor: deal === 'fixed_rent' ? Number(b.rentMinor ?? 0) : null,
+      maintenanceBy: (b.maintenanceBy as HomeTerms['maintenanceBy']) ?? 'company',
+      contractId: (b.contractId as string | null) ?? null,
+    };
+    operator.homeTerms[propertyId] = [row, ...list.filter((t) => t.from !== row.from)].sort((x, y) =>
+      y.from.localeCompare(x.from),
+    );
+    save();
+    return row;
+  }
+  if (what === 'cleaning-cost' && method === 'PUT') {
+    operator.cleaningCosts ??= {};
+    operator.cleaningCosts[propertyId] = (b.cleaningCostMinor as number | null) ?? null;
+    save();
+    return { cleaningCostMinor: operator.cleaningCosts[propertyId] };
+  }
+  operator.payees ??= {};
+  const current = operator.payees[propertyId];
+  if (what === 'payee' && method === 'PUT') {
+    const sortCode = typeof b.sortCode === 'string' ? b.sortCode.replace(/[\s-]/g, '') : undefined;
+    const accountNumber =
+      typeof b.accountNumber === 'string' ? b.accountNumber.replace(/\s/g, '') : undefined;
+    operator.payees[propertyId] = {
+      payeeName: String(b.payeeName),
+      reference: (b.reference as string | undefined)?.trim() || null,
+      sortCode: sortCode ?? current?.sortCode ?? null,
+      accountNumber: accountNumber ?? current?.accountNumber ?? null,
+    };
+    save();
+    const p = operator.payees[propertyId];
+    return {
+      payeeName: p.payeeName,
+      reference: p.reference,
+      accountHint: p.accountNumber?.slice(-4) ?? null,
+      hasBank: Boolean(p.accountNumber),
+    };
+  }
+  if (what === 'payee' && method === 'DELETE') {
+    delete operator.payees[propertyId];
+    save();
+    return null;
+  }
+  if (what === 'payee/bank') {
+    if (!current?.accountNumber || !current.sortCode)
+      throw new ApiError(404, 'no_bank', 'No bank details are saved for this home.');
+    return { sortCode: current.sortCode, accountNumber: current.accountNumber };
+  }
+  throw new ApiError(404, 'not_found', 'Not found.');
+}
+
 export async function demoSetReceipt(
   orgId: string | null,
   expenseId: string,
@@ -3800,6 +3951,13 @@ async function demoComputeMonth(operator: DemoOperator, o: DemoOwner, month: str
       if (night >= first && night < next) nights += 1;
     }
     if (!nights) continue;
+    const total = x.totalMinor;
+    const payout = x.payoutMinor === null ? total : Math.min(x.payoutMinor, total);
+    const cleaning = total > 0 ? Math.round(((x.cleaningMinor ?? 0) * payout) / total) : 0;
+    const refunds = -(x.payments ?? [])
+      .filter((p) => p.refundFor === 'stay')
+      .reduce((t, p) => t + p.amountMinor, 0);
+    const share = (v: number) => Math.round((v * nights) / n);
     bookings.push({
       reservationId: x.id,
       propertyId: x.propertyId,
@@ -3809,7 +3967,11 @@ async function demoComputeMonth(operator: DemoOperator, o: DemoOwner, month: str
       checkIn: x.checkIn,
       checkOut: x.checkOut,
       nights,
-      earnedMinor: Math.round((x.totalMinor * nights) / n),
+      grossMinor: share(total),
+      channelFeesMinor: share(total - payout),
+      cleaningMinor: share(cleaning),
+      refundsMinor: share(refunds),
+      earnedMinor: share(payout - cleaning - refunds),
     });
   }
   bookings.sort((a, b) => a.checkIn.localeCompare(b.checkIn));
@@ -3822,28 +3984,65 @@ async function demoComputeMonth(operator: DemoOperator, o: DemoOwner, month: str
       e.spentOn < next,
   );
   const expenses = await Promise.all(spent.map((e) => expenseView(operator, e)));
+  const sum = <T>(rows: T[], f: (r: T) => number) => rows.reduce((t, r) => t + f(r), 0);
   const homes = owner.homes.map((h) => {
     const mine = bookings.filter((b) => b.propertyId === h.id);
+    const t = (operator.homeTerms?.[h.id] ?? []).find((x) => x.from <= month);
+    const deal: OwnerMonth['homes'][number]['deal'] = t?.deal ?? 'owner_fee';
+    const earned = sum(mine, (b) => b.earnedMinor);
+    const bp =
+      deal === 'percentage' ? (t?.feeBasisPoints ?? 0) : deal === 'owner_fee' ? owner.feeBasisPoints : null;
+    const fee = bp === null ? 0 : Math.round((Math.max(0, earned) * bp) / 10_000);
+    const rent = deal === 'fixed_rent' ? (t?.rentMinor ?? 0) : 0;
     return {
       id: h.id,
       name: h.name,
-      nights: mine.reduce((t, b) => t + b.nights, 0),
-      earnedMinor: mine.reduce((t, b) => t + b.earnedMinor, 0),
-      expensesMinor: spent.filter((e) => e.propertyId === h.id).reduce((t, e) => t + e.amountMinor, 0),
+      nights: sum(mine, (b) => b.nights),
+      deal,
+      feeBasisPoints: bp,
+      grossMinor: sum(mine, (b) => b.grossMinor ?? 0),
+      channelFeesMinor: sum(mine, (b) => b.channelFeesMinor ?? 0),
+      cleaningMinor: sum(mine, (b) => b.cleaningMinor ?? 0),
+      refundsMinor: sum(mine, (b) => b.refundsMinor ?? 0),
+      earnedMinor: earned,
+      feeMinor: fee,
+      rentMinor: rent,
+      ownerShareMinor: deal === 'fixed_rent' ? rent : earned - fee,
+      expensesMinor: sum(
+        spent.filter((e) => e.propertyId === h.id),
+        (e) => e.amountMinor,
+      ),
     };
   });
-  const earnedMinor = homes.reduce((t, h) => t + h.earnedMinor, 0);
-  const feeMinor = Math.round((earnedMinor * owner.feeBasisPoints) / 10_000);
-  const expensesMinor = spent.reduce((t, e) => t + e.amountMinor, 0);
+  const total = (
+    k:
+      | 'grossMinor'
+      | 'channelFeesMinor'
+      | 'cleaningMinor'
+      | 'refundsMinor'
+      | 'earnedMinor'
+      | 'feeMinor'
+      | 'rentMinor'
+      | 'ownerShareMinor',
+  ) => sum(homes, (h) => h[k]);
+  const expensesMinor = sum(spent, (e) => e.amountMinor);
   return {
     owner,
     month,
     currency: operator.workspace.settings.currency,
     homes,
-    earnedMinor,
-    feeMinor,
+    grossMinor: total('grossMinor'),
+    channelFeesMinor: total('channelFeesMinor'),
+    cleaningMinor: total('cleaningMinor'),
+    refundsMinor: total('refundsMinor'),
+    earnedMinor: total('earnedMinor'),
+    feeMinor: total('feeMinor'),
+    rentMinor: total('rentMinor'),
+    ownerShareMinor: total('ownerShareMinor'),
     expensesMinor,
-    netMinor: earnedMinor - feeMinor - expensesMinor,
+    claimCreditsMinor: 0,
+    claimCredits: [],
+    netMinor: total('ownerShareMinor') - expensesMinor,
     expenses: expenses.sort((a, b) => b.spentOn.localeCompare(a.spentOn)),
     bookings,
     statement: null,
@@ -4104,6 +4303,46 @@ async function demoMoney(
       operator.owners = list.filter((x) => x !== o);
       save();
       return null;
+    }
+    if (parts[3] === 'setup' && method === 'GET') return demoOwnerSetup(operator, o);
+    if (parts[3] === 'contracts') {
+      operator.contracts ??= {};
+      operator.contracts[o.id] ??= [];
+      const list = operator.contracts[o.id] as DemoContract[];
+      const b = (body ?? {}) as Record<string, unknown>;
+      if (parts.length === 4 && method === 'POST') {
+        const c: DemoContract = {
+          id: crypto.randomUUID(),
+          title: String(b.title ?? 'Management agreement'),
+          signedOn: (b.signedOn as string | null) ?? null,
+          startsOn: (b.startsOn as string | null) ?? null,
+          endsOn: (b.endsOn as string | null) ?? null,
+          sharedWithOwner: (b.sharedWithOwner as boolean | undefined) ?? true,
+          file: null,
+          createdAt: new Date().toISOString(),
+        };
+        list.unshift(c);
+        save();
+        return c;
+      }
+      const c = list.find((x) => x.id === parts[4]);
+      if (!c) throw new ApiError(404, 'contract_not_found', 'That contract is not on this owner.');
+      if (parts.length === 5 && method === 'PATCH') {
+        for (const k of ['title', 'signedOn', 'startsOn', 'endsOn', 'sharedWithOwner'] as const)
+          if (b[k] !== undefined) Object.assign(c, { [k]: b[k] });
+        save();
+        return c;
+      }
+      if (parts.length === 5 && method === 'DELETE') {
+        operator.contracts[o.id] = list.filter((x) => x !== c);
+        save();
+        return null;
+      }
+      if (parts[5] === 'file' && method === 'GET') {
+        const url = c.fileUrl?.startsWith('demo-photo:') ? await demoPhotoUrl(c.fileUrl.slice(11)) : null;
+        if (!url) throw new ApiError(404, 'file_not_found', 'No file has been added to this contract yet.');
+        return { url };
+      }
     }
     if (parts[3] === 'logins' && parts.length === 4 && method === 'POST') {
       const email = String((body as { email: string }).email)
@@ -4424,6 +4663,16 @@ export async function demoFetch<T>(
   await pause();
   const method = options.method ?? 'GET';
   const s = load();
+
+  const homeSetup = /^\/v1\/properties\/([0-9a-f-]{36})\/(terms|payee|payee\/bank|cleaning-cost)$/.exec(path);
+  if (homeSetup)
+    return demoHomeSetup(
+      options.orgId,
+      method,
+      homeSetup[1] as string,
+      homeSetup[2] as string,
+      options.body,
+    ) as T;
 
   if (method === 'GET' && path === '/v1/me') {
     const me: Me = {
@@ -5053,6 +5302,7 @@ export async function demoFetch<T>(
       if (b.dueTime !== undefined) task.dueTime = b.dueTime;
       if (b.assigneeId !== undefined) task.assignee = memberName(operator, b.assigneeId);
       if (b.checklist !== undefined) task.checklist = b.checklist;
+      if (b.costMinor !== undefined) task.costMinor = b.costMinor;
       if (b.status !== undefined) {
         if (task.status === 'done' && b.status !== 'done') {
           task.doneBy = null;
@@ -5748,6 +5998,8 @@ export async function demoFetch<T>(
     if (method === 'POST' && what === 'payments') {
       const parsed = PaymentCreateSchema.safeParse(options.body);
       if (!parsed.success) invalid(parsed.error.issues);
+      if (parsed.data.amountMinor < 0 && !parsed.data.refundFor)
+        throw new ApiError(400, 'refund_for', 'Say what the refund was for: the stay or the cleaning.');
       stay.payments ??= [];
       stay.payments.push({
         id: crypto.randomUUID(),
@@ -5755,6 +6007,7 @@ export async function demoFetch<T>(
         method: parsed.data.method,
         paidOn: parsed.data.paidOn,
         note: parsed.data.note || null,
+        refundFor: parsed.data.amountMinor < 0 ? (parsed.data.refundFor ?? null) : null,
         recordedBy: by,
         createdAt: new Date().toISOString(),
       });

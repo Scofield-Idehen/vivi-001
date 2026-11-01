@@ -103,6 +103,7 @@ const summaryColumns = {
   deadline: claims.deadline,
   currency: reservations.currency,
   receivedMinor: claims.receivedMinor,
+  receivedOn: claims.receivedOn,
   createdAt: claims.createdAt,
   claimedMinor: sql<number>`coalesce((select sum(i.amount_minor) from app.claim_items i where i.claim_id = ${claims.id}), 0)::bigint`,
 };
@@ -128,6 +129,7 @@ function toSummary(r: SummaryRow, currency: string): ClaimSummary {
     currency: (r.currency as string | null) ?? currency,
     claimedMinor: Number(r.claimedMinor ?? 0),
     receivedMinor: r.receivedMinor === null || r.receivedMinor === undefined ? null : Number(r.receivedMinor),
+    receivedOn: (r.receivedOn as string | null) ?? null,
     createdAt: toIso(String(r.createdAt)),
   };
 }
@@ -443,9 +445,19 @@ export function claimRoutes(
             : b.status === 'filed' && !claim.filedOn
               ? (await settingsOf(tx, deps.now?.())).today
               : undefined;
+        // Money in: dated today unless a day is given, so it lands on the right statement.
+        const receivedOn =
+          b.receivedOn !== undefined
+            ? b.receivedOn
+            : b.receivedMinor !== undefined
+              ? b.receivedMinor
+                ? (claim.receivedOn ?? (await settingsOf(tx, deps.now?.())).today)
+                : null
+              : undefined;
         await tx
           .update(claims)
           .set({
+            ...(receivedOn !== undefined ? { receivedOn } : {}),
             ...(b.status !== undefined ? { status: b.status } : {}),
             ...(b.place !== undefined ? { place: b.place } : {}),
             ...(b.deadline !== undefined ? { deadline: b.deadline } : {}),

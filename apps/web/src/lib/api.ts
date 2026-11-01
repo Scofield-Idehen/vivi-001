@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AccountListingList,
+  BankDetails,
   BrandUpdate,
   Calendar,
   CalendarChange,
@@ -24,6 +25,8 @@ import type {
   ConsoleOperatorList,
   ConsoleOverview,
   ConsoleSync,
+  Contract,
+  ContractInput,
   CustomField,
   CustomFieldCreate,
   CustomFieldList,
@@ -37,6 +40,8 @@ import type {
   ExpenseUpdate,
   GuestLink,
   GuestStay,
+  HomeTerms,
+  HomeTermsInput,
   Insights,
   Invitation,
   InvitationList,
@@ -62,7 +67,10 @@ import type {
   OwnerLoginBulkResult,
   OwnerLoginInvite,
   OwnerMonth,
+  OwnerSetup,
   OwnerUpdate,
+  Payee,
+  PayeeInput,
   PaymentCreate,
   PhotoStage,
   PhotoUploadTicket,
@@ -109,7 +117,14 @@ import type {
   WorkspaceSync,
 } from '@v01/shared';
 import { config } from './config.ts';
-import { demoAddClaimFile, demoAddPhoto, demoAddTaskPhoto, demoFetch, demoSetReceipt } from './demo.ts';
+import {
+  demoAddClaimFile,
+  demoAddPhoto,
+  demoAddTaskPhoto,
+  demoFetch,
+  demoSetContractFile,
+  demoSetReceipt,
+} from './demo.ts';
 import { ApiError } from './errors.ts';
 import {
   ACCEPTED,
@@ -1850,3 +1865,116 @@ export function useInviteOwners(orgId: string | null) {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['owners', orgId] }),
   });
 }
+
+// Owners' contracts, each home's terms and payee (1 Nov 2026) --------------------------------------
+
+export function useOwnerSetup(orgId: string | null, ownerId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['owner-setup', orgId, ownerId],
+    enabled: Boolean(token && orgId && ownerId),
+    queryFn: () => apiFetch<OwnerSetup>(`/v1/owners/${ownerId}/setup`, { token: token as string, orgId }),
+  });
+}
+
+/** After any change to terms, contracts, payees or costs: the set-up, the owners and their months. */
+function useSetupMutation<V, R>(orgId: string | null, run: (token: string, v: V) => Promise<R>) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (v: V) => run(token as string, v),
+    onSuccess: () => {
+      for (const key of ['owner-setup', 'owners', 'owner-month', 'statements'])
+        void queryClient.invalidateQueries({ queryKey: [key, orgId] });
+    },
+  });
+}
+
+async function putContractFile(
+  token: string,
+  orgId: string | null,
+  ownerId: string,
+  contractId: string,
+  file: File,
+) {
+  const contentType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : '');
+  if (config.demo) return demoSetContractFile(orgId, ownerId, contractId, file, contentType);
+  const base = `/v1/owners/${ownerId}/contracts/${contractId}`;
+  const ticket = await apiFetch<PhotoUploadTicket>(`${base}/uploads`, {
+    token,
+    orgId,
+    method: 'POST',
+    body: { contentType, bytes: file.size },
+  });
+  let response: Response;
+  try {
+    response = await fetch(ticket.uploadUrl, { method: ticket.method, headers: ticket.headers, body: file });
+  } catch {
+    throw new ApiError(0, 'offline', 'Cannot reach file storage. Check your connection and try again.');
+  }
+  if (!response.ok)
+    throw new ApiError(response.status, 'upload_failed', 'The contract could not be uploaded.');
+  return apiFetch<Contract>(`${base}/file`, {
+    token,
+    orgId,
+    method: 'PUT',
+    body: { path: ticket.path, fileName: file.name.slice(0, 200), contentType, bytes: file.size },
+  });
+}
+
+export function useSaveContract(orgId: string | null, ownerId: string) {
+  return useSetupMutation<{ id?: string; body: ContractInput; file?: File | null }, Contract>(
+    orgId,
+    async (token, { id, body, file }) => {
+      let saved = id
+        ? await apiFetch<Contract>(`/v1/owners/${ownerId}/contracts/${id}`, {
+            token,
+            orgId,
+            method: 'PATCH',
+            body,
+          })
+        : await apiFetch<Contract>(`/v1/owners/${ownerId}/contracts`, { token, orgId, method: 'POST', body });
+      if (file) saved = await putContractFile(token, orgId, ownerId, saved.id, file);
+      return saved;
+    },
+  );
+}
+
+export function useRemoveContract(orgId: string | null, ownerId: string) {
+  return useSetupMutation<string, void>(orgId, (token, id) =>
+    apiFetch<void>(`/v1/owners/${ownerId}/contracts/${id}`, { token, orgId, method: 'DELETE' }),
+  );
+}
+
+export async function contractLink(token: string, orgId: string | null, ownerId: string, id: string) {
+  return apiFetch<{ url: string }>(`/v1/owners/${ownerId}/contracts/${id}/file`, { token, orgId });
+}
+
+export function useSaveHomeSetup(orgId: string | null) {
+  return useSetupMutation<
+    {
+      propertyId: string;
+      terms?: HomeTermsInput;
+      payee?: PayeeInput | null;
+      cleaningCostMinor?: number | null;
+    },
+    void
+  >(orgId, async (token, { propertyId, terms, payee, cleaningCostMinor }) => {
+    const base = `/v1/properties/${propertyId}`;
+    if (terms) await apiFetch<HomeTerms>(`${base}/terms`, { token, orgId, method: 'PUT', body: terms });
+    if (payee) await apiFetch<Payee>(`${base}/payee`, { token, orgId, method: 'PUT', body: payee });
+    if (payee === null) await apiFetch<void>(`${base}/payee`, { token, orgId, method: 'DELETE' });
+    if (cleaningCostMinor !== undefined)
+      await apiFetch(`${base}/cleaning-cost`, { token, orgId, method: 'PUT', body: { cleaningCostMinor } });
+  });
+}
+
+export function useBankDetails(orgId: string | null) {
+  const token = useToken();
+  return useMutation({
+    mutationFn: (propertyId: string) =>
+      apiFetch<BankDetails>(`/v1/properties/${propertyId}/payee/bank`, { token: token as string, orgId }),
+  });
+}
+
+export { useToken };

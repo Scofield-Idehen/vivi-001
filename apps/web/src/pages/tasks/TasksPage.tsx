@@ -42,12 +42,14 @@ import {
   useTeam,
   useUpdateTask,
   useUpdateTaskTemplate,
+  useWorkspace,
 } from '../../lib/api.ts';
 import { config } from '../../lib/config.ts';
 import { setDemoRole } from '../../lib/demo.ts';
 import { dateTime, plural, shortDate } from '../../lib/format.ts';
 import { currentPosition, PHOTO_ACCEPT, type PhotoStamp } from '../../lib/images.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
+import { parseAmount } from '../reservations/Money.tsx';
 
 function cx(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(' ');
@@ -160,6 +162,52 @@ function TaskCard({ t, today, onOpen, crew }: { t: Task; today: string; onOpen()
 }
 
 /** Looking at one task: tick the list, start, finish; the office also moves and assigns it. */
+/**
+ * What a repair cost (1 Nov 2026). When the job is done it is logged as an expense on the home:
+ * charged to the owner, the company's on a fixed-rent home, or nothing when the owner arranges
+ * their own maintenance, as the home's terms say.
+ */
+function JobCost({
+  t,
+  saving,
+  onSave,
+}: {
+  t: Task;
+  saving: boolean;
+  onSave(costMinor: number | null): void;
+}) {
+  const { orgId } = useCurrentWorkspace();
+  const workspace = useWorkspace(orgId);
+  const currency = workspace.data?.settings.currency ?? 'GBP';
+  const [text, setText] = useState(t.costMinor ? (t.costMinor / 100).toFixed(2) : '');
+  const parsed = text.trim() ? parseAmount(text, currency) : {};
+  const value = text.trim() ? (parsed.minor ?? null) : null;
+  const changed = value !== (t.costMinor ?? null) && (!text.trim() || parsed.minor !== undefined);
+  return (
+    <section className="flex flex-col gap-2">
+      <TextField
+        label={`What it cost (${currency})`}
+        value={text}
+        onChange={setText}
+        placeholder="120.00"
+        error={text.trim() ? parsed.error : undefined}
+        hint={
+          t.status === 'done'
+            ? 'Logged as an expense on the home. Change it here and the expense changes too.'
+            : 'Logged as an expense on the home when the job is done: charged to the owner, or the company’s, as the home’s terms say.'
+        }
+      />
+      {changed ? (
+        <div>
+          <Button variant="secondary" disabled={saving} onClick={() => onSave(value)}>
+            Save cost
+          </Button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function TaskSheet({
   taskId,
   orgId,
@@ -319,6 +367,15 @@ function TaskSheet({
           <TaskPhotos t={t} orgId={orgId} live={Boolean(live)} />
 
           {live ? <ReportDamage t={t} orgId={orgId} /> : null}
+
+          {office && t.kind !== 'cleaning' ? (
+            <JobCost
+              key={`${t.id}-${t.costMinor ?? ''}`}
+              t={t}
+              saving={update.isPending}
+              onSave={(costMinor) => patch({ costMinor })}
+            />
+          ) : null}
 
           {office ? (
             <section className="grid gap-4 sm:grid-cols-2">

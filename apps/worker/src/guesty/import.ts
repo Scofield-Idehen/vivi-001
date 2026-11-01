@@ -755,6 +755,7 @@ class Importer {
         currency: v.currency,
         totalMinor: v.totalMinor,
         payoutMinor: v.payoutMinor,
+        cleaningMinor: v.cleaningMinor,
         checkInTime: v.checkInTime,
         checkOutTime: v.checkOutTime,
         cancelledAt: v.cancelledAt,

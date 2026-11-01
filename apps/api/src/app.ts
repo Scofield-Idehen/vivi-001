@@ -35,6 +35,7 @@ import { portalRoutes } from './routes/portal.ts';
 import { propertyRoutes } from './routes/properties.ts';
 import { reservationRoutes } from './routes/reservations.ts';
 import { taskRoutes } from './routes/tasks.ts';
+import { termRoutes } from './routes/terms.ts';
 import { todayRoutes } from './routes/today.ts';
 import { webhookRoutes } from './routes/webhooks.ts';
 import { workspaceRoutes } from './routes/workspace.ts';
@@ -151,6 +152,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   claimRoutes(app, { scope, files: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, now: deps.now });
   insightRoutes(app, { scope });
   ownerRoutes(app, { scope, files: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, now: deps.now });
+  termRoutes(app, { scope, files: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, box, now: deps.now });
   inboxRoutes(app, { scope });
   const lockProvider =
     deps.locks !== undefined

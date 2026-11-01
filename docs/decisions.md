@@ -28,6 +28,31 @@ V-01 Build Playbook and Design Roadmap.
 - **The Owners page, restructured:** totals, search, filter by log-in, each owner's number of homes,
   and the homes without an owner as a list, each given to an owner in one choice.
 - **PriceLabs waits for verification** (docs/waiting.md).
+- **No browser dialogs.** V-01 asks with its own confirmation (components/Confirm.tsx): a small box
+  on a laptop, a sheet with full-width buttons on a phone, the action named on the button. A test keeps
+  the browser's confirm, alert and prompt out.
+- **What owners are paid, from their contract (Alpha: "some owners are part of our board and so we
+  don't charge them management fee… we need to know what an owner gets in real time").**
+  - Each owner's signed contracts are uploaded on their page, with signed, start and end dates. Guesty
+    held no owner documents (checked 1 Nov 2026), so they come from the office.
+  - Each home has terms from a month on: a percentage fee, a fixed monthly rent, or no fee (a board
+    member); who arranges repairs (us, or the owner); and the contract they come from. Earlier months
+    keep their terms. A home with none uses the owner's fee, and the page asks for them.
+  - Who is paid for each home, and the sort code and account number, are sealed by the API and shown
+    to admins and accounts only (permissions `payees.read`, `payees.write`).
+  - **The owner's share comes from the payout (Alpha, 1 Nov 2026).** For each stay, the nights in the
+    month take their share of: what the guest paid, the channel's fee (the total less the payout), the
+    cleaning fee inside the payout (ours, for the cleaner), and stay refunds. What's left is what the
+    stay brought in; the terms give the owner's part. Expenses charged to the owner come off; claim
+    money received for repairs they paid for comes back, in the month it arrived.
+  - A refund says what it was for: the stay (the owner shares it) or the cleaning (ours).
+  - A clean, when done, logs the home's cleaning cost as our expense. A repair's cost, when the job is
+    done, is charged to the owner, ours on a fixed-rent home, or nothing when the owner arranges repairs.
+  - The Owners list shows what each owner is due this month so far, and who is still to set up.
+- **Guesty prices:** most Guesty bookings carry `subTotalPrice`, not `totalPrice`; the import reads
+  that (and `fareCleaning`). `pnpm guesty:import --prices-only` (GitHub: Guesty import, prices only)
+  refreshes prices on bookings already imported. Diagnose (GitHub Actions) prints counts only.
+
 
 ## 2026-10-31
 

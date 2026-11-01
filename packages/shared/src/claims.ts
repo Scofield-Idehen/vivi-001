@@ -142,6 +142,7 @@ export const ClaimSummarySchema = z.object({
   currency: z.string(),
   claimedMinor: z.number().int(),
   receivedMinor: z.number().int().nullable(),
+  receivedOn: IsoDate.nullable().optional(),
   createdAt: z.string(),
 });
 export type ClaimSummary = z.infer<typeof ClaimSummarySchema>;
@@ -202,6 +203,8 @@ export const ClaimUpdateSchema = z
     filedOn: IsoDate.nullable(),
     filedReference: z.string().trim().max(120).nullable(),
     receivedMinor: z.number().int().min(0).max(100_000_000).nullable(),
+    /** When the money came in; today when left out. It goes back to the owner on that month's statement. */
+    receivedOn: IsoDate.nullable(),
     outcome: z.string().trim().max(2000).nullable(),
   })
   .partial()

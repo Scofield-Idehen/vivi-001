@@ -412,6 +412,8 @@ export interface MappedReservation {
   currency: string | null;
   totalMinor: number | null;
   payoutMinor: number | null;
+  /** The cleaning fee inside the total. */
+  cleaningMinor: number | null;
   checkInTime: string | null;
   checkOutTime: string | null;
   cancelledAt: string | null;
@@ -492,6 +494,7 @@ export function reservationFrom(
       currency,
       totalMinor: minorOf(totalOf(r.money), currency ?? org.currency),
       payoutMinor: minorOf(r.money?.hostPayout ?? r.money?.netIncome, currency ?? org.currency),
+      cleaningMinor: minorOf(r.money?.fareCleaning, currency ?? org.currency),
       checkInTime: timeOf(r.plannedArrival),
       checkOutTime: timeOf(r.plannedDeparture),
       cancelledAt: status === 'cancelled' ? (r.canceledAt ?? new Date().toISOString()) : null,

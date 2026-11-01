@@ -24,6 +24,8 @@ export const OwnerSchema = z.object({
   /** The owner log-in (1 Nov 2026): who can sign in as this owner, and invitations not yet used. */
   logins: z.array(z.object({ userId: Uuid, name: z.string(), email: z.string() })),
   invited: z.array(z.object({ id: Uuid, email: z.string(), expiresAt: z.string().nullable() })),
+  /** What's still to set up: a contract on file, and terms for each home. */
+  setup: z.object({ contract: z.boolean(), homesWithoutTerms: z.number().int() }),
   createdAt: z.string(),
 });
 export type Owner = z.infer<typeof OwnerSchema>;
@@ -189,14 +191,45 @@ export const OwnerMonthSchema = z.object({
       id: Uuid,
       name: z.string(),
       nights: z.number().int(),
+      /** The deal this month: a percentage, a fixed rent, no fee, or the owner's own fee when none is set. */
+      deal: z.enum(['percentage', 'fixed_rent', 'no_fee', 'owner_fee']).optional(),
+      feeBasisPoints: z.number().int().nullable().optional(),
+      /** What guests paid for the nights, the channels' fees, and the cleaning fees inside it. */
+      grossMinor: z.number().int().optional(),
+      channelFeesMinor: z.number().int().optional(),
+      cleaningMinor: z.number().int().optional(),
+      refundsMinor: z.number().int().optional(),
+      /** What the stays brought in: the payout, less cleaning and stay refunds. */
       earnedMinor: z.number().int(),
+      feeMinor: z.number().int().optional(),
+      rentMinor: z.number().int().optional(),
+      /** The owner's part: the earnings less the fee, all of them (no fee), or the rent. */
+      ownerShareMinor: z.number().int().optional(),
       expensesMinor: z.number().int(),
     }),
   ),
+  grossMinor: z.number().int().optional(),
+  channelFeesMinor: z.number().int().optional(),
+  cleaningMinor: z.number().int().optional(),
+  refundsMinor: z.number().int().optional(),
   earnedMinor: z.number().int(),
   feeMinor: z.number().int(),
+  rentMinor: z.number().int().optional(),
+  ownerShareMinor: z.number().int().optional(),
   expensesMinor: z.number().int(),
-  /** Earned, less the fee and the expenses charged to the owner. */
+  /** Claim money paid back for repairs they were charged. */
+  claimCreditsMinor: z.number().int().optional(),
+  claimCredits: z
+    .array(
+      z.object({
+        claimId: Uuid,
+        propertyName: z.string(),
+        receivedOn: IsoDate,
+        creditMinor: z.number().int(),
+      }),
+    )
+    .optional(),
+  /** The owner's part, less the expenses charged to them, plus claim money paid back. */
   netMinor: z.number().int(),
   expenses: z.array(ExpenseSchema),
   /** Each stay with nights in the month, and what those nights earned. */
@@ -211,6 +244,10 @@ export const OwnerMonthSchema = z.object({
       checkOut: IsoDate,
       /** Nights of the stay that fall in this month. */
       nights: z.number().int(),
+      grossMinor: z.number().int().optional(),
+      channelFeesMinor: z.number().int().optional(),
+      cleaningMinor: z.number().int().optional(),
+      refundsMinor: z.number().int().optional(),
       earnedMinor: z.number().int(),
     }),
   ),

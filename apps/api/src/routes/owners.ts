@@ -3,9 +3,11 @@ import {
   appUsers,
   claims,
   expenses,
+  homeTerms,
   invitations,
   memberships,
   organisationSettings,
+  ownerContracts,
   ownerStatements,
   owners,
   properties,
@@ -39,7 +41,7 @@ import {
   StatementPaidSchema,
   todayIn,
 } from '@v01/shared';
-import { and, asc, desc, eq, gte, inArray, isNull, lt, type SQL, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, type SQL, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -126,6 +128,23 @@ export async function loadOwners(tx: Tx, where?: SQL): Promise<Owner[]> {
         sql`(${invitations.expiresAt} is null or ${invitations.expiresAt} > now())`,
       ),
     );
+  const contracts = await tx
+    .select({ ownerId: ownerContracts.ownerId })
+    .from(ownerContracts)
+    .where(inArray(ownerContracts.ownerId, ids));
+  const termed = new Set(
+    (
+      await tx
+        .selectDistinct({ propertyId: homeTerms.propertyId })
+        .from(homeTerms)
+        .where(
+          inArray(
+            homeTerms.propertyId,
+            homes.map((h) => h.id),
+          ),
+        )
+    ).map((r) => r.propertyId),
+  );
   return rows.map((o) => ({
     id: o.id,
     name: o.name,
@@ -141,6 +160,10 @@ export async function loadOwners(tx: Tx, where?: SQL): Promise<Owner[]> {
     invited: invited
       .filter((i) => i.ownerId === o.id)
       .map((i) => ({ id: i.id, email: i.email, expiresAt: i.expiresAt ? toIso(String(i.expiresAt)) : null })),
+    setup: {
+      contract: contracts.some((c) => c.ownerId === o.id),
+      homesWithoutTerms: homes.filter((h) => h.ownerId === o.id && !termed.has(h.id)).length,
+    },
     createdAt: toIso(String(o.createdAt)),
   }));
 }
@@ -220,6 +243,32 @@ async function checkLinks(tx: Tx, propertyId?: string | null, claimId?: string |
 }
 
 /** The month worked out live from bookings and expenses: what a draft statement shows. */
+/** The terms each home is on in a month: the latest row from the month's first day or before. */
+export async function termsInMonth(
+  tx: Tx,
+  ids: string[],
+  month: string,
+): Promise<Map<string, typeof homeTerms.$inferSelect>> {
+  if (!ids.length) return new Map();
+  const rows = await tx
+    .select()
+    .from(homeTerms)
+    .where(and(inArray(homeTerms.propertyId, ids), lte(homeTerms.effectiveFrom, `${month}-01`)))
+    .orderBy(desc(homeTerms.effectiveFrom));
+  const map = new Map<string, typeof homeTerms.$inferSelect>();
+  for (const r of rows) if (!map.has(r.propertyId)) map.set(r.propertyId, r);
+  return map;
+}
+
+/**
+ * An owner's month (reworked 1 Nov 2026). For each confirmed stay, the nights in the month take
+ * their share of: what the guest paid, the channel's fee (the total less the payout), the cleaning
+ * fee inside the payout (the company's, for the cleaner), and refunds (a stay refund lowers what the
+ * home earned; a cleaning refund is the company's). What's left is what the home earned. Each
+ * home's terms then give the owner's part: earnings less the fee, all of it (no fee, a board
+ * member), or the fixed rent whatever was earned. Expenses charged to the owner come off; claim
+ * money received for repairs they paid for comes back.
+ */
 async function computeMonth(
   tx: Tx,
   owner: Owner,
@@ -230,7 +279,6 @@ async function computeMonth(
 ): Promise<OwnerMonth> {
   const { first, next } = monthOf(month);
   const ids = owner.homes.map((h) => h.id);
-  // Each confirmed booking's money spread evenly over its nights; the nights in this month count.
   const stays = ids.length
     ? (
         await tx.execute<{
@@ -240,12 +288,19 @@ async function computeMonth(
           channel: Channel;
           check_in: string;
           check_out: string;
+          all_nights: number;
           nights: number;
-          minor: number;
+          total: number;
+          payout: number | null;
+          cleaning: number | null;
+          stay_refunds: number;
         }>(sql`
           select r.id, r.property_id, g.full_name as guest_name, r.channel, r.check_in::text, r.check_out::text,
+                 greatest(r.check_out - r.check_in, 1) as all_nights,
                  count(*)::int as nights,
-                 round(sum(r.total_minor::numeric / greatest(r.check_out - r.check_in, 1)))::bigint::int as minor
+                 r.total_minor as total, r.payout_minor as payout, r.cleaning_minor as cleaning,
+                 coalesce((select -sum(p.amount_minor) from app.reservation_payments p
+                            where p.reservation_id = r.id and p.refund_for = 'stay'), 0)::bigint as stay_refunds
             from app.reservations r
             left join app.guests g on g.id = r.guest_id
             cross join lateral generate_series(r.check_in, r.check_out - 1, interval '1 day') n
@@ -256,6 +311,22 @@ async function computeMonth(
            order by r.check_in`)
       ).rows
     : [];
+  const lines = stays.map((x) => {
+    const part = Number(x.nights) / Number(x.all_nights);
+    const total = Number(x.total);
+    const payout = x.payout === null ? total : Math.min(Number(x.payout), total);
+    const cleaningOfPayout = total > 0 ? Math.round((Number(x.cleaning ?? 0) * payout) / total) : 0;
+    const refunds = Number(x.stay_refunds);
+    const share = (v: number) => Math.round(v * part);
+    return {
+      x,
+      grossMinor: share(total),
+      channelFeesMinor: share(total - payout),
+      cleaningMinor: share(cleaningOfPayout),
+      refundsMinor: share(refunds),
+      earnedMinor: share(payout - cleaningOfPayout - refunds),
+    };
+  });
   const list =
     ids.length && options.lines !== false
       ? await loadExpenses(
@@ -283,40 +354,91 @@ async function computeMonth(
             ),
           )
       : list.map((e) => ({ propertyId: e.propertyId, amount: e.amountMinor }));
+  // Claim money received this month, paid back up to the repairs the owner was charged for.
+  const credits = ids.length
+    ? (
+        await tx.execute<{ id: string; property_id: string; received_on: string; credit: number }>(sql`
+          select c.id, r.property_id, c.received_on::text,
+                 least(c.received_minor, coalesce((select sum(e.amount_minor) from app.expenses e
+                                                    where e.claim_id = c.id and e.charge_to = 'owner'), 0))::bigint as credit
+            from app.claims c join app.reservations r on r.id = c.reservation_id
+           where r.property_id in ${ids} and c.received_minor > 0
+             and c.received_on >= ${first}::date and c.received_on < ${next}::date`)
+      ).rows.filter((c) => Number(c.credit) > 0)
+    : [];
+  const terms = await termsInMonth(tx, ids, month);
+  const sum = <T>(rows: T[], f: (r: T) => number) => rows.reduce((t, r) => t + f(r), 0);
   const homes = owner.homes.map((h) => {
-    const mine = stays.filter((x) => x.property_id === h.id);
+    const mine = lines.filter((l) => l.x.property_id === h.id);
+    const t = terms.get(h.id);
+    const earned = sum(mine, (l) => l.earnedMinor);
+    const deal = (t?.deal ?? 'owner_fee') as 'percentage' | 'fixed_rent' | 'no_fee' | 'owner_fee';
+    const bp =
+      deal === 'percentage' ? (t?.feeBasisPoints ?? 0) : deal === 'owner_fee' ? owner.feeBasisPoints : null;
+    const fee = bp === null ? 0 : Math.round((Math.max(0, earned) * bp) / 10_000);
+    const rent = deal === 'fixed_rent' ? Number(t?.rentMinor ?? 0) : 0;
     return {
       id: h.id,
       name: h.name,
-      nights: mine.reduce((t, x) => t + x.nights, 0),
-      earnedMinor: mine.reduce((t, x) => t + Number(x.minor), 0),
-      expensesMinor: spentRows.filter((x) => x.propertyId === h.id).reduce((t, x) => t + Number(x.amount), 0),
+      nights: sum(mine, (l) => Number(l.x.nights)),
+      deal,
+      feeBasisPoints: bp,
+      grossMinor: sum(mine, (l) => l.grossMinor),
+      channelFeesMinor: sum(mine, (l) => l.channelFeesMinor),
+      cleaningMinor: sum(mine, (l) => l.cleaningMinor),
+      refundsMinor: sum(mine, (l) => l.refundsMinor),
+      earnedMinor: earned,
+      feeMinor: fee,
+      rentMinor: rent,
+      ownerShareMinor: deal === 'fixed_rent' ? rent : earned - fee,
+      expensesMinor: sum(
+        spentRows.filter((x) => x.propertyId === h.id),
+        (x) => Number(x.amount),
+      ),
     };
   });
-  const earnedMinor = homes.reduce((t, h) => t + h.earnedMinor, 0);
-  const feeMinor = Math.round((earnedMinor * owner.feeBasisPoints) / 10_000);
-  const expensesMinor = spentRows.reduce((t, x) => t + Number(x.amount), 0);
   const nameOf = new Map(owner.homes.map((h) => [h.id, h.name]));
+  const total = (k: keyof (typeof homes)[number]) => sum(homes, (h) => Number(h[k] ?? 0));
+  const ownerShareMinor = total('ownerShareMinor');
+  const expensesMinor = sum(spentRows, (x) => Number(x.amount));
+  const claimCreditsMinor = sum(credits, (c) => Number(c.credit));
   return {
     owner,
     month,
     currency,
     homes,
-    earnedMinor,
-    feeMinor,
+    grossMinor: total('grossMinor'),
+    channelFeesMinor: total('channelFeesMinor'),
+    cleaningMinor: total('cleaningMinor'),
+    refundsMinor: total('refundsMinor'),
+    earnedMinor: total('earnedMinor'),
+    feeMinor: total('feeMinor'),
+    rentMinor: total('rentMinor'),
+    ownerShareMinor,
     expensesMinor,
-    netMinor: earnedMinor - feeMinor - expensesMinor,
+    claimCreditsMinor,
+    claimCredits: credits.map((c) => ({
+      claimId: c.id,
+      propertyName: nameOf.get(c.property_id) ?? '',
+      receivedOn: c.received_on,
+      creditMinor: Number(c.credit),
+    })),
+    netMinor: ownerShareMinor - expensesMinor + claimCreditsMinor,
     expenses: list,
-    bookings: stays.map((x) => ({
-      reservationId: x.id,
-      propertyId: x.property_id,
-      propertyName: nameOf.get(x.property_id) ?? '',
-      guestName: x.guest_name,
-      channel: x.channel,
-      checkIn: x.check_in,
-      checkOut: x.check_out,
-      nights: x.nights,
-      earnedMinor: Number(x.minor),
+    bookings: lines.map((l) => ({
+      reservationId: l.x.id,
+      propertyId: l.x.property_id,
+      propertyName: nameOf.get(l.x.property_id) ?? '',
+      guestName: l.x.guest_name,
+      channel: l.x.channel,
+      checkIn: l.x.check_in,
+      checkOut: l.x.check_out,
+      nights: Number(l.x.nights),
+      grossMinor: l.grossMinor,
+      channelFeesMinor: l.channelFeesMinor,
+      cleaningMinor: l.cleaningMinor,
+      refundsMinor: l.refundsMinor,
+      earnedMinor: l.earnedMinor,
     })),
     statement: null,
   };
@@ -342,7 +464,12 @@ export async function savedStatement(
   return {
     ...snap,
     // Statements saved before owner log-ins existed have no list of them.
-    owner: { ...snap.owner, logins: snap.owner.logins ?? [], invited: snap.owner.invited ?? [] },
+    owner: {
+      ...snap.owner,
+      logins: snap.owner.logins ?? [],
+      invited: snap.owner.invited ?? [],
+      setup: snap.owner.setup ?? { contract: false, homesWithoutTerms: 0 },
+    },
     expenses: snap.expenses.map((e) => ({ ...e, receipt: receiptOf.get(e.id) ?? null })),
     statement: {
       status: row.s.status as 'final' | 'paid',

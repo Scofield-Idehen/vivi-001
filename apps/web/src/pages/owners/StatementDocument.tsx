@@ -54,20 +54,71 @@ export function StatementDocument({ m, from, locale }: { m: OwnerMonth; from: st
 
       <table className="mb-8 w-full border-collapse">
         <tbody>
+          {m.grossMinor !== undefined ? (
+            <>
+              <tr className="border-b border-black/10 text-black/70">
+                <td className={cell}>Guests paid for the nights</td>
+                <td className={`${cell} text-right tnum`}>{money(m.grossMinor)}</td>
+              </tr>
+              {m.channelFeesMinor ? (
+                <tr className="border-b border-black/10 text-black/70">
+                  <td className={cell}>Channel fees (Airbnb, Booking.com, Vrbo)</td>
+                  <td className={`${cell} text-right tnum`}>− {money(m.channelFeesMinor)}</td>
+                </tr>
+              ) : null}
+              {m.cleaningMinor ? (
+                <tr className="border-b border-black/10 text-black/70">
+                  <td className={cell}>Cleaning fees (pay the cleaners)</td>
+                  <td className={`${cell} text-right tnum`}>− {money(m.cleaningMinor)}</td>
+                </tr>
+              ) : null}
+              {m.refundsMinor ? (
+                <tr className="border-b border-black/10 text-black/70">
+                  <td className={cell}>Refunds to guests for their stay</td>
+                  <td className={`${cell} text-right tnum`}>− {money(m.refundsMinor)}</td>
+                </tr>
+              ) : null}
+            </>
+          ) : null}
           <tr className="border-b border-black/15">
-            <td className={cell}>Earned by your {m.homes.length === 1 ? 'home' : 'homes'}</td>
+            <td className={cell}>What your {m.homes.length === 1 ? 'home' : 'homes'} brought in</td>
             <td className={`${cell} text-right tnum`}>{money(m.earnedMinor)}</td>
           </tr>
-          <tr className="border-b border-black/15">
-            <td className={cell}>Management fee ({feeText(o.feeBasisPoints)})</td>
-            <td className={`${cell} text-right tnum`}>{m.feeMinor ? `− ${money(m.feeMinor)}` : money(0)}</td>
-          </tr>
+          {m.homes.some((h) => h.deal === 'fixed_rent') ? (
+            <tr className="border-b border-black/15">
+              <td className={cell}>
+                Your part:{' '}
+                {m.homes.map((h) => `${h.name} ${shareText(h, o.feeBasisPoints, money)}`).join('; ')}
+              </td>
+              <td className={`${cell} text-right tnum`}>
+                {money(m.ownerShareMinor ?? m.earnedMinor - m.feeMinor)}
+              </td>
+            </tr>
+          ) : (
+            <tr className="border-b border-black/15">
+              <td className={cell}>
+                Management fee
+                {m.homes.every((h) => h.deal === 'no_fee')
+                  ? ' (none)'
+                  : ` (${feeSummary(m, o.feeBasisPoints)})`}
+              </td>
+              <td className={`${cell} text-right tnum`}>
+                {m.feeMinor ? `− ${money(m.feeMinor)}` : money(0)}
+              </td>
+            </tr>
+          )}
           <tr className="border-b border-black/15">
             <td className={cell}>Expenses charged to you</td>
             <td className={`${cell} text-right tnum`}>
               {m.expensesMinor ? `− ${money(m.expensesMinor)}` : money(0)}
             </td>
           </tr>
+          {m.claimCreditsMinor ? (
+            <tr className="border-b border-black/15">
+              <td className={cell}>Claim money paid back for repairs</td>
+              <td className={`${cell} text-right tnum`}>{money(m.claimCreditsMinor)}</td>
+            </tr>
+          ) : null}
           <tr className="text-[14px] font-semibold">
             <td className="pt-2.5">{m.netMinor < 0 ? 'Owed by you' : 'Due to you'}</td>
             <td className="pt-2.5 text-right tnum">{money(Math.abs(m.netMinor))}</td>
@@ -141,9 +192,23 @@ export function StatementDocument({ m, from, locale }: { m: OwnerMonth; from: st
       )}
 
       <p className="text-[11px] text-black/60">
-        Each booking’s total is spread evenly over the nights it covers; the nights falling in{' '}
-        {monthName(m.month)} count here. Receipts for the expenses are available on request.
+        Each stay’s payout is spread evenly over its nights; the nights falling in {monthName(m.month)} count
+        here. The cleaning fee guests pay goes to the cleaners. Receipts for the expenses are available on
+        request.
       </p>
     </article>
   );
+}
+
+function shareText(h: OwnerMonth['homes'][number], ownerFee: number, money: (m: number) => string): string {
+  if (h.deal === 'fixed_rent') return `rent ${money(h.rentMinor ?? 0)}`;
+  if (h.deal === 'no_fee') return 'no fee';
+  return `less ${feeText(h.feeBasisPoints ?? ownerFee)}`;
+}
+
+function feeSummary(m: OwnerMonth, ownerFee: number): string {
+  const rates = [
+    ...new Set(m.homes.filter((h) => h.deal !== 'no_fee').map((h) => h.feeBasisPoints ?? ownerFee)),
+  ];
+  return rates.length === 1 ? feeText(rates[0] as number) : 'by home';
 }

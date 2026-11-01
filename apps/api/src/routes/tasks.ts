@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   appUsers,
   customFields,
+  expenses,
   memberships,
   organisationSettings,
   properties,
@@ -203,6 +204,7 @@ async function loadTasks(
       nextArrivalAt: t.kind === 'cleaning' ? clock(nextArrival) : null,
       doneBy: t.doneBy ? (doneNames.get(t.doneBy) ?? null) : null,
       doneAt: t.doneAt ? toIso(t.doneAt) : null,
+      costMinor: t.costMinor === null || t.costMinor === undefined ? null : Number(t.costMinor),
       createdAt: toIso(t.createdAt),
       access: [],
     };
@@ -397,6 +399,8 @@ export function taskRoutes(
           const extra = Object.keys(req.body).filter((k) => !allowed.has(k));
           if (extra.length)
             throw new HttpError(403, 'not_allowed', 'The field team can start, tick off and finish a task.');
+          if (req.body.costMinor !== undefined)
+            throw new HttpError(403, 'not_allowed', 'The office records what a job cost.');
           if (req.body.status === 'cancelled')
             throw new HttpError(403, 'not_allowed', 'Only the office cancels a task.');
         }
@@ -414,6 +418,7 @@ export function taskRoutes(
             ...(b.dueTime !== undefined ? { dueTime: b.dueTime } : {}),
             ...(b.assigneeId !== undefined ? { assigneeUserId: b.assigneeId } : {}),
             ...(b.checklist !== undefined ? { checklist: b.checklist } : {}),
+            ...(b.costMinor !== undefined ? { costMinor: b.costMinor } : {}),
             ...(finishing
               ? {
                   doneBy: ctx.userId,
@@ -435,6 +440,11 @@ export function taskRoutes(
             .set({ cleaningStatus: 'clean', cleaningChangedAt: sql`now()`, cleaningChangedBy: ctx.userId })
             .where(eq(properties.id, current.propertyId));
         }
+        // A finished job's cost is logged as an expense; reopening it takes the expense back off.
+        const done = finishing || (current.status === 'done' && !reopening);
+        if (done && (finishing || b.costMinor !== undefined))
+          await logJobCost(tx, ctx.orgId, ctx.userId, current.id);
+        if (reopening) await tx.delete(expenses).where(eq(expenses.taskId, current.id));
         const [task] = await loadTasks(tx, eq(tasks.id, current.id), 'asc', deps.photos);
         if (!task) throw new Error('The task was not found after update.');
         return task;
@@ -649,4 +659,55 @@ async function assertMember(tx: Tx, orgId: string, userId: string): Promise<void
     .from(memberships)
     .where(and(eq(memberships.organisationId, orgId), eq(memberships.userId, userId)));
   if (!member) throw new HttpError(400, 'not_a_member', 'That person is not a member of this workspace.');
+}
+
+/**
+ * A finished job's cost, as an expense on the home (1 Nov 2026). A clean costs what the home's
+ * cleaner is paid, and it is the company's: the guest's cleaning fee pays for it. A repair costs
+ * what was recorded on it, and goes by the home's terms: nothing when the owner arranges their own
+ * maintenance, the company's on a fixed-rent home, otherwise charged to the owner. One expense per
+ * job: changing the cost later changes it.
+ */
+export async function logJobCost(tx: Tx, orgId: string, userId: string, taskId: string): Promise<void> {
+  const [t] = await tx.select().from(tasks).where(eq(tasks.id, taskId));
+  if (!t) return;
+  const [home] = await tx
+    .select({ ownerId: properties.ownerId, cleaningCost: properties.cleaningCostMinor })
+    .from(properties)
+    .where(eq(properties.id, t.propertyId));
+  const [settings] = await tx
+    .select({ currency: organisationSettings.currency, timeZone: organisationSettings.timeZone })
+    .from(organisationSettings);
+  const today = todayIn(settings?.timeZone ?? 'Europe/London');
+  let amount: number | null = null;
+  let chargeTo: 'owner' | 'company' = 'company';
+  let category = 'repairs';
+  if (t.kind === 'cleaning') {
+    amount =
+      home?.cleaningCost === null || home?.cleaningCost === undefined ? null : Number(home.cleaningCost);
+    category = 'cleaning';
+  } else if (t.costMinor !== null && t.costMinor !== undefined) {
+    const terms = (
+      await tx.execute<{ deal: string; maintenance_by: string }>(sql`
+        select deal, maintenance_by from app.home_terms
+         where property_id = ${t.propertyId}::uuid and effective_from <= ${today}::date
+         order by effective_from desc limit 1`)
+    ).rows[0];
+    if (terms?.maintenance_by === 'owner') amount = null;
+    else {
+      amount = Number(t.costMinor);
+      chargeTo = terms?.deal === 'fixed_rent' || !home?.ownerId ? 'company' : 'owner';
+    }
+  }
+  if (!amount) {
+    await tx.delete(expenses).where(eq(expenses.taskId, taskId));
+    return;
+  }
+  await tx.execute(sql`
+    insert into app.expenses (organisation_id, property_id, task_id, spent_on, category, description,
+                              amount_minor, currency, charge_to, created_by)
+    values (${orgId}::uuid, ${t.propertyId}::uuid, ${taskId}::uuid, ${today}::date, ${category},
+            ${t.title.slice(0, 300)}, ${amount}, ${settings?.currency ?? 'GBP'}, ${chargeTo}, ${userId}::uuid)
+    on conflict (task_id) where task_id is not null
+    do update set amount_minor = excluded.amount_minor, charge_to = excluded.charge_to, category = excluded.category`);
 }

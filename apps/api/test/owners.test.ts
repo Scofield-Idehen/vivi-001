@@ -211,8 +211,8 @@ describe('owners and expenses', () => {
       expensesMinor: 9000,
       netMinor: 31000,
     });
-    expect(r.body.homes).toEqual([
-      { id: lodge, name: 'Lodge', nights: 4, earnedMinor: 50000, expensesMinor: 9000 },
+    expect(r.body.homes).toMatchObject([
+      { id: lodge, name: 'Lodge', nights: 4, deal: 'owner_fee', earnedMinor: 50000, expensesMinor: 9000 },
     ]);
     expect(r.body.expenses).toHaveLength(1);
   });

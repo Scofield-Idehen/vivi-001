@@ -27,7 +27,7 @@ const explain = (error: unknown) =>
 const METHOD_OPTIONS = PAYMENT_METHODS.map((m) => ({ value: m, label: PAYMENT_METHOD_LABELS[m] }));
 
 /** "450", "-20", "1,200.50" into minor units, or an error in words. */
-function parseAmount(text: string, currency: string): { minor?: number; error?: string } {
+export function parseAmount(text: string, currency: string): { minor?: number; error?: string } {
   const cleaned = text.trim().replace(/[^\d.-]/g, '');
   if (!cleaned || cleaned === '-') return { error: 'An amount, such as 45.' };
   const negative = cleaned.startsWith('-');
@@ -90,32 +90,60 @@ function AddPayment({
   orgId,
   r,
   currency,
+  refund = false,
   onDone,
 }: {
   orgId: string;
   r: Reservation;
   currency: string;
+  refund?: boolean;
   onDone(): void;
 }) {
   const add = useAddPayment(orgId, r.id);
   const [amount, setAmount] = useState(
-    r.balanceMinor !== null && r.balanceMinor > 0 ? (r.balanceMinor / 100).toFixed(2) : '',
+    !refund && r.balanceMinor !== null && r.balanceMinor > 0 ? (r.balanceMinor / 100).toFixed(2) : '',
   );
+  const [refundFor, setRefundFor] = useState<'stay' | 'cleaning' | null>(null);
   const [method, setMethod] = useState<PaymentMethod>(r.channel === 'direct' ? 'bank_transfer' : 'channel');
   const [paidOn, setPaidOn] = useState(r.today);
   const [note, setNote] = useState('');
   const parsed = amount ? parseAmount(amount, currency) : {};
-  const ready = parsed.minor !== undefined && !add.isPending;
+  const minor = parsed.minor === undefined ? undefined : refund ? -Math.abs(parsed.minor) : parsed.minor;
+  const ready = minor !== undefined && minor !== 0 && (minor > 0 || refundFor !== null) && !add.isPending;
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-hairline bg-canvas p-3.5">
       <TextField
         label={`Amount (${currency})`}
         value={amount}
         onChange={setAmount}
-        placeholder="450.00"
+        placeholder={refund ? '30.00' : '450.00'}
         error={amount ? parsed.error : undefined}
-        hint="A minus records a refund."
+        hint={refund ? 'What the guest got back.' : undefined}
       />
+      {refund ? (
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="mb-1.5 text-[13px] text-slate">What was it for?</legend>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {(
+              [
+                ['stay', 'The stay', 'Comes off what the home earned, so the owner shares it.'],
+                ['cleaning', 'The cleaning', 'Comes out of the cleaning fee. The owner isn’t affected.'],
+              ] as const
+            ).map(([v, label, hint]) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={refundFor === v}
+                onClick={() => setRefundFor(v)}
+                className={`rounded-xl border px-3 py-2.5 text-left text-[14px] ${refundFor === v ? 'border-accent bg-white text-ink' : 'border-hairline text-slate hover:border-edge'}`}
+              >
+                <span className="block font-medium text-ink">{label}</span>
+                <span className="block text-[12.5px]">{hint}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
       <SelectField
         label="How"
         value={method}
@@ -132,9 +160,10 @@ function AddPayment({
           onClick={() =>
             add.mutate(
               {
-                amountMinor: parsed.minor as number,
+                amountMinor: minor as number,
                 method,
                 paidOn,
+                ...(minor !== undefined && minor < 0 && refundFor ? { refundFor } : {}),
                 ...(note.trim() ? { note: note.trim() } : {}),
               },
               { onSuccess: onDone },
@@ -168,7 +197,7 @@ export function Money({
   const money = (minor: number) => formatMoney({ amountMinor: minor, currency }, locale);
   const removeCharge = useRemoveCharge(orgId, r.id);
   const removePayment = useRemovePayment(orgId, r.id);
-  const [adding, setAdding] = useState<'charge' | 'payment' | null>(null);
+  const [adding, setAdding] = useState<'charge' | 'payment' | 'refund' | null>(null);
   const when = new Intl.DateTimeFormat(locale, {
     day: 'numeric',
     month: 'short',
@@ -217,7 +246,14 @@ export function Money({
           <div key={p.id} className="flex justify-between gap-4">
             <dt className="flex min-w-0 items-center gap-1 text-slate">
               <span className="truncate">
-                {p.amountMinor < 0 ? 'Refund' : 'Paid'} {shortDate(`${p.paidOn}T12:00:00`)}
+                {p.amountMinor < 0
+                  ? p.refundFor === 'cleaning'
+                    ? 'Cleaning refund'
+                    : p.refundFor === 'stay'
+                      ? 'Stay refund'
+                      : 'Refund'
+                  : 'Paid'}{' '}
+                {shortDate(`${p.paidOn}T12:00:00`)}
                 <span className="text-mist"> · {PAYMENT_METHOD_LABELS[p.method]}</span>
                 {p.note ? <span className="text-mist"> · {p.note}</span> : null}
               </span>
@@ -263,6 +299,8 @@ export function Money({
             <AddCharge orgId={orgId} r={r} currency={currency} onDone={() => setAdding(null)} />
           ) : adding === 'payment' ? (
             <AddPayment orgId={orgId} r={r} currency={currency} onDone={() => setAdding(null)} />
+          ) : adding === 'refund' ? (
+            <AddPayment orgId={orgId} r={r} currency={currency} refund onDone={() => setAdding(null)} />
           ) : (
             <div className="-ml-2.5 flex flex-wrap">
               <button type="button" onClick={() => setAdding('charge')} className="action">
@@ -270,6 +308,9 @@ export function Money({
               </button>
               <button type="button" onClick={() => setAdding('payment')} className="action">
                 Record a payment
+              </button>
+              <button type="button" onClick={() => setAdding('refund')} className="action">
+                Record a refund
               </button>
             </div>
           )}

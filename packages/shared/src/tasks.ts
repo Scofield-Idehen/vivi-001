@@ -74,6 +74,8 @@ export const TaskSchema = z.object({
   nextArrivalAt: z.string().nullable(),
   doneBy: z.string().nullable(),
   doneAt: Timestamp.nullable(),
+  /** What the job cost, for a repair; a clean's cost comes from the home. */
+  costMinor: z.number().int().nullable().optional(),
   createdAt: Timestamp,
   /**
    * Getting in: the fields marked for the crew (the bottom lock code), opened only on one task
@@ -131,6 +133,8 @@ export const TaskUpdateSchema = z
     dueTime: Clock.nullable().optional(),
     assigneeId: Uuid.nullable().optional(),
     checklist: z.array(ChecklistItemSchema).max(40).optional(),
+    /** What the job cost (a repair, a contractor): logged as an expense when the job is done. */
+    costMinor: z.number().int().min(0).max(100_000_000).nullable().optional(),
   })
   .refine((u) => Object.keys(u).length > 0, { message: 'Nothing to change.' });
 export type TaskUpdate = z.infer<typeof TaskUpdateSchema>;

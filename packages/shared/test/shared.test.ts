@@ -98,7 +98,7 @@ describe('permissions', () => {
     for (const [permission, roles] of Object.entries(PERMISSIONS)) {
       const allowed = (roles as readonly string[]).includes('v01_support');
       expect(allowed, permission).toBe(
-        permission.endsWith('.read') && permission !== 'secrets.read' && permission !== 'portal.read',
+        permission.endsWith('.read') && !['secrets.read', 'portal.read', 'payees.read'].includes(permission),
       );
     }
   });

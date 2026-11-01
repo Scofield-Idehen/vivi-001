@@ -108,6 +108,8 @@ export const PaymentSchema = z.object({
   method: z.enum(PAYMENT_METHODS),
   paidOn: z.string(),
   note: z.string().nullable(),
+  /** For a refund: what it gave back. A stay refund lowers what the owner is due; a cleaning refund is the company's. */
+  refundFor: z.enum(['stay', 'cleaning']).nullable().optional(),
   recordedBy: z.string().nullable(),
   createdAt: z.string(),
 });
@@ -123,6 +125,8 @@ export const PaymentCreateSchema = z.object({
   method: z.enum(PAYMENT_METHODS),
   paidOn: DayString,
   note: z.string().trim().max(400).optional(),
+  /** Needed for a refund: the stay (the owner shares it) or the cleaning (the company's). */
+  refundFor: z.enum(['stay', 'cleaning']).optional(),
 });
 export type PaymentCreate = z.infer<typeof PaymentCreateSchema>;
 

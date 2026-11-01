@@ -58,6 +58,8 @@ export const reservations = app.table(
     infants: integer('infants').notNull().default(0),
     currency: char('currency', { length: 3 }),
     totalMinor: bigint('total_minor', { mode: 'number' }),
+    /** The cleaning fee the guest paid, inside the total (from Guesty's fareCleaning). */
+    cleaningMinor: bigint('cleaning_minor', { mode: 'number' }),
     payoutMinor: bigint('payout_minor', { mode: 'number' }),
     /** The team's own notes on the booking. Channels never see them. */
     notes: text('notes'),
@@ -236,6 +238,8 @@ export const reservationPayments = app.table(
     method: text('method').notNull(),
     paidOn: date('paid_on', { mode: 'string' }).notNull(),
     note: text('note'),
+    /** For a refund: what it gives back, the stay (the owner shares it) or the cleaning (the company's). */
+    refundFor: text('refund_for'),
     recordedBy: uuid('recorded_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
   },
@@ -246,6 +250,10 @@ export const reservationPayments = app.table(
       sql`${t.method} in ('channel', 'card', 'bank_transfer', 'cash', 'other')`,
     ),
     check('reservation_payments_amount', sql`${t.amountMinor} <> 0`),
+    check(
+      'reservation_payments_refund_for',
+      sql`${t.refundFor} is null or (${t.refundFor} in ('stay', 'cleaning') and ${t.amountMinor} < 0)`,
+    ),
     check('reservation_payments_note_length', sql`${t.note} is null or char_length(${t.note}) <= 400`),
   ],
 );

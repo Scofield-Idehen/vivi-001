@@ -1,12 +1,13 @@
 import { IconSearch } from '@tabler/icons-react';
-import type { Owner, OwnerList, OwnerLoginBulkResult } from '@v01/shared';
+import { type Owner, type OwnerList, type OwnerLoginBulkResult, todayIn } from '@v01/shared';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
+import { monthName } from '../../components/MonthPicker.tsx';
 import { Sheet } from '../../components/Sheet.tsx';
 import { Button, Notice } from '../../components/ui.tsx';
-import { ApiError, useGiveHome, useInviteOwners } from '../../lib/api.ts';
+import { ApiError, useGiveHome, useInviteOwners, useStatements, useWorkspace } from '../../lib/api.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
-import { feeText } from './OwnersPage.tsx';
+import { moneyText } from '../properties/money.ts';
 
 /**
  * The owners at a glance (1 Nov 2026): how many homes each has (one owner can have many), whether
@@ -22,12 +23,15 @@ const ACCESS: Record<Access, { label: string; tone: string }> = {
   invited: { label: 'Invited', tone: 'bg-pending/15 text-pending-text' },
   none: { label: 'No log-in', tone: 'bg-linen text-slate' },
 };
-const FILTERS: [Access | 'all', string][] = [
+type Filter = Access | 'all' | 'setup';
+const FILTERS: [Filter, string][] = [
   ['all', 'All'],
+  ['setup', 'Still to set up'],
   ['in', 'Can log in'],
   ['invited', 'Invited'],
   ['none', 'No log-in'],
 ];
+const needsSetup = (o: Owner) => !o.setup.contract || o.setup.homesWithoutTerms > 0;
 
 function homesLine(o: Owner): string {
   if (!o.homes.length) return 'No homes yet';
@@ -37,7 +41,14 @@ function homesLine(o: Owner): string {
 
 export function OwnersList({ data, write }: { data: OwnerList; write: boolean }) {
   const [q, setQ] = useState('');
-  const [filter, setFilter] = useState<Access | 'all'>('all');
+  const [filter, setFilter] = useState<Filter>('all');
+  const { orgId } = useCurrentWorkspace();
+  const workspace = useWorkspace(orgId);
+  const thisMonth = todayIn(workspace.data?.settings.timeZone ?? 'Europe/London').slice(0, 7);
+  const statements = useStatements(orgId, thisMonth);
+  const dueOf = new Map((statements.data?.statements ?? []).map((s) => [s.ownerId, s.netMinor]));
+  const money = (minor: number) =>
+    moneyText(minor, statements.data?.currency ?? 'GBP', workspace.data?.settings.locale ?? 'en-GB');
   const [inviting, setInviting] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const needle = q.trim().toLowerCase();
@@ -45,7 +56,7 @@ export function OwnersList({ data, write }: { data: OwnerList; write: boolean })
     () =>
       data.owners.filter(
         (o) =>
-          (filter === 'all' || accessOf(o) === filter) &&
+          (filter === 'all' || (filter === 'setup' ? needsSetup(o) : accessOf(o) === filter)) &&
           (!needle ||
             [o.name, o.company, o.email, ...o.homes.map((h) => h.name)].some((v) =>
               v?.toLowerCase().includes(needle),
@@ -70,7 +81,7 @@ export function OwnersList({ data, write }: { data: OwnerList; write: boolean })
               data.unowned.length,
               data.unowned.length ? 'Give each to an owner below' : 'All done',
             ],
-            ['Can log in', canLogIn, `of ${data.owners.length}`],
+            ['Still to set up', data.owners.filter(needsSetup).length, 'Contract or a home’s deal missing'],
           ] as const
         ).map(([label, value, sub]) => (
           <div key={label} className="rounded-2xl border border-hairline bg-canvas px-4 py-3">
@@ -131,8 +142,8 @@ export function OwnersList({ data, write }: { data: OwnerList; write: boolean })
           <div className="hidden grid-cols-[minmax(0,1.4fr)_minmax(0,1.8fr)_70px_110px] gap-4 border-b border-hairline px-4 py-2 text-[12px] text-slate md:grid">
             <span>Owner</span>
             <span>Homes</span>
-            <span className="text-right">Fee</span>
-            <span className="text-right">Log-in</span>
+            <span className="text-right">Due in {monthName(thisMonth).split(' ')[0]} so far</span>
+            <span className="text-right">Status</span>
           </div>
           <ul className="divide-y divide-hairline">
             {owners.map((o) => {
@@ -155,10 +166,15 @@ export function OwnersList({ data, write }: { data: OwnerList; write: boolean })
                       </span>
                       <span className="text-[13px] text-slate">{homesLine(o)}</span>
                     </span>
-                    <span className="hidden text-right text-[13px] text-ink tnum md:block">
-                      {feeText(o.feeBasisPoints)}
+                    <span className="hidden text-right text-[13.5px] text-ink tnum md:block">
+                      {dueOf.has(o.id) ? money(dueOf.get(o.id) as number) : '…'}
                     </span>
-                    <span className="text-right">
+                    <span className="flex flex-col items-end gap-1">
+                      {needsSetup(o) ? (
+                        <span className="rounded-full bg-pending/15 px-2 py-0.5 text-[12px] whitespace-nowrap text-pending-text">
+                          {!o.setup.contract ? 'No contract' : `${o.setup.homesWithoutTerms} without a deal`}
+                        </span>
+                      ) : null}
                       <span className={`rounded-full px-2 py-0.5 text-[12px] whitespace-nowrap ${a.tone}`}>
                         {a.label}
                       </span>

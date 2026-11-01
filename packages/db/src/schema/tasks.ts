@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   check,
   date,
@@ -51,6 +52,8 @@ export const tasks = app.table(
     /** When it must be done by that day, such as the next guest's arrival; null means by the end of the day. */
     dueTime: time('due_time'),
     assigneeUserId: uuid('assignee_user_id').references(() => appUsers.id, { onDelete: 'set null' }),
+    /** What the job cost (a repair, a contractor); logged as an expense when the job is done. */
+    costMinor: bigint('cost_minor', { mode: 'number' }),
     checklist: jsonb('checklist').$type<ChecklistItem[]>().notNull().default(sql`'[]'::jsonb`),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
     doneBy: uuid('done_by').references(() => appUsers.id, { onDelete: 'set null' }),

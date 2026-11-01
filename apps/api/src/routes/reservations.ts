@@ -118,6 +118,7 @@ async function loadReservation(tx: Tx, id: string): Promise<Reservation> {
     method: p.method as PaymentMethod,
     paidOn: p.paidOn,
     note: p.note,
+    refundFor: (p.refundFor as 'stay' | 'cleaning' | null) ?? null,
     recordedBy: p.recordedBy ? by : null,
     createdAt: toIso(p.createdAt),
   }));
@@ -368,7 +369,11 @@ export function reservationRoutes(app: FastifyInstance, deps: { scope: RequestSc
     async (req, reply) =>
       deps.scope.inOrg(req, 'money.write', async (tx, ctx) => {
         await loadReservation(tx, req.params.id);
+        const refund = req.body.amountMinor < 0;
+        if (refund && !req.body.refundFor)
+          throw new HttpError(400, 'refund_for', 'Say what the refund was for: the stay or the cleaning.');
         await tx.insert(reservationPayments).values({
+          refundFor: refund ? (req.body.refundFor ?? null) : null,
           organisationId: ctx.orgId,
           reservationId: req.params.id,
           amountMinor: req.body.amountMinor,
