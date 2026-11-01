@@ -277,3 +277,100 @@ describe('card payments', () => {
     expect(loadEnv({ ...base, STRIPE_SECRET_KEY: fakeKey('test') }).STRIPE_LIVE).toBe(false);
   });
 });
+
+describe('the deposit on the guest’s page', () => {
+  const ON = { ask: true, gates: true, onAirbnb: false };
+  /** A booking on its own home, with that home's deposit settings. */
+  const booking = async (channel: string, inDays: number, set: typeof ON | null = ON) => {
+    const home = (
+      await call('POST', '/v1/properties', {
+        as: asA(),
+        body: { name: `Home ${Math.random().toString(36).slice(2, 8)}`, countryCode: 'GB', maxGuests: 4 },
+      })
+    ).body.id as string;
+    if (set)
+      await owner(
+        `update app.properties set security_deposit_minor = 15000, deposit_ask = $2, deposit_gates_codes = $3,
+           deposit_on_airbnb = $4 where id = $1`,
+        [home, set.ask, set.gates, set.onAirbnb],
+      );
+    const [r] = await owner<{ id: string; guest_key: string }>(
+      `insert into app.reservations (organisation_id, property_id, channel, status, check_in, check_out,
+         adults, children, currency, total_minor)
+       values ($1, $2, $3, 'confirmed', $4, $5, 2, 0, 'GBP', 30000) returning id, guest_key`,
+      [a.orgId, home, channel, addDays(today, inDays), addDays(today, inDays + 2)],
+    );
+    return { ...r!, home };
+  };
+  const page = async (key: string) => (await app.inject({ method: 'GET', url: `/v1/stay/${key}` })).json();
+  const addCard = (key: string) => app.inject({ method: 'POST', url: `/v1/stay/${key}/deposit` });
+
+  it('is off until the home asks for one', async () => {
+    const b = await booking('direct', 2, null);
+    expect((await page(b.guest_key)).deposit).toBeNull();
+    await owner(
+      `update app.properties set security_deposit_minor = 15000, deposit_ask = true, deposit_gates_codes = true where id = $1`,
+      [b.home],
+    );
+    const shown = await page(b.guest_key);
+    expect(shown.deposit).toMatchObject({ status: 'needed', amountMinor: 15000, currency: 'GBP' });
+    expect(shown.codesWaitForDeposit).toBe(true);
+  });
+
+  it('opens 3 days before arrival', async () => {
+    const b = await booking('booking_com', 6);
+    const shown = await page(b.guest_key);
+    expect(shown.deposit).toMatchObject({ status: 'later', opensOn: addDays(today, 3) });
+    expect((await addCard(b.guest_key)).statusCode).toBe(409);
+  });
+
+  it('sends the guest to Stripe, once, and holds the codes until it is held', async () => {
+    const b = await booking('direct', 1);
+    const first = await addCard(b.guest_key);
+    expect(first.statusCode).toBe(200);
+    const again = await addCard(b.guest_key);
+    expect(again.json().url).toBe(first.json().url);
+    const [row] = await owner<{
+      id: string;
+      session_id: string;
+      created_by: string | null;
+      amount_minor: string;
+    }>(`select id, session_id, created_by, amount_minor from app.card_requests where reservation_id = $1`, [
+      b.id,
+    ]);
+    expect(row).toMatchObject({ created_by: null, amount_minor: '15000' });
+    expect(gateway.sessions.get(row!.session_id)!.input.successUrl).toContain(`/stay/${b.guest_key}`);
+    // Tomorrow's arrival without a deposit shows on Today.
+    const before = await call('GET', '/v1/today', { as: asA() });
+    expect(before.body.attention.some((x: { id: string }) => x.id === `deposit:${b.id}`)).toBe(true);
+    gateway.complete(row!.session_id);
+    const shown = await page(b.guest_key);
+    expect(shown.deposit.status).toBe('held');
+    expect(shown.codesWaitForDeposit).toBe(false);
+    const after = await call('GET', '/v1/today', { as: asA() });
+    expect(after.body.attention.some((x: { id: string }) => x.id === `deposit:${b.id}`)).toBe(false);
+    expect((await addCard(b.guest_key)).statusCode).toBe(409);
+  });
+
+  it('leaves Airbnb guests alone unless the home says its listing states the deposit', async () => {
+    const b = await booking('airbnb', 1);
+    expect((await page(b.guest_key)).deposit).toBeNull();
+    const byHand = await call('POST', `/v1/reservations/${b.id}/card-requests`, {
+      as: asA(),
+      body: { kind: 'deposit', amountMinor: 10000 },
+    });
+    expect(byHand.status).toBe(409);
+    const list = await call('GET', `/v1/reservations/${b.id}/card-requests`, { as: asA() });
+    expect(list.body).toMatchObject({ depositAllowed: false, depositMinor: 15000 });
+    await owner(`update app.properties set deposit_on_airbnb = true where id = $1`, [b.home]);
+    expect((await page(b.guest_key)).deposit.status).toBe('needed');
+    expect(
+      (
+        await call('POST', `/v1/reservations/${b.id}/card-requests`, {
+          as: asA(),
+          body: { kind: 'deposit', amountMinor: 10000 },
+        })
+      ).status,
+    ).toBe(201);
+  });
+});

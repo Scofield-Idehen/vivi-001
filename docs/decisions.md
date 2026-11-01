@@ -834,3 +834,18 @@ V-01 Build Playbook and Design Roadmap.
 - **Added without an email (Alpha):** adding makes their sign-in through Supabase's admin API and
   sends nothing. They join the field team, can be given jobs at once, and sign in later with their
   email as the same person. Nudges go through Slack (next), where the cleaners already are.
+
+## 2026-11-01: The damage deposit, asked of the guest on their page
+
+- **Per home:** the home's security deposit amount, and three switches: ask guests for it; hold the
+  door code and Wi-Fi password until it is held; ask Airbnb guests too (off: Airbnb doesn't allow a
+  deposit outside Airbnb unless the listing states it; damage there goes through a claim).
+- **On the guest's page** (the link the arrival messages already carry): "Add your card" from 3
+  days before arrival, since a card keeps a hold about 7 days (5 for Visa credit). Stripe's page
+  takes the card; the guest comes back to their page and sees it held.
+- **Held, not charged (Alpha asked why):** most deposits go back. A charge refunded takes 5–10
+  working days to reach the guest and Stripe keeps its fee; a hold lets go in a day or two at no
+  cost, and only what is kept is charged. Long stays outlast a hold: a "charge and refund" choice
+  is offered for those if wanted.
+- **On Today:** a guest arriving today or tomorrow at such a home without the deposit held.
+- **By hand:** "Hold a deposit" on a booking is hidden for Airbnb bookings unless the home allows it.

@@ -408,6 +408,9 @@ const NO_ACTIVITY: DemoLive = {
 /** What a listing starts with before anyone fills it in; the API's column defaults. */
 function listingDefaults(): Omit<PropertyDetail, keyof Property | 'updatedAt'> {
   return {
+    depositAsk: false,
+    depositGatesCodes: false,
+    depositOnAirbnb: false,
     addressLine2: null,
     title: null,
     summary: null,
@@ -4655,6 +4658,8 @@ function demoGuestStay(s: DemoState, key: string): GuestStay {
       phase,
       codesFrom: phase === 'before' ? stay.checkIn : null,
       doorCode: phase === 'during' && stayCodes(operator, stay, true).length ? demoDoorCode(stay.id) : null,
+      deposit: null,
+      codesWaitForDeposit: false,
       property: {
         name: property.name,
         title: property.title,
@@ -6070,7 +6075,14 @@ export async function demoFetch<T>(
     const today = now.slice(0, 10);
     const answer = () => {
       save();
-      return { enabled: true, testMode: true, requests: [...(stay.cards ?? [])].reverse() } as T;
+      const home = operator.properties.find((p) => p.id === stay.propertyId);
+      return {
+        enabled: true,
+        testMode: true,
+        requests: [...(stay.cards ?? [])].reverse(),
+        depositAllowed: stay.channel !== 'airbnb' || Boolean(home?.depositOnAirbnb),
+        depositMinor: home?.securityDepositMinor ?? null,
+      } as T;
     };
     if (cardList && method === 'GET') return answer();
     if (cardList && method === 'POST') {

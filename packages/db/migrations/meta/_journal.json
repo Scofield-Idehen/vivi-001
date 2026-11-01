@@ -351,6 +351,20 @@
       "when": 1793548288927,
       "tag": "0049_staff_skills_security",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1793550090669,
+      "tag": "0050_deposits",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1793550092307,
+      "tag": "0051_guest_deposit",
+      "breakpoints": true
     }
   ]
 }

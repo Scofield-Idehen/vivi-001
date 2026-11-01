@@ -61,6 +61,23 @@ export const GuestStaySchema = z.object({
   fields: z.array(GuestFieldSchema),
   /** The stay's own door code, from the smart lock; shown on the same days as the other codes. */
   doorCode: z.string().nullable(),
+  /** The damage deposit, when this home asks for one on this stay; null otherwise. */
+  deposit: z
+    .object({
+      /**
+       * later   it can be added from `opensOn`
+       * needed  it can be added now
+       * held    held on the guest's card
+       * done    kept or released after the stay
+       */
+      status: z.enum(['later', 'needed', 'held', 'done']),
+      amountMinor: z.number().int(),
+      currency: z.string(),
+      opensOn: z.string(),
+    })
+    .nullable(),
+  /** The door code and secrets wait for the deposit (true until it is held). */
+  codesWaitForDeposit: z.boolean(),
 });
 export type GuestStay = z.infer<typeof GuestStaySchema>;
 
@@ -71,3 +88,21 @@ export const GuestLinkSchema = z.object({
   path: z.string(),
 });
 export type GuestLink = z.infer<typeof GuestLinkSchema>;
+
+/** The guest goes to Stripe to add their card for the deposit. */
+export const GuestDepositLinkSchema = z.object({ url: z.string() });
+export type GuestDepositLink = z.infer<typeof GuestDepositLinkSchema>;
+
+/** How many days before arrival a deposit can be held: a card keeps a hold about 7 days. */
+export const DEPOSIT_DAYS_BEFORE = 3;
+
+/**
+ * Whether a stay is asked for the home's deposit: the home asks, has an amount, and the booking
+ * isn't an Airbnb one unless the home says its Airbnb listing states the deposit.
+ */
+export function depositWanted(
+  home: { ask: boolean; amountMinor: number | null; onAirbnb: boolean },
+  channel: string,
+): boolean {
+  return home.ask && (home.amountMinor ?? 0) > 0 && (channel !== 'airbnb' || home.onAirbnb);
+}

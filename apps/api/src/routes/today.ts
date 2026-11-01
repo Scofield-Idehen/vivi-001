@@ -136,6 +136,41 @@ export function todayRoutes(app: FastifyInstance, deps: { scope: RequestScope; n
           }
         }
 
+        if (seesGuests) {
+          // A home that asks for a deposit, a guest arriving today or tomorrow, and no deposit held.
+          const noDeposit = await tx
+            .select({
+              id: reservations.id,
+              propertyName: properties.name,
+              checkIn: reservations.checkIn,
+              guestName: guests.fullName,
+            })
+            .from(reservations)
+            .innerJoin(properties, eq(properties.id, reservations.propertyId))
+            .leftJoin(guests, eq(guests.id, reservations.guestId))
+            .where(
+              and(
+                eq(reservations.status, 'confirmed'),
+                sql`${reservations.checkIn} between ${today}::date and ${today}::date + 1`,
+                eq(properties.depositAsk, true),
+                sql`coalesce(${properties.securityDepositMinor}, 0) > 0`,
+                sql`(${reservations.channel} <> 'airbnb' or ${properties.depositOnAirbnb})`,
+                sql`not exists (select 1 from app.card_requests c where c.reservation_id = ${reservations.id}
+                      and c.kind = 'deposit' and c.status in ('held', 'kept', 'released'))`,
+              ),
+            )
+            .orderBy(asc(reservations.checkIn));
+          for (const n of noDeposit) {
+            attention.push({
+              id: `deposit:${n.id}`,
+              severity: n.checkIn === today ? 'urgent' : 'warning',
+              title: `No deposit yet: ${n.guestName ?? 'the guest'}, ${n.propertyName}`,
+              detail: `Arriving ${n.checkIn === today ? 'today' : 'tomorrow'}. The deposit button is on their guest page; send them the link, or ask for it from the booking.`,
+              to: `/reservations/${n.id}`,
+            });
+          }
+        }
+
         const [workerSeen] = (
           await tx.execute<{ seen: string | null }>(sql`select app.worker_last_seen() as seen`)
         ).rows;

@@ -187,6 +187,76 @@ async function requestOf(tx: Tx, id: string): Promise<Row> {
   return row;
 }
 
+/**
+ * Makes a Stripe link for a booking and records it. Used by the team (a payment or a deposit) and
+ * by the guest's own page (the deposit), where nobody is signed in and `createdBy` is null.
+ */
+export async function createCardRequest(
+  tx: Tx,
+  gateway: CardGateway,
+  input: {
+    orgId: string;
+    reservationId: string;
+    kind: 'payment' | 'deposit';
+    amountMinor: number;
+    createdBy: string | null;
+    successUrl: string;
+    cancelUrl: string;
+  },
+): Promise<Row> {
+  const [b] = await tx
+    .select({
+      id: reservations.id,
+      status: reservations.status,
+      currency: reservations.currency,
+      checkIn: reservations.checkIn,
+      checkOut: reservations.checkOut,
+      home: properties.name,
+      email: guests.email,
+    })
+    .from(reservations)
+    .innerJoin(properties, eq(properties.id, reservations.propertyId))
+    .leftJoin(guests, eq(guests.id, reservations.guestId))
+    .where(eq(reservations.id, input.reservationId));
+  if (!b) throw new HttpError(404, 'reservation_not_found', 'That booking does not exist here.');
+  if (b.status === 'cancelled')
+    throw new HttpError(409, 'reservation_cancelled', 'This booking is cancelled.');
+  const [settings] = await tx.select({ currency: organisationSettings.currency }).from(organisationSettings);
+  const currency = b.currency ?? settings?.currency ?? 'GBP';
+  const id = randomUUID();
+  const created = await gateway
+    .createCheckout({
+      kind: input.kind,
+      amountMinor: input.amountMinor,
+      currency,
+      description: `Stay at ${b.home}, ${b.checkIn} to ${b.checkOut}`,
+      successUrl: input.successUrl,
+      cancelUrl: input.cancelUrl,
+      customerEmail: b.email,
+      metadata: { v01_org: input.orgId, v01_request: id },
+      idempotencyKey: `v01-${id}`,
+    })
+    .catch(cardFailure);
+  const [row] = await tx
+    .insert(cardRequests)
+    .values({
+      id,
+      organisationId: input.orgId,
+      reservationId: b.id,
+      kind: input.kind,
+      amountMinor: input.amountMinor,
+      currency,
+      sessionId: created.sessionId,
+      url: created.url,
+      expiresAt: created.expiresAt,
+      live: gateway.live,
+      createdBy: input.createdBy,
+    })
+    .returning();
+  if (!row) throw new Error('Saving the card request returned nothing.');
+  return row;
+}
+
 const ReservationParams = z.object({ id: z.uuid() });
 const RequestParams = z.object({ requestId: z.uuid() });
 
@@ -196,12 +266,27 @@ export function cardRoutes(
 ) {
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const { gateway } = deps;
-  const list = (tx: Tx, reservationId: string): Promise<CardRequestList> =>
-    listFor(tx, reservationId).then((requests) => ({
+  const list = async (tx: Tx, reservationId: string): Promise<CardRequestList> => {
+    const [home] = await tx
+      .select({
+        channel: reservations.channel,
+        ask: properties.depositAsk,
+        amountMinor: properties.securityDepositMinor,
+        onAirbnb: properties.depositOnAirbnb,
+      })
+      .from(reservations)
+      .innerJoin(properties, eq(properties.id, reservations.propertyId))
+      .where(eq(reservations.id, reservationId));
+    return {
       enabled: gateway !== null,
       testMode: gateway ? !gateway.live : true,
-      requests,
-    }));
+      requests: await listFor(tx, reservationId),
+      // By hand a deposit can be asked whatever the home's own setting, but never on an Airbnb
+      // booking unless the home says its Airbnb listing states the deposit.
+      depositAllowed: home ? home.channel !== 'airbnb' || home.onAirbnb : false,
+      depositMinor: home?.amountMinor ?? null,
+    };
+  };
 
   typed.get(
     '/v1/reservations/:id/card-requests',
@@ -251,50 +336,27 @@ export function cardRoutes(
         const [b] = await tx
           .select({
             id: reservations.id,
-            status: reservations.status,
-            currency: reservations.currency,
-            checkIn: reservations.checkIn,
-            checkOut: reservations.checkOut,
-            home: properties.name,
-            email: guests.email,
+            channel: reservations.channel,
+            onAirbnb: properties.depositOnAirbnb,
           })
           .from(reservations)
           .innerJoin(properties, eq(properties.id, reservations.propertyId))
-          .leftJoin(guests, eq(guests.id, reservations.guestId))
           .where(eq(reservations.id, req.params.id));
         if (!b) throw new HttpError(404, 'reservation_not_found', 'That booking does not exist here.');
-        if (b.status === 'cancelled')
-          throw new HttpError(409, 'reservation_cancelled', 'This booking is cancelled.');
-        const [settings] = await tx
-          .select({ currency: organisationSettings.currency })
-          .from(organisationSettings);
-        const currency = b.currency ?? settings?.currency ?? 'GBP';
-        const id = randomUUID();
-        const created = await gateway
-          .createCheckout({
-            kind: req.body.kind,
-            amountMinor: req.body.amountMinor,
-            currency,
-            description: `Stay at ${b.home}, ${b.checkIn} to ${b.checkOut}`,
-            successUrl: `${deps.appUrl}/paid`,
-            cancelUrl: `${deps.appUrl}/paid?not=1`,
-            customerEmail: b.email,
-            metadata: { v01_org: ctx.orgId, v01_request: id },
-            idempotencyKey: `v01-${id}`,
-          })
-          .catch(cardFailure);
-        await tx.insert(cardRequests).values({
-          id,
-          organisationId: ctx.orgId,
+        if (req.body.kind === 'deposit' && b.channel === 'airbnb' && !b.onAirbnb)
+          throw new HttpError(
+            409,
+            'deposit_airbnb',
+            'Airbnb doesn’t allow a deposit taken outside Airbnb unless the listing states it. Damage on an Airbnb stay goes through Airbnb (a claim).',
+          );
+        await createCardRequest(tx, gateway, {
+          orgId: ctx.orgId,
           reservationId: b.id,
           kind: req.body.kind,
           amountMinor: req.body.amountMinor,
-          currency,
-          sessionId: created.sessionId,
-          url: created.url,
-          expiresAt: created.expiresAt,
-          live: gateway.live,
           createdBy: ctx.userId,
+          successUrl: `${deps.appUrl}/paid`,
+          cancelUrl: `${deps.appUrl}/paid?not=1`,
         });
         reply.code(201);
         return list(tx, b.id);

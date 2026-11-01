@@ -201,16 +201,16 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
           serviceKey: deps.env.SUPABASE_SERVICE_ROLE_KEY,
         })
       : NO_USER_DIRECTORY);
-  memberRoutes(app, { scope, mailer, appUrl, directory });
-  portalRoutes(app, { scope, mailer, appUrl, files: taskPhotos, now: deps.now });
-  guestRoutes(app, { db: deps.db, scope, box, now: deps.now });
-  consoleRoutes(app, { scope });
   const cards =
     deps.cards !== undefined
       ? deps.cards
       : deps.env.STRIPE_SECRET_KEY
         ? new StripeGateway({ secretKey: deps.env.STRIPE_SECRET_KEY })
         : null;
+  memberRoutes(app, { scope, mailer, appUrl, directory });
+  portalRoutes(app, { scope, mailer, appUrl, files: taskPhotos, now: deps.now });
+  guestRoutes(app, { db: deps.db, scope, box, now: deps.now, cards, appUrl });
+  consoleRoutes(app, { scope });
   cardRoutes(app, { scope, gateway: cards, appUrl });
   await webhookRoutes(app, {
     db: deps.db,

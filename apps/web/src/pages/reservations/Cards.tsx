@@ -22,12 +22,14 @@ function NewRequest({
   r,
   kind,
   currency,
+  depositMinor = null,
   onDone,
 }: {
   orgId: string;
   r: Reservation;
   kind: 'payment' | 'deposit';
   currency: string;
+  depositMinor?: number | null;
   onDone(): void;
 }) {
   const make = useCardAction<number>(
@@ -37,9 +39,13 @@ function NewRequest({
     (amountMinor) => ({ kind, amountMinor }),
   );
   const [amount, setAmount] = useState(
-    kind === 'payment' && r.balanceMinor !== null && r.balanceMinor > 0
-      ? (r.balanceMinor / 100).toFixed(2)
-      : '',
+    kind === 'payment'
+      ? r.balanceMinor !== null && r.balanceMinor > 0
+        ? (r.balanceMinor / 100).toFixed(2)
+        : ''
+      : depositMinor
+        ? (depositMinor / 100).toFixed(2)
+        : '',
   );
   const parsed = amount ? parseAmount(amount, currency) : {};
   const ready = parsed.minor !== undefined && parsed.minor > 0 && !make.isPending;
@@ -308,6 +314,12 @@ export function Cards({
           <Notice tone="urgent">{explain(error)}</Notice>
         </div>
       ) : null}
+      {canWrite && list.enabled && r.status !== 'cancelled' && !list.depositAllowed ? (
+        <p className="mt-3 text-[12.5px] text-mist">
+          No deposit on an Airbnb booking: Airbnb doesn’t allow one outside Airbnb. Damage goes through a
+          claim.
+        </p>
+      ) : null}
       {canWrite && list.enabled && r.status !== 'cancelled' ? (
         <div className="mt-3">
           {making ? (
@@ -316,6 +328,7 @@ export function Cards({
               r={r}
               kind={making}
               currency={currency}
+              depositMinor={list.depositMinor}
               onDone={() => setMaking(null)}
             />
           ) : (
@@ -323,9 +336,11 @@ export function Cards({
               <button type="button" className="action" onClick={() => setMaking('payment')}>
                 Ask for a card payment
               </button>
-              <button type="button" className="action" onClick={() => setMaking('deposit')}>
-                Hold a deposit
-              </button>
+              {list.depositAllowed ? (
+                <button type="button" className="action" onClick={() => setMaking('deposit')}>
+                  Hold a deposit
+                </button>
+              ) : null}
             </div>
           )}
         </div>

@@ -118,6 +118,15 @@ export class ApiDatabase extends Database {
     return rows[0]?.stay ?? null;
   }
 
+  /** The damage deposit for a stay, by the key in the guest's link; null for an unknown or unconfirmed stay. */
+  async guestDeposit(key: string): Promise<Record<string, unknown> | null> {
+    const { rows } = await this.pool.query<{ d: Record<string, unknown> | null }>(
+      'select app.guest_deposit($1) as d',
+      [key],
+    );
+    return rows[0]?.d ?? null;
+  }
+
   /** Stores a raw webhook before anything else happens. The API may insert but never read these. */
   async recordWebhook(event: {
     provider: string;

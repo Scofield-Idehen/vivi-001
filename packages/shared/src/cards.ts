@@ -54,5 +54,9 @@ export const CardRequestListSchema = z.object({
   /** True when the key is a test key: no real money moves. */
   testMode: z.boolean(),
   requests: z.array(CardRequestSchema),
+  /** A deposit may be asked on this booking (not an Airbnb one unless the home allows it). */
+  depositAllowed: z.boolean(),
+  /** The home's deposit, to start the amount with. */
+  depositMinor: z.number().int().nullable(),
 });
 export type CardRequestList = z.infer<typeof CardRequestListSchema>;

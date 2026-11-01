@@ -39,6 +39,7 @@ import type {
   ExpenseInput,
   ExpenseList,
   ExpenseUpdate,
+  GuestDepositLink,
   GuestLink,
   GuestStay,
   GuestyPeople,
@@ -928,6 +929,16 @@ export function useGuestStay(key: string | null) {
     queryFn: () => apiFetch<GuestStay>(`/v1/stay/${key}`, { token: null }),
     retry: false,
     refetchInterval: 5 * 60_000,
+  });
+}
+
+/** The guest goes to Stripe to add their card for the deposit. */
+export function useGuestDeposit(key: string) {
+  return useMutation({
+    mutationFn: () => apiFetch<GuestDepositLink>(`/v1/stay/${key}/deposit`, { token: null, method: 'POST' }),
+    onSuccess: ({ url }) => {
+      window.location.assign(url);
+    },
   });
 }
 

@@ -1,7 +1,7 @@
-import { canTake, MANAGED_BY_LABELS, type PropertyDetail } from '@v01/shared';
+import { canTake, formatMoney, MANAGED_BY_LABELS, type PropertyDetail } from '@v01/shared';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { SelectField } from '../../components/fields.tsx';
+import { SelectField, Toggle } from '../../components/fields.tsx';
 import { Button, Notice } from '../../components/ui.tsx';
 import { ApiError, useArchiveProperty, useOwners, useTeam, useUpdateProperty } from '../../lib/api.ts';
 import { V01 } from '../../lib/format.ts';
@@ -120,6 +120,42 @@ export function SettingsSection({
             </Notice>
           </div>
         ) : null}
+      </div>
+      <div className="mt-8 max-w-[560px]">
+        <h3 className="text-[15px] font-medium text-ink">Damage deposit</h3>
+        <p className="mt-1 text-[13.5px] leading-relaxed text-slate">
+          {d.securityDepositMinor
+            ? `${formatMoney({ amountMinor: d.securityDepositMinor, currency: 'GBP' }, 'en-GB')}, held on the guest’s card and not charged. They add their card on their guest page from 3 days before arrival; it is let go after the stay unless you keep some for damage.`
+            : 'Set the security deposit amount under Pricing first.'}
+        </p>
+        {canEdit ? (
+          <div className="mt-1 divide-y divide-hairline">
+            <Toggle
+              label="Ask guests for the deposit"
+              description="On their guest page, and a warning on Today when someone arrives without it."
+              checked={d.depositAsk}
+              onChange={(v) => update.mutate({ depositAsk: v })}
+            />
+            {d.depositAsk ? (
+              <Toggle
+                label="Hold the door code until it’s in place"
+                description="The door code and Wi-Fi password stay hidden on the guest page until the deposit is held."
+                checked={d.depositGatesCodes}
+                onChange={(v) => update.mutate({ depositGatesCodes: v })}
+              />
+            ) : null}
+            {d.depositAsk ? (
+              <Toggle
+                label="Ask Airbnb guests too"
+                description="Only if your Airbnb listing states the deposit. Airbnb doesn’t allow one otherwise; damage goes through a claim."
+                checked={d.depositOnAirbnb}
+                onChange={(v) => update.mutate({ depositOnAirbnb: v })}
+              />
+            ) : null}
+          </div>
+        ) : (
+          <p className="mt-2 text-[14px] text-ink">{d.depositAsk ? 'Asked of guests' : 'Not asked'}</p>
+        )}
       </div>
       {canEdit ? (
         <div className="mt-8 rounded-xl border border-hairline p-4">

@@ -1,9 +1,9 @@
-import { IconExternalLink, IconMapPin, IconPhone } from '@tabler/icons-react';
-import { CHECK_IN_METHOD_LABELS, type GuestField, type GuestStay } from '@v01/shared';
+import { IconCircleCheck, IconExternalLink, IconMapPin, IconPhone } from '@tabler/icons-react';
+import { CHECK_IN_METHOD_LABELS, formatMoney, type GuestField, type GuestStay } from '@v01/shared';
 import type { ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Spinner } from '../components/Spinner.tsx';
-import { ApiError, useGuestStay } from '../lib/api.ts';
+import { ApiError, useGuestDeposit, useGuestStay } from '../lib/api.ts';
 import { config } from '../lib/config.ts';
 
 /**
@@ -37,7 +37,18 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** A code, big and easy to read from a phone at the door; or where and when it will appear. */
-function Code({ label, value, from }: { label: string; value: string | null; from: string | null }) {
+function Code({
+  label,
+  value,
+  from,
+  note,
+}: {
+  label: string;
+  value: string | null;
+  from: string | null;
+  /** Said instead of when it appears: the codes wait for the deposit. */
+  note?: string;
+}) {
   return (
     <div className="rounded-xl bg-canvas px-4 py-3">
       <p className="text-[13px] text-slate">{label}</p>
@@ -47,10 +58,79 @@ function Code({ label, value, from }: { label: string; value: string | null; fro
         </p>
       ) : (
         <p className="mt-0.5 text-[15px] text-slate">
-          {from ? `Appears here on ${long(from)}.` : 'No longer shown now the stay has ended.'}
+          {note ?? (from ? `Appears here on ${long(from)}.` : 'No longer shown now the stay has ended.')}
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * The damage deposit (1 Nov 2026): held on the guest's card, not charged, and let go after the
+ * stay if nothing is damaged. The button takes them to Stripe's page; they come back here.
+ */
+function Deposit({
+  stayKey,
+  d,
+  accent,
+}: {
+  stayKey: string;
+  d: NonNullable<GuestStay['deposit']>;
+  accent: string;
+}) {
+  const add = useGuestDeposit(stayKey);
+  const [params] = useSearchParams();
+  const justAdded = params.get('deposit') === 'added';
+  const amount = formatMoney({ amountMinor: d.amountMinor, currency: d.currency }, 'en-GB');
+  if (d.status === 'done') return null;
+  return (
+    <Card title="Damage deposit">
+      {d.status === 'held' ? (
+        <p className="flex items-start gap-2">
+          <IconCircleCheck
+            size={22}
+            stroke={1.75}
+            className="mt-0.5 shrink-0"
+            style={{ color: accent }}
+            aria-hidden
+          />
+          <span>
+            <b className="font-medium">{amount}</b> is held on your card, not charged. It is let go after your
+            stay if nothing is damaged.
+          </span>
+        </p>
+      ) : (
+        <>
+          <p>
+            This stay has a <b className="font-medium">{amount}</b> damage deposit. It is held on your card,
+            not charged, and let go after your stay if nothing is damaged.
+          </p>
+          {justAdded ? (
+            <p className="text-slate">Thank you. It can take a minute to show here; refresh if it hasn’t.</p>
+          ) : null}
+          {d.status === 'later' ? (
+            <p className="text-slate">You can add your card from {long(d.opensOn)}.</p>
+          ) : (
+            <button
+              type="button"
+              disabled={add.isPending}
+              onClick={() => add.mutate()}
+              className="inline-flex h-11 w-fit items-center justify-center rounded-xl bg-accent px-5 text-[15px] font-medium text-white disabled:opacity-60"
+            >
+              {add.isPending ? 'Opening the secure page…' : 'Add your card'}
+            </button>
+          )}
+          {add.error ? (
+            <p className="text-[14px] text-urgent">
+              {add.error instanceof ApiError ? add.error.message : 'That didn’t open. Try again.'}
+            </p>
+          ) : null}
+          <p className="text-[13px] text-mist">
+            Your card is taken on Stripe’s secure page; we never see its number.
+          </p>
+        </>
+      )}
+    </Card>
   );
 }
 
@@ -115,6 +195,7 @@ export function StayPage() {
   const address = [p.addressLine1, p.addressLine2, p.city, p.postcode].filter(Boolean);
   const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address.join(', '))}`;
   const firstName = s.guestName?.split(' ')[0] ?? null;
+  const waitNote = s.codesWaitForDeposit ? 'Appears here once your deposit is in place (above).' : undefined;
 
   return (
     <main className="min-h-dvh bg-canvas pb-12" style={{ '--color-accent': accent } as React.CSSProperties}>
@@ -152,15 +233,21 @@ export function StayPage() {
           ) : null}
         </div>
 
+        {s.deposit && s.phase !== 'after' ? (
+          <Deposit stayKey={key ?? ''} d={s.deposit} accent={accent} />
+        ) : null}
+
         <Card title="Arriving">
           <p>
             Check in from <b className="font-medium">{s.checkInTime}</b> on {long(s.checkIn)}.
             {p.checkInMethod ? ` ${CHECK_IN_METHOD_LABELS[p.checkInMethod]}.` : ''}
           </p>
           {p.guestAccess ? <p className="whitespace-pre-line text-slate">{p.guestAccess}</p> : null}
-          {s.doorCode ? <Code label="Your door code" value={s.doorCode} from={s.codesFrom} /> : null}
+          {s.doorCode || s.codesWaitForDeposit ? (
+            <Code label="Your door code" value={s.doorCode} from={s.codesFrom} note={waitNote} />
+          ) : null}
           {codes.map((f) => (
-            <Code key={f.name} label={f.name} value={f.value} from={s.codesFrom} />
+            <Code key={f.name} label={f.name} value={f.value} from={s.codesFrom} note={waitNote} />
           ))}
           {instructions.map((f) =>
             f.value ? (
@@ -185,7 +272,9 @@ export function StayPage() {
                 Network <b className="font-medium">{wifiName.value}</b>
               </p>
             ) : null}
-            {wifiPassword ? <Code label="Password" value={wifiPassword.value} from={s.codesFrom} /> : null}
+            {wifiPassword ? (
+              <Code label="Password" value={wifiPassword.value} from={s.codesFrom} note={waitNote} />
+            ) : null}
           </Card>
         ) : null}
 

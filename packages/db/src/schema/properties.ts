@@ -119,6 +119,14 @@ export const properties = app.table(
     /** Whose home it is (owners.ts); the API checks it is in the same workspace. */
     /** What the cleaner is paid for one clean of this home; logged as the company's cost when a clean is done. */
     cleaningCostMinor: bigint('cleaning_cost_minor', { mode: 'number' }),
+    /**
+     * The damage deposit (1 Nov 2026), of `security_deposit_minor`: asked of the guest on their page
+     * from 3 days before arrival; not for Airbnb bookings unless the listing states it.
+     */
+    depositAsk: boolean('deposit_ask').notNull().default(false),
+    /** The door code and secrets on the guest's page wait until the deposit is held. */
+    depositGatesCodes: boolean('deposit_gates_codes').notNull().default(false),
+    depositOnAirbnb: boolean('deposit_on_airbnb').notNull().default(false),
     ownerId: uuid('owner_id'),
     archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'string' }),
     createdAt: createdAt(),

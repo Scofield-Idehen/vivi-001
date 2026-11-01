@@ -199,6 +199,12 @@ export const PropertyDetailSchema = PropertySchema.extend({
   extraGuestFeeMinor: z.number().int().nullable(),
   extraGuestFrom: z.number().int().nullable(),
   securityDepositMinor: z.number().int().nullable(),
+  /** The deposit is asked on the guest's page from 3 days before arrival. */
+  depositAsk: z.boolean(),
+  /** The door code waits until the deposit is held. */
+  depositGatesCodes: z.boolean(),
+  /** Airbnb bookings are asked too (only when the Airbnb listing states the deposit). */
+  depositOnAirbnb: z.boolean(),
   // Legal.
   licenceNumber: z.string().nullable(),
   cleaner: z.object({ id: Uuid, name: z.string() }).nullable(),
@@ -331,6 +337,9 @@ export const PropertyUpdateSchema = z
     extraGuestFeeMinor: Minor,
     extraGuestFrom: z.number().int().min(1).max(50).nullable().optional(),
     securityDepositMinor: Minor,
+    depositAsk: z.boolean().optional(),
+    depositGatesCodes: z.boolean().optional(),
+    depositOnAirbnb: z.boolean().optional(),
     licenceNumber: Text(80),
     tags: TagsSchema.optional(),
     /** Who usually cleans it; the check-out clean is assigned to them. Null: nobody yet. */
