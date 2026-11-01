@@ -804,3 +804,20 @@ V-01 Build Playbook and Design Roadmap.
 - **Tooling:** pnpm workspaces, TypeScript 7, Biome for lint and format, Vitest against real Postgres,
   esbuild bundles for the API and worker.
 - **`managed_by` values are `guesty` and `v01`.** If V-01 is renamed, rename the enum value in a migration.
+
+## 2026-11-01: Card payments and deposits through Stripe Checkout
+
+- **Stripe Checkout links, made on a booking.** The team asks for a card payment or a damage deposit
+  and sends the link (copy, or WhatsApp to the guest's number). Stripe's page takes the card, so no
+  card number reaches V-01. Links last 24 hours.
+- **A deposit is a hold, not a charge** (manual capture). A card keeps a hold for about 7 days, so it
+  is asked for close to arrival. Keeping some or all records a charge and a card payment of the same
+  amount, so the balance doesn't move; the rest goes back to the card. Releasing lets it all go.
+- **The booking learns the outcome from Stripe itself:** the signed webhook (`/webhooks/stripe`, once
+  STRIPE_WEBHOOK_SECRET is set) or, without it, by asking Stripe whenever the card requests are read.
+  Both run the same settle step under a row lock, so a payment is recorded once.
+- **Test mode by default.** A live key is refused unless STRIPE_LIVE=true. Requests remember whether
+  they were test or live, and test payments are noted "(Stripe test)".
+- **Settings:** STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are their own GitHub secrets, added to the
+  API's settings at deploy. One Stripe account for now (Vivistays); each operator's own account
+  (Stripe Connect) is the step before a second operator takes payments.

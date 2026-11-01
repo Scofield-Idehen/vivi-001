@@ -6,6 +6,7 @@ import type {
   Calendar,
   CalendarChange,
   CalendarChangeResult,
+  CardRequestList,
   ChannelAccount,
   ChannelAccountConnect,
   ChannelAccountCreate,
@@ -630,6 +631,45 @@ export const useRemovePayment = (orgId: string | null, id: string) =>
   useReservationAction<string>(orgId, id, (paymentId) => `/payments/${paymentId}`, 'DELETE');
 export const useCancelReservation = (orgId: string | null, id: string) =>
   useReservationAction<ReservationCancel>(orgId, id, () => '/cancel', 'POST');
+
+// Card payments and deposits (Stripe) ---------------------------------------------------------
+
+export function useCardRequests(orgId: string | null, id: string) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['card-requests', orgId, id],
+    enabled: Boolean(token && orgId),
+    queryFn: () =>
+      apiFetch<CardRequestList>(`/v1/reservations/${id}/card-requests`, { token: token as string, orgId }),
+    // An open link or a held deposit can change at Stripe: look again now and then while it's on screen.
+    refetchInterval: (q) =>
+      q.state.data?.requests.some((r) => r.status === 'open' || r.status === 'held') ? 20_000 : false,
+  });
+}
+
+/** Any card action: the list comes back, and the booking (its payments) is read again. */
+export function useCardAction<B = void>(
+  orgId: string | null,
+  reservationId: string,
+  path: (b: B) => string,
+  body?: (b: B) => unknown,
+) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (b: B) =>
+      apiFetch<CardRequestList>(path(b), {
+        token: token as string,
+        orgId,
+        method: 'POST',
+        ...(body ? { body: body(b) } : {}),
+      }),
+    onSuccess: async (list) => {
+      queryClient.setQueryData(['card-requests', orgId, reservationId], list);
+      await queryClient.invalidateQueries({ queryKey: ['reservation', orgId, reservationId] });
+    },
+  });
+}
 
 /** The token for work that runs outside a hook, like uploading photos after adding a property. */
 export function useApiToken(): string | null {

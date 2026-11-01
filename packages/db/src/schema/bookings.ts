@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   char,
   check,
   date,
@@ -255,5 +256,56 @@ export const reservationPayments = app.table(
       sql`${t.refundFor} is null or (${t.refundFor} in ('stay', 'cleaning') and ${t.amountMinor} < 0)`,
     ),
     check('reservation_payments_note_length', sql`${t.note} is null or char_length(${t.note}) <= 400`),
+  ],
+);
+
+/**
+ * A card request on a booking (1 Nov 2026): a Stripe Checkout link asking the guest to pay, or to
+ * let a damage deposit be held. When it is paid, a card payment is recorded on the booking; when
+ * some of a deposit is kept, a charge and a payment of that amount are recorded together, so the
+ * balance doesn't move. `payment_id` and `charge_id` point at what was recorded.
+ */
+export const cardRequests = app.table(
+  'card_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    reservationId: uuid('reservation_id')
+      .notNull()
+      .references(() => reservations.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    status: text('status').notNull().default('open'),
+    amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
+    currency: char('currency', { length: 3 }).notNull(),
+    sessionId: text('session_id').notNull(),
+    paymentIntentId: text('payment_intent_id'),
+    url: text('url'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    keptMinor: bigint('kept_minor', { mode: 'number' }),
+    keptReason: text('kept_reason'),
+    paymentId: uuid('payment_id').references(() => reservationPayments.id, { onDelete: 'set null' }),
+    chargeId: uuid('charge_id').references(() => reservationCharges.id, { onDelete: 'set null' }),
+    /** Test or live: a test request never becomes real money. */
+    live: boolean('live').notNull().default(false),
+    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    settledAt: timestamp('settled_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('card_requests_reservation_idx').on(t.reservationId),
+    unique('card_requests_session_key').on(t.sessionId),
+    check('card_requests_kind', sql`${t.kind} in ('payment', 'deposit')`),
+    check(
+      'card_requests_status',
+      sql`${t.status} in ('open', 'paid', 'held', 'kept', 'released', 'expired')`,
+    ),
+    check('card_requests_amount', sql`${t.amountMinor} > 0`),
+    check(
+      'card_requests_kept',
+      sql`${t.keptMinor} is null or (${t.keptMinor} > 0 and ${t.keptMinor} <= ${t.amountMinor})`,
+    ),
   ],
 );

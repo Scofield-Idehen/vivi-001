@@ -11,7 +11,6 @@ export {
  * Planned adapters, each behind its own interface like the channel swap layer
  * (playbook, Section 15). Credentials are stored encrypted and per operator.
  *   pricelabs/  Phase 4: sync URL, calendar trigger URL, /listings, /calendar, /reservations, /get_prices
- *   stripe/     Phase 4: Stripe Connect payment links on each operator's own account
  */
 export {
   EmailError,
@@ -52,3 +51,17 @@ export {
   type TTLockConfig,
   TTLockProvider,
 } from './ttlock/client.ts';
+export {
+  type CardGateway,
+  CardError,
+  type CardKind,
+  type CheckoutCreated,
+  type CheckoutInput,
+  type CheckoutState,
+  MemoryCardGateway,
+  STRIPE_API_URL,
+  StripeGateway,
+  signStripeBody,
+  stripeForm,
+  verifyStripeSignature,
+} from './stripe/client.ts';

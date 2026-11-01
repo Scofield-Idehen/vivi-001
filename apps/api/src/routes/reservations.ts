@@ -40,7 +40,7 @@ const notFound = () =>
   new HttpError(404, 'reservation_not_found', 'That booking does not exist in this workspace.');
 
 /** Today where the operator is. Row-level security leaves exactly one settings row in scope. */
-async function operatorToday(tx: Tx): Promise<string> {
+export async function operatorToday(tx: Tx): Promise<string> {
   const [row] = await tx.select({ timeZone: organisationSettings.timeZone }).from(organisationSettings);
   return todayIn(row?.timeZone ?? 'Europe/London');
 }

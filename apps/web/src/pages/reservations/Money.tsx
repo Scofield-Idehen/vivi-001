@@ -13,12 +13,13 @@ import { SelectField, TextField } from '../../components/fields.tsx';
 import { Button, Notice } from '../../components/ui.tsx';
 import { ApiError, useAddCharge, useAddPayment, useRemoveCharge, useRemovePayment } from '../../lib/api.ts';
 import { shortDate } from '../../lib/format.ts';
+import { Cards } from './Cards.tsx';
 import { ChannelName } from './parts.tsx';
 
 /**
  * The money on a booking, for the record: the channel's total, extra charges the team adds (a
  * late check-out, a pet; a discount as a minus), payments received, and the balance they make.
- * Nothing is charged from here; taking payments comes in Phase 4.
+ * Card payments and deposits through Stripe sit below (Cards.tsx).
  */
 
 const explain = (error: unknown) =>
@@ -316,6 +317,7 @@ export function Money({
           )}
         </div>
       ) : null}
+      <Cards orgId={orgId} r={r} locale={locale} timeZone={timeZone} canWrite={canWrite} />
     </div>
   );
 }

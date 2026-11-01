@@ -12,6 +12,9 @@ import {
   type CalendarNight,
   CalendarQuerySchema,
   type CalendarStay,
+  CardKeepSchema,
+  type CardRequest,
+  CardRequestCreateSchema,
   CHANNEL_LABELS,
   type Channel,
   type ChannelAccount,
@@ -328,6 +331,8 @@ interface DemoStay extends Omit<CalendarStay, 'status'> {
   /** Money for the record, and why the team cancelled it. Missing in older saved states. */
   charges?: Charge[];
   payments?: Payment[];
+  /** Card requests (Stripe stand-in in the demo). */
+  cards?: CardRequest[];
   cancellationReason?: string | null;
   cancelledBy?: string | null;
 }
@@ -5952,6 +5957,105 @@ export async function demoFetch<T>(
     operator.calendar.stays.push(stay);
     save();
     return toReservation(operator, stay) as T;
+  }
+
+  // Card payments and deposits: the Stripe stand-in. "Guest pays (demo)" plays the guest's part.
+  const cardList = /^\/v1\/reservations\/([0-9a-f-]{36})\/card-requests$/.exec(path);
+  const cardAct = /^\/v1\/card-requests\/([0-9a-f-]{36})\/(cancel|keep|release|demo-pay)$/.exec(path);
+  if (cardList?.[1] || cardAct?.[1]) {
+    const { operator } = access(options.orgId, method === 'GET' ? 'reservations.read' : 'money.write');
+    const stay = cardList?.[1]
+      ? findStay(operator, cardList[1])
+      : operator.calendar.stays.find((x) => (x.cards ?? []).some((c) => c.id === cardAct?.[1]));
+    if (!stay) throw new ApiError(404, 'card_request_not_found', 'That card request isn’t here.');
+    stay.cards ??= [];
+    const by = operator.team.find((m) => m.email === DEMO_USER.email)?.fullName ?? 'Demo user';
+    const now = new Date().toISOString();
+    const today = now.slice(0, 10);
+    const answer = () => {
+      save();
+      return { enabled: true, testMode: true, requests: [...(stay.cards ?? [])].reverse() } as T;
+    };
+    if (cardList && method === 'GET') return answer();
+    if (cardList && method === 'POST') {
+      const parsed = CardRequestCreateSchema.safeParse(options.body);
+      if (!parsed.success) invalid(parsed.error.issues);
+      if (stay.status === 'cancelled')
+        throw new ApiError(409, 'reservation_cancelled', 'This booking is cancelled.');
+      const id = crypto.randomUUID();
+      stay.cards.push({
+        id,
+        kind: parsed.data.kind,
+        status: 'open',
+        amountMinor: parsed.data.amountMinor,
+        currency: stay.currency ?? 'GBP',
+        url: `https://checkout.stripe.com/c/pay/cs_test_demo_${id.slice(0, 8)}`,
+        keptMinor: null,
+        keptReason: null,
+        expiresAt: new Date(Date.now() + 23.5 * 3600_000).toISOString(),
+        createdBy: by,
+        createdAt: now,
+        settledAt: null,
+      });
+      return answer();
+    }
+    const card = stay.cards.find((c) => c.id === cardAct?.[1]);
+    if (!card) throw new ApiError(404, 'card_request_not_found', 'That card request isn’t here.');
+    const what = cardAct?.[2];
+    const pay = (amountMinor: number, note: string) => {
+      stay.payments ??= [];
+      stay.payments.push({
+        id: crypto.randomUUID(),
+        amountMinor,
+        method: 'card',
+        paidOn: today,
+        note,
+        refundFor: null,
+        recordedBy: by,
+        createdAt: now,
+      });
+    };
+    if (what === 'demo-pay') {
+      if (card.status !== 'open')
+        throw new ApiError(409, 'card_request_closed', 'That link is no longer open.');
+      if (card.kind === 'payment') {
+        pay(card.amountMinor, 'Paid by card through Stripe (Stripe test)');
+        Object.assign(card, { status: 'paid', url: null, settledAt: now });
+      } else Object.assign(card, { status: 'held', url: null });
+      return answer();
+    }
+    if (what === 'cancel') {
+      if (card.status !== 'open')
+        throw new ApiError(409, 'card_request_closed', 'That link is no longer open.');
+      Object.assign(card, { status: 'expired', url: null, settledAt: now });
+      return answer();
+    }
+    if (card.status !== 'held')
+      throw new ApiError(409, 'not_held', 'Nothing is held on the guest’s card for this.');
+    if (what === 'release') {
+      Object.assign(card, { status: 'released', settledAt: now });
+      return answer();
+    }
+    const parsed = CardKeepSchema.safeParse(options.body);
+    if (!parsed.success) invalid(parsed.error.issues);
+    if (parsed.data.amountMinor > card.amountMinor)
+      throw new ApiError(400, 'too_much', 'That is more than the deposit held.');
+    stay.charges ??= [];
+    stay.charges.push({
+      id: crypto.randomUUID(),
+      label: parsed.data.reason,
+      amountMinor: parsed.data.amountMinor,
+      createdBy: by,
+      createdAt: now,
+    });
+    pay(parsed.data.amountMinor, 'Kept from the deposit (Stripe test)');
+    Object.assign(card, {
+      status: 'kept',
+      keptMinor: parsed.data.amountMinor,
+      keptReason: parsed.data.reason,
+      settledAt: now,
+    });
+    return answer();
   }
 
   const moneyMatch =

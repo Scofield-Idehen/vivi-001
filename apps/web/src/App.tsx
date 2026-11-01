@@ -24,6 +24,7 @@ import { About, ModuleToCome, NotFound, NoWorkspace } from './pages/misc.tsx';
 import { ExpensesPage } from './pages/money/ExpensesPage.tsx';
 import { OwnerPage } from './pages/owners/OwnerPage.tsx';
 import { OwnersPage } from './pages/owners/OwnersPage.tsx';
+import { PaidPage } from './pages/PaidPage.tsx';
 import { ProfilePage } from './pages/ProfilePage.tsx';
 import { Properties } from './pages/Properties.tsx';
 import { NewPropertyPanel } from './pages/properties/NewPropertyPanel.tsx';
@@ -112,6 +113,8 @@ const routes = [
   { path: '/sign-in', element: <SignIn /> },
   // The guest's page for their stay: public, by the key in their link.
   { path: '/stay/:key', element: <StayPage /> },
+  // Where Stripe sends a guest after paying: public.
+  { path: '/paid', element: <PaidPage /> },
   {
     path: '/',
     element: <Gate />,

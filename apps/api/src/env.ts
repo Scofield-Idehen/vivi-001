@@ -39,7 +39,24 @@ const EnvSchema = z
     TTLOCK_CLIENT_ID: z.string().min(1).optional(),
     TTLOCK_CLIENT_SECRET: z.string().min(1).optional(),
     TTLOCK_API_URL: z.url().optional(),
+    /**
+     * Card payments and deposits (Stripe). A test key (sk_test_… or rk_test_…) moves no real money.
+     * A live key is refused unless STRIPE_LIVE is "true", so real charges are always a decision.
+     */
+    STRIPE_SECRET_KEY: z.string().min(20).optional(),
+    /** The signing secret of the Stripe webhook (whsec_…). Without it V-01 checks with Stripe instead. */
+    STRIPE_WEBHOOK_SECRET: z.string().min(16).optional(),
+    STRIPE_LIVE: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
   })
+  .refine(
+    (env) => !env.STRIPE_SECRET_KEY || env.STRIPE_LIVE || !/^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY),
+    {
+      message: 'STRIPE_SECRET_KEY is a live key. Set STRIPE_LIVE=true to take real money, or use a test key.',
+    },
+  )
   .refine((env) => env.SUPABASE_URL || env.SUPABASE_JWT_SECRET, {
     message: 'Set SUPABASE_URL (recommended) or SUPABASE_JWT_SECRET so sign-in tokens can be verified',
   });

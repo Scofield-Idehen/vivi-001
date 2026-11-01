@@ -123,6 +123,9 @@ jobs:
           API_ENV: ${{ secrets.API_ENV }}
           WORKER_ENV: ${{ secrets.WORKER_ENV }}
           DEPLOY_WORKER: ${{ vars.DEPLOY_WORKER }}
+          # Kept as their own secrets so they can be added or changed without editing API_ENV.
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
         shell: python3 {0}
         run: |
           import json, os, sys
@@ -144,7 +147,13 @@ jobs:
               with open(out, 'w') as f:
                   f.write('\n'.join(lines) + '\n')
               return len(lines)
-          n = to_yaml(os.environ.get('API_ENV'), 'api.env.yaml')
+          api_text = os.environ.get('API_ENV') or ''
+          for extra in ('STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'):
+              value = (os.environ.get(extra) or '').strip()
+              if value and f'\n{extra}=' not in f'\n{api_text}':
+                  api_text += f'\n{extra}={value}'
+                  print(f'API: {extra} added from its own secret')
+          n = to_yaml(api_text, 'api.env.yaml')
           if n == 0:
               sys.exit('The API_ENV secret is empty.')
           print(f'API: {n} settings')

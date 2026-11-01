@@ -3,7 +3,13 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import { appBrand } from '@v01/brand';
 import type { ApiDatabase } from '@v01/db';
-import { type LockProvider, SecretBox, TTLockProvider } from '@v01/integrations';
+import {
+  type CardGateway,
+  type LockProvider,
+  SecretBox,
+  StripeGateway,
+  TTLockProvider,
+} from '@v01/integrations';
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import {
   hasZodFastifySchemaValidationErrors,
@@ -17,6 +23,7 @@ import { errorBody, HttpError } from './errors.ts';
 import { type InviteMailer, NO_INVITE_MAILER, SupabaseInviteMailer } from './invites.ts';
 import { NO_PHOTO_STORE, type PhotoStore, SupabasePhotoStore } from './photos.ts';
 import { calendarRoutes } from './routes/calendar.ts';
+import { cardRoutes } from './routes/cards.ts';
 import { channelRoutes } from './routes/channels.ts';
 import { channexRoutes } from './routes/channex.ts';
 import { claimRoutes } from './routes/claims.ts';
@@ -54,6 +61,8 @@ export interface AppDeps {
   now?: () => Date;
   /** Defaults to TTLock when V-01's TTLock application is configured. */
   locks?: LockProvider | null;
+  /** Card payments; defaults to Stripe when STRIPE_SECRET_KEY is set. */
+  cards?: CardGateway | null;
 }
 
 function photoStoreFrom(env: Env, bucket: string): PhotoStore {
@@ -179,7 +188,18 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   portalRoutes(app, { scope, mailer, appUrl, files: taskPhotos, now: deps.now });
   guestRoutes(app, { db: deps.db, scope, box, now: deps.now });
   consoleRoutes(app, { scope });
-  await webhookRoutes(app, { db: deps.db, channexSecret: deps.env.CHANNEX_WEBHOOK_SECRET });
+  const cards =
+    deps.cards !== undefined
+      ? deps.cards
+      : deps.env.STRIPE_SECRET_KEY
+        ? new StripeGateway({ secretKey: deps.env.STRIPE_SECRET_KEY })
+        : null;
+  cardRoutes(app, { scope, gateway: cards, appUrl });
+  await webhookRoutes(app, {
+    db: deps.db,
+    channexSecret: deps.env.CHANNEX_WEBHOOK_SECRET,
+    cards: { gateway: cards, secret: deps.env.STRIPE_WEBHOOK_SECRET },
+  });
 
   return app;
 }

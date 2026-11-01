@@ -1,7 +1,9 @@
 import { ChannexWebhookSchema, verifyChannexWebhook } from '@v01/channels';
 import type { ApiDatabase } from '@v01/db';
+import { type CardGateway, verifyStripeSignature } from '@v01/integrations';
 import type { FastifyInstance } from 'fastify';
 import { errorBody } from '../errors.ts';
+import { handleStripeEvent } from './cards.ts';
 
 /**
  * Channex webhook intake (integration step 5). It verifies the signature against the raw
@@ -12,7 +14,11 @@ import { errorBody } from '../errors.ts';
  */
 export async function webhookRoutes(
   app: FastifyInstance,
-  deps: { db: ApiDatabase; channexSecret: string | undefined },
+  deps: {
+    db: ApiDatabase;
+    channexSecret: string | undefined;
+    cards?: { gateway: CardGateway | null; secret: string | undefined };
+  },
 ) {
   await app.register(async (scope) => {
     // Keep the exact bytes: the signature covers the raw body, not re-serialised JSON.
@@ -50,6 +56,35 @@ export async function webhookRoutes(
         externalPropertyId: event.data.property_id ?? null,
         payload: parsed,
       });
+      return reply.code(200).send({ received: true });
+    });
+
+    // Stripe: a payment or deposit changed. Verified, then settled by asking Stripe itself.
+    scope.post('/webhooks/stripe', async (req, reply) => {
+      const gateway = deps.cards?.gateway;
+      const secret = deps.cards?.secret;
+      if (!gateway || !secret) {
+        return reply.code(503).send(errorBody('webhooks_disabled', 'Stripe webhooks are not configured.'));
+      }
+      const rawBody = typeof req.body === 'string' ? req.body : '';
+      const header = req.headers['stripe-signature'];
+      const check = verifyStripeSignature({
+        rawBody,
+        header: typeof header === 'string' ? header : undefined,
+        secret,
+      });
+      if (!check.ok) {
+        req.log.warn({ reason: check.reason }, 'Rejected Stripe webhook');
+        return reply.code(401).send(errorBody('bad_signature', 'Webhook signature check failed.'));
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(rawBody);
+      } catch {
+        return reply.code(400).send(errorBody('bad_json', 'Webhook body is not valid JSON.'));
+      }
+      // A failure here is a 500, so Stripe tries again later.
+      await handleStripeEvent(deps.db, gateway, parsed, req.log);
       return reply.code(200).send({ received: true });
     });
   });
