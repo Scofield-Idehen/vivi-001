@@ -1,4 +1,4 @@
-import { MANAGED_BY_LABELS, type PropertyDetail } from '@v01/shared';
+import { canTake, MANAGED_BY_LABELS, type PropertyDetail } from '@v01/shared';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { SelectField } from '../../components/fields.tsx';
@@ -80,9 +80,11 @@ export function SettingsSection({
             onChange={(v) => update.mutate({ cleanerUserId: v || null })}
             options={[
               { value: '', label: 'Nobody yet' },
-              ...people.map((m) => ({ value: m.id, label: m.name })),
+              ...people
+                .filter((m) => m.id === d.cleaner?.id || canTake(m, 'cleaning', d.id))
+                .map((m) => ({ value: m.id, label: m.name })),
             ]}
-            hint="The clean made at every check-out is assigned to them."
+            hint="The clean made at every check-out is assigned to them. Only cleaners on this home are listed."
           />
         ) : null}
         {canEdit ? (
@@ -93,9 +95,11 @@ export function SettingsSection({
               onChange={(v) => update.mutate({ maintainerUserId: v || null })}
               options={[
                 { value: '', label: 'Nobody yet' },
-                ...people.map((m) => ({ value: m.id, label: m.name })),
+                ...people
+                  .filter((m) => m.id === d.maintainer?.id || canTake(m, 'maintenance', d.id))
+                  .map((m) => ({ value: m.id, label: m.name })),
               ]}
-              hint="Maintenance jobs here, and damage the cleaners report, go to them."
+              hint="Maintenance jobs here, and damage the cleaners report, go to them. Only maintenance staff on this home are listed."
             />
           </div>
         ) : (

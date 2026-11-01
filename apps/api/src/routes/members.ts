@@ -1,5 +1,9 @@
-import { appUsers, invitations, memberHomes, memberships, properties, type Tx } from '@v01/db';
+import { appUsers, guestyStaff, invitations, memberHomes, memberships, properties, type Tx } from '@v01/db';
 import {
+  GuestyPeopleAddedSchema,
+  GuestyPeopleAddSchema,
+  GuestyPeopleSchema,
+  type GuestyPerson,
   INVITATION_DAYS,
   type Invitation,
   InvitationListSchema,
@@ -7,6 +11,8 @@ import {
   InviteSchema,
   MemberHomesSchema,
   MemberRoleUpdateSchema,
+  MemberSkillsSchema,
+  type Skill,
   type TeamMember,
   TeamMemberSchema,
 } from '@v01/shared';
@@ -16,7 +22,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { type RequestScope, toIso } from '../context.ts';
 import { HttpError } from '../errors.ts';
-import { type InviteMailer, NO_INVITE_MAILER } from '../invites.ts';
+import { type InviteMailer, NO_INVITE_MAILER, NO_USER_DIRECTORY, type UserDirectory } from '../invites.ts';
 
 /**
  * The team (admins only): invite a colleague by email and role, change a role, remove someone.
@@ -51,6 +57,7 @@ async function openInvitations(tx: Tx): Promise<Invitation[]> {
     role: i.role,
     invitedBy: i.invitedBy ? invitedBy : null,
     propertyIds: i.propertyIds ?? null,
+    skills: i.skills as Skill[],
     createdAt: toIso(i.createdAt),
     expiresAt: i.expiresAt ? toIso(i.expiresAt) : null,
   }));
@@ -80,12 +87,22 @@ export async function homesByMember(tx: Tx, orgId: string): Promise<Map<string, 
 
 async function memberOr404(tx: Tx, orgId: string, userId: string): Promise<TeamMember> {
   const [row] = await tx
-    .select({ id: appUsers.id, name: personName, email: appUsers.email, role: memberships.role })
+    .select({
+      id: appUsers.id,
+      name: personName,
+      email: appUsers.email,
+      role: memberships.role,
+      skills: memberships.skills,
+    })
     .from(memberships)
     .innerJoin(appUsers, eq(appUsers.id, memberships.userId))
     .where(and(eq(memberships.organisationId, orgId), eq(memberships.userId, userId)));
   if (!row) throw new HttpError(404, 'member_not_found', 'That person is not in this workspace.');
-  return { ...row, propertyIds: (await homesByMember(tx, orgId)).get(userId) ?? null };
+  return {
+    ...row,
+    skills: row.skills as Skill[],
+    propertyIds: (await homesByMember(tx, orgId)).get(userId) ?? null,
+  };
 }
 
 /** The homes asked for, checked: every one must be a home in this workspace. */
@@ -122,9 +139,132 @@ async function admins(tx: Tx, orgId: string): Promise<number> {
 
 export function memberRoutes(
   app: FastifyInstance,
-  deps: { scope: RequestScope; mailer: InviteMailer; appUrl: string },
+  deps: { scope: RequestScope; mailer: InviteMailer; appUrl: string; directory?: UserDirectory },
 ) {
   const typed = app.withTypeProvider<ZodTypeProvider>();
+  const directory = deps.directory ?? NO_USER_DIRECTORY;
+
+  typed.put(
+    '/v1/members/:userId/skills',
+    { schema: { params: MemberParams, body: MemberSkillsSchema, response: { 200: TeamMemberSchema } } },
+    async (req) =>
+      deps.scope.inOrg(req, 'members.manage', async (tx, ctx) => {
+        const member = await memberOr404(tx, ctx.orgId, req.params.userId);
+        if (member.role === 'owner')
+          throw new HttpError(400, 'owner_login', 'An owner’s log-in doesn’t take jobs.');
+        await tx
+          .update(memberships)
+          .set({ skills: [...new Set(req.body.skills)] })
+          .where(and(eq(memberships.organisationId, ctx.orgId), eq(memberships.userId, req.params.userId)));
+        return memberOr404(tx, ctx.orgId, req.params.userId);
+      }),
+  );
+
+  /** The people on the Guesty account, and whether each is on the team here. */
+  async function guestyPeople(tx: Tx, orgId: string): Promise<GuestyPerson[]> {
+    const rows = await tx.select().from(guestyStaff).orderBy(sql`lower(${guestyStaff.fullName})`);
+    const team = await tx
+      .select({ id: memberships.userId, email: appUsers.email, role: memberships.role })
+      .from(memberships)
+      .innerJoin(appUsers, eq(appUsers.id, memberships.userId))
+      .where(eq(memberships.organisationId, orgId));
+    const byId = new Map(team.map((m) => [m.id, m]));
+    const byEmail = new Map(team.map((m) => [m.email.toLowerCase(), m]));
+    return rows.map((r) => {
+      const m =
+        (r.userId ? byId.get(r.userId) : undefined) ??
+        (r.email ? byEmail.get(r.email.toLowerCase()) : undefined);
+      return {
+        id: r.id,
+        name: r.fullName,
+        email: r.email,
+        tags: r.tags,
+        skills: r.skills as Skill[],
+        propertyIds: r.propertyIds ?? null,
+        memberId: m?.id ?? null,
+        memberRole: m?.role ?? null,
+      };
+    });
+  }
+
+  typed.get('/v1/team/guesty', { schema: { response: { 200: GuestyPeopleSchema } } }, async (req) =>
+    deps.scope.inOrg(req, 'members.manage', async (tx, ctx) => ({
+      people: await guestyPeople(tx, ctx.orgId),
+    })),
+  );
+
+  /**
+   * Brings people from Guesty onto the team as the field team, with their skills and homes, and
+   * makes their sign-in without emailing them. Someone already here keeps their role; the skills
+   * and homes from Guesty are added to theirs.
+   */
+  typed.post(
+    '/v1/team/guesty',
+    { schema: { body: GuestyPeopleAddSchema, response: { 200: GuestyPeopleAddedSchema } } },
+    async (req) =>
+      deps.scope.inOrg(req, 'members.manage', async (tx, ctx) => {
+        const people = (await guestyPeople(tx, ctx.orgId)).filter((p) => req.body.ids.includes(p.id));
+        const result = { added: 0, updated: 0, skipped: [] as { name: string; reason: string }[] };
+        const homesNow = await homesByMember(tx, ctx.orgId);
+        for (const p of people) {
+          if (!p.email) {
+            result.skipped.push({ name: p.name, reason: 'No email in Guesty.' });
+            continue;
+          }
+          if (p.memberRole === 'owner' || p.memberRole === 'admin') {
+            if (p.memberId)
+              await tx.update(guestyStaff).set({ userId: p.memberId }).where(eq(guestyStaff.id, p.id));
+            result.skipped.push({
+              name: p.name,
+              reason: p.memberRole === 'admin' ? 'Already an admin here.' : 'Has an owner’s log-in here.',
+            });
+            continue;
+          }
+          let userId = p.memberId;
+          if (!userId) {
+            let signInId: string;
+            try {
+              signInId = await directory.ensure(p.email, p.name);
+            } catch (error) {
+              req.log.warn({ err: error }, 'Could not make a sign-in for a colleague from Guesty');
+              result.skipped.push({ name: p.name, reason: 'Their sign-in could not be made. Try again.' });
+              continue;
+            }
+            const made = await tx.execute<{ id: string }>(
+              sql`select app.ensure_colleague(${signInId}::uuid, ${p.email}, ${p.name}) as id`,
+            );
+            userId = made.rows[0]?.id ?? signInId;
+            await tx
+              .insert(memberships)
+              .values({ organisationId: ctx.orgId, userId, role: 'field', skills: p.skills })
+              .onConflictDoNothing();
+            await setHomes(tx, ctx.orgId, userId, p.propertyIds);
+            result.added += 1;
+          } else {
+            const [m] = await tx
+              .select({ skills: memberships.skills })
+              .from(memberships)
+              .where(and(eq(memberships.organisationId, ctx.orgId), eq(memberships.userId, userId)));
+            await tx
+              .update(memberships)
+              .set({ skills: [...new Set([...(m?.skills ?? []), ...p.skills])] })
+              .where(and(eq(memberships.organisationId, ctx.orgId), eq(memberships.userId, userId)));
+            const had = homesNow.get(userId);
+            // Every home stays every home; otherwise Guesty's homes join theirs.
+            if (had !== undefined)
+              await setHomes(
+                tx,
+                ctx.orgId,
+                userId,
+                p.propertyIds === null ? null : [...new Set([...had, ...p.propertyIds])],
+              );
+            result.updated += 1;
+          }
+          await tx.update(guestyStaff).set({ userId }).where(eq(guestyStaff.id, p.id));
+        }
+        return result;
+      }),
+  );
 
   typed.get('/v1/invitations', { schema: { response: { 200: InvitationListSchema } } }, async (req) =>
     deps.scope.inOrg(req, 'members.manage', async (tx) => ({ invitations: await openInvitations(tx) })),
@@ -159,6 +299,7 @@ export function memberRoutes(
             fullName: req.body.name,
             role: req.body.role,
             propertyIds,
+            skills: [...new Set(req.body.skills ?? [])],
             invitedBy: ctx.userId,
             expiresAt: sql`now() + interval '${sql.raw(String(INVITATION_DAYS))} days'`,
           })

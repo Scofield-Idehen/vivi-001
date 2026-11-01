@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { boolean, index, integer, jsonb, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { reservations } from './bookings.ts';
 import { channelAccounts } from './channels.ts';
@@ -148,5 +149,36 @@ export const integrationTokens = app.table(
   (t) => [
     unique('integration_tokens_key').on(t.provider, t.clientId),
     index('integration_tokens_expiry_idx').on(t.expiresAt),
+  ],
+);
+
+/**
+ * The people on the operator's Guesty account (1 Nov 2026): cleaners, maintenance and the office,
+ * staged so the team can choose who joins V-01. Guesty's tags give the skills ("cleaners",
+ * "Maintenance"); a user's role lists the homes they work on (none listed: every home).
+ * `user_id` is set once the person is on the team.
+ */
+export const guestyStaff = app.table(
+  'guesty_staff',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    guestyUserId: text('guesty_user_id').notNull(),
+    fullName: text('full_name').notNull(),
+    email: text('email'),
+    phone: text('phone'),
+    tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
+    skills: text('skills').array().notNull().default(sql`'{}'::text[]`),
+    /** The V-01 homes from the role's listings; null means every home. */
+    propertyIds: uuid('property_ids').array(),
+    userId: uuid('user_id'),
+    seenAt: timestamp('seen_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('guesty_staff_user_key').on(t.organisationId, t.guestyUserId),
+    index('guesty_staff_org_idx').on(t.organisationId),
   ],
 );

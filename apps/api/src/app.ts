@@ -20,7 +20,14 @@ import type { TokenVerifier } from './auth.ts';
 import { RequestScope } from './context.ts';
 import type { Env } from './env.ts';
 import { errorBody, HttpError } from './errors.ts';
-import { type InviteMailer, NO_INVITE_MAILER, SupabaseInviteMailer } from './invites.ts';
+import {
+  type InviteMailer,
+  NO_INVITE_MAILER,
+  NO_USER_DIRECTORY,
+  SupabaseInviteMailer,
+  SupabaseUserDirectory,
+  type UserDirectory,
+} from './invites.ts';
 import { NO_PHOTO_STORE, type PhotoStore, SupabasePhotoStore } from './photos.ts';
 import { calendarRoutes } from './routes/calendar.ts';
 import { cardRoutes } from './routes/cards.ts';
@@ -61,6 +68,8 @@ export interface AppDeps {
   now?: () => Date;
   /** Defaults to TTLock when V-01's TTLock application is configured. */
   locks?: LockProvider | null;
+  /** Makes colleagues' sign-ins without emailing them; defaults to Supabase Auth with the service key. */
+  directory?: UserDirectory;
   /** Card payments; defaults to Stripe when STRIPE_SECRET_KEY is set. */
   cards?: CardGateway | null;
 }
@@ -184,7 +193,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       : NO_INVITE_MAILER);
   // The app's address, for the link in the invitation: the first allowed browser origin.
   const appUrl = (deps.env.CORS_ORIGINS.split(',')[0] ?? 'http://localhost:5173').trim().replace(/\/$/, '');
-  memberRoutes(app, { scope, mailer, appUrl });
+  const directory =
+    deps.directory ??
+    (deps.env.SUPABASE_URL && deps.env.SUPABASE_SERVICE_ROLE_KEY
+      ? new SupabaseUserDirectory({
+          supabaseUrl: deps.env.SUPABASE_URL,
+          serviceKey: deps.env.SUPABASE_SERVICE_ROLE_KEY,
+        })
+      : NO_USER_DIRECTORY);
+  memberRoutes(app, { scope, mailer, appUrl, directory });
   portalRoutes(app, { scope, mailer, appUrl, files: taskPhotos, now: deps.now });
   guestRoutes(app, { db: deps.db, scope, box, now: deps.now });
   consoleRoutes(app, { scope });

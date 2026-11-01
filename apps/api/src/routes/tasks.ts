@@ -3,6 +3,7 @@ import {
   appUsers,
   customFields,
   expenses,
+  memberHomes,
   memberships,
   organisationSettings,
   properties,
@@ -20,6 +21,8 @@ import {
   DamageReportSchema,
   PhotoUploadRequestSchema,
   PhotoUploadTicketSchema,
+  type Skill,
+  skillFor,
   type Task,
   TaskCreateSchema,
   type TaskList,
@@ -344,7 +347,11 @@ export function taskRoutes(
           .from(properties)
           .where(and(eq(properties.id, req.body.propertyId), isNull(properties.archivedAt)));
         if (!property) throw new HttpError(404, 'property_not_found', 'That property does not exist here.');
-        if (req.body.assigneeId) await assertMember(tx, ctx.orgId, req.body.assigneeId);
+        if (req.body.assigneeId)
+          await assertCanTake(tx, ctx.orgId, req.body.assigneeId, {
+            kind: req.body.kind,
+            propertyId: req.body.propertyId,
+          });
         // Unassigned, it goes to the property's usual person for that kind of job.
         const usual =
           req.body.kind === 'cleaning'
@@ -404,7 +411,11 @@ export function taskRoutes(
           if (req.body.status === 'cancelled')
             throw new HttpError(403, 'not_allowed', 'Only the office cancels a task.');
         }
-        if (req.body.assigneeId) await assertMember(tx, ctx.orgId, req.body.assigneeId);
+        if (req.body.assigneeId && req.body.assigneeId !== current.assigneeUserId)
+          await assertCanTake(tx, ctx.orgId, req.body.assigneeId, {
+            kind: current.kind,
+            propertyId: current.propertyId,
+          });
         const b = req.body;
         const finishing = b.status === 'done' && current.status !== 'done';
         const reopening = b.status !== undefined && b.status !== 'done' && current.status === 'done';
@@ -619,7 +630,13 @@ export function taskRoutes(
   typed.get('/v1/team', { schema: { response: { 200: TeamListSchema } } }, async (req) =>
     deps.scope.inOrg(req, 'workspace.read', async (tx, ctx): Promise<TeamList> => {
       const rows = await tx
-        .select({ id: appUsers.id, name: personName, email: appUsers.email, role: memberships.role })
+        .select({
+          id: appUsers.id,
+          name: personName,
+          email: appUsers.email,
+          role: memberships.role,
+          skills: memberships.skills,
+        })
         .from(memberships)
         .innerJoin(appUsers, eq(appUsers.id, memberships.userId))
         // Owners' log-ins are not part of the team.
@@ -627,11 +644,14 @@ export function taskRoutes(
         .orderBy(sql`lower(${personName}) collate "C"`);
       // Email addresses are for the office; the crew and support see names.
       const hide = !can(ctx.role, 'members.manage') && ctx.role !== 'operations';
-      const homes = can(ctx.role, 'members.manage') ? await homesByMember(tx, ctx.orgId) : new Map();
+      // Who works on which homes: the office needs it to give out jobs.
+      const office = can(ctx.role, 'members.manage') || can(ctx.role, 'tasks.manage');
+      const homes = office ? await homesByMember(tx, ctx.orgId) : new Map();
       return {
         members: rows.map((r) => ({
           ...r,
           email: hide ? '' : r.email,
+          skills: r.skills as Skill[],
           propertyIds: homes.get(r.id) ?? null,
         })),
       };
@@ -653,12 +673,49 @@ async function ownTask(
   return task;
 }
 
-async function assertMember(tx: Tx, orgId: string, userId: string): Promise<void> {
+/**
+ * Whether this person can be given this job (1 Nov 2026): on the team, with the skill the kind of
+ * job needs (a clean: cleaning; a repair: maintenance), and working on that home.
+ */
+export async function assertCanTake(
+  tx: Tx,
+  orgId: string,
+  userId: string,
+  job: { kind: string; propertyId: string },
+): Promise<void> {
   const [member] = await tx
-    .select({ id: memberships.userId })
+    .select({ role: memberships.role, skills: memberships.skills, limited: memberships.homesLimited })
     .from(memberships)
     .where(and(eq(memberships.organisationId, orgId), eq(memberships.userId, userId)));
-  if (!member) throw new HttpError(400, 'not_a_member', 'That person is not a member of this workspace.');
+  if (!member || member.role === 'owner')
+    throw new HttpError(400, 'not_a_member', 'That person is not a member of this workspace.');
+  const skill = skillFor(job.kind);
+  if (skill && !member.skills.includes(skill))
+    throw new HttpError(
+      400,
+      'wrong_skill',
+      skill === 'cleaning'
+        ? 'Only cleaners can be given a clean. Add Cleaning to them on the Team page first.'
+        : 'Only maintenance staff can be given a repair. Add Maintenance to them on the Team page first.',
+    );
+  if (member.limited) {
+    const [home] = await tx
+      .select({ id: memberHomes.propertyId })
+      .from(memberHomes)
+      .where(
+        and(
+          eq(memberHomes.organisationId, orgId),
+          eq(memberHomes.userId, userId),
+          eq(memberHomes.propertyId, job.propertyId),
+        ),
+      );
+    if (!home)
+      throw new HttpError(
+        400,
+        'not_their_home',
+        'That person doesn’t work on this home. Give them the home on the Team page first.',
+      );
+  }
 }
 
 /**

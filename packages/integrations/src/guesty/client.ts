@@ -248,6 +248,14 @@ export class GuestyClient {
     }
   }
 
+  /**
+   * The people on the Guesty account (1 Nov 2026): the office, cleaners and maintenance. Their
+   * tags say what they do; each role lists the listings they work on.
+   */
+  users(): AsyncGenerator<GuestyUser, void, void> {
+    return this.pages<GuestyUser>('/v1/users', { fields: USER_FIELDS });
+  }
+
   /** Bookings leaving on or after `checkOutFrom` (YYYY-MM-DD), every status. */
   reservations(checkOutFrom: string): AsyncGenerator<GuestyReservation, void, void> {
     return this.pages<GuestyReservation>('/v1/reservations', {
@@ -379,6 +387,31 @@ const RESERVATION_FIELDS = [
   'createdAt',
   'canceledAt',
 ].join(' ');
+
+const USER_FIELDS = [
+  '_id',
+  'firstName',
+  'lastName',
+  'fullName',
+  'email',
+  'phone',
+  'tags',
+  'roles',
+  'status',
+].join(' ');
+
+export interface GuestyUser {
+  _id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  fullName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  tags?: string[] | null;
+  /** Each role, with the listings it covers; an empty list means every listing. */
+  roles?: { roleId?: string; listingIds?: string[] | null }[] | null;
+  status?: string | null;
+}
 
 const OWNER_FIELDS = [
   '_id',

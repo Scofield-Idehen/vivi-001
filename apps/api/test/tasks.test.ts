@@ -69,11 +69,10 @@ async function member(role: string, email: string, name: string): Promise<Who> {
     `insert into app.app_users (id, email, full_name) values (gen_random_uuid(), $1, $2) returning id`,
     [email, name],
   );
-  await owner(`insert into app.memberships (organisation_id, user_id, role) values ($1, $2, $3)`, [
-    a.orgId,
-    user!.id,
-    role,
-  ]);
+  await owner(
+    `insert into app.memberships (organisation_id, user_id, role, skills) values ($1, $2, $3::app.member_role, case when $3::text = 'field' then array['cleaning', 'maintenance'] else '{}'::text[] end)`,
+    [a.orgId, user!.id, role],
+  );
   return { orgId: a.orgId, userId: user!.id, email };
 }
 

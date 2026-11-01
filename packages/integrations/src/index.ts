@@ -35,6 +35,7 @@ export {
   type GuestyReservation,
   type GuestyToken,
   type GuestyTokenStore,
+  type GuestyUser,
   MemoryTokenStore,
 } from './guesty/client.ts';
 export { SecretBox } from './secrets.ts';

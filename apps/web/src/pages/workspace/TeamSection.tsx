@@ -1,4 +1,13 @@
-import { can, ROLE_LABELS, STAFF_ROLES, type StaffRole, type WorkspaceRole } from '@v01/shared';
+import {
+  can,
+  ROLE_LABELS,
+  SKILL_LABELS,
+  SKILLS,
+  type Skill,
+  STAFF_ROLES,
+  type StaffRole,
+  type WorkspaceRole,
+} from '@v01/shared';
 import { useState } from 'react';
 import { useConfirm } from '../../components/Confirm.tsx';
 import { SelectField, TextField } from '../../components/fields.tsx';
@@ -11,11 +20,13 @@ import {
   useInvitations,
   useInvite,
   useMemberHomes,
+  useMemberSkills,
   useProperties,
   useRemoveMember,
   useTeam,
 } from '../../lib/api.ts';
 import { shortDate } from '../../lib/format.ts';
+import { GuestyPeople } from './GuestyPeople.tsx';
 
 /**
  * Who is in the workspace, and inviting a colleague by email and role. The invitation email comes
@@ -33,6 +44,39 @@ const ROLE_HELP: Record<StaffRole, string> = {
   field: 'Their own jobs on a phone; no guest names.',
 };
 
+/** Two small switches: which jobs a person does. */
+function SkillSwitches({
+  skills,
+  onChange,
+  disabled = false,
+  label,
+}: {
+  skills: Skill[];
+  onChange(next: Skill[]): void;
+  disabled?: boolean;
+  label: string;
+}) {
+  return (
+    <fieldset aria-label={label} className="m-0 inline-flex min-w-0 gap-1 border-0 p-0">
+      {SKILLS.map((s) => {
+        const on = skills.includes(s);
+        return (
+          <button
+            key={s}
+            type="button"
+            aria-pressed={on}
+            disabled={disabled}
+            onClick={() => onChange(on ? skills.filter((x) => x !== s) : [...skills, s])}
+            className={`h-6 rounded-full border px-2.5 text-[12px] ${on ? 'border-accent bg-accent text-white' : 'border-hairline bg-white text-slate hover:border-edge'}`}
+          >
+            {SKILL_LABELS[s]}
+          </button>
+        );
+      })}
+    </fieldset>
+  );
+}
+
 const ROLE_OPTIONS = STAFF_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }));
 
 export function TeamSection({ orgId, role, selfId }: { orgId: string; role: WorkspaceRole; selfId: string }) {
@@ -45,6 +89,8 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
   const remove = useRemoveMember(orgId);
   const confirm = useConfirm();
   const homesOf = useMemberHomes(orgId);
+  const skillsOf = useMemberSkills(orgId);
+  const [newSkills, setNewSkills] = useState<Skill[]>([]);
   const properties = useProperties(manage ? orgId : null);
   const homes = (properties.data?.properties ?? [])
     .map((p) => ({ id: p.id, name: p.name }))
@@ -70,12 +116,14 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
         name: name.trim(),
         role: newRole,
         propertyIds: newRole === 'admin' ? null : newHomes,
+        skills: newSkills,
       },
       {
         onSuccess: (r) => {
           setEmail('');
           setName('');
           setNewHomes(null);
+          setNewSkills([]);
           setDone(
             r.email === 'invited'
               ? `${r.invitation.email} has an email with a sign-in link.`
@@ -165,6 +213,21 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
                   ) : null}
                 </p>
               ) : null}
+              {manage && m.role !== 'owner' ? (
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[12.5px] text-slate">
+                  <span>Jobs</span>
+                  <SkillSwitches
+                    label={`Jobs ${m.name} does`}
+                    skills={m.skills}
+                    disabled={skillsOf.isPending}
+                    onChange={(skills) => skillsOf.mutate({ userId: m.id, skills })}
+                  />
+                </div>
+              ) : m.skills.length ? (
+                <p className="mt-0.5 text-[12.5px] text-slate">
+                  {m.skills.map((s) => SKILL_LABELS[s]).join(', ')}
+                </p>
+              ) : null}
             </div>
             <div className="flex items-center gap-2">
               {manage && m.id !== selfId ? (
@@ -239,9 +302,9 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
           }}
         />
       ) : null}
-      {change.error || remove.error ? (
+      {change.error || remove.error || skillsOf.error ? (
         <div className="mt-3">
-          <Notice tone="urgent">{explain(change.error ?? remove.error)}</Notice>
+          <Notice tone="urgent">{explain(change.error ?? remove.error ?? skillsOf.error)}</Notice>
         </div>
       ) : null}
 
@@ -263,6 +326,9 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
                       </p>
                       <p className="text-[12.5px] text-slate">
                         {ROLE_LABELS[i.role]}
+                        {i.skills.length
+                          ? `, ${i.skills.map((s) => SKILL_LABELS[s].toLowerCase()).join(' and ')}`
+                          : ''}
                         {i.propertyIds
                           ? `, ${homesText(i.propertyIds, homes).replace(/^Only /, 'only ')}`
                           : ''}{' '}
@@ -284,6 +350,8 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
               </ul>
             </>
           ) : null}
+
+          <GuestyPeople orgId={orgId} homes={homes} />
 
           <div className="mt-6 flex max-w-[560px] flex-col gap-4 rounded-2xl border border-hairline bg-canvas p-4">
             <h3 className="font-semibold tracking-[-0.015em] text-[18px] text-ink">Invite a colleague</h3>
@@ -320,6 +388,15 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
                 </button>
               </div>
             )}
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-hairline bg-white px-3.5 py-2.5 text-[14px]">
+              <span className="block text-[12.5px] text-slate">
+                Jobs they do
+                <span className="block text-[12px] text-mist">
+                  A clean goes only to cleaning; a repair to maintenance.
+                </span>
+              </span>
+              <SkillSwitches label="Jobs they do" skills={newSkills} onChange={setNewSkills} />
+            </div>
             {invite.error ? <Notice tone="urgent">{explain(invite.error)}</Notice> : null}
             {done ? <Notice tone="done">{done}</Notice> : null}
             <div>

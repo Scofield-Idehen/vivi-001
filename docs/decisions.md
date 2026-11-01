@@ -821,3 +821,16 @@ V-01 Build Playbook and Design Roadmap.
 - **Settings:** STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are their own GitHub secrets, added to the
   API's settings at deploy. One Stripe account for now (Vivistays); each operator's own account
   (Stripe Connect) is the step before a second operator takes payments.
+
+## 2026-11-01: Cleaners and maintenance from Guesty; skills decide who takes which job
+
+- **Skills on the team:** each person does Cleaning, Maintenance, both or neither. A clean can be
+  given only to someone with Cleaning who works on that home; a repair only to Maintenance. An
+  inspection to anyone. The same rule applies to a home's usual cleaner and usual repairer. The
+  field team already in V-01 kept both skills.
+- **From Guesty:** the people on the Guesty account are staged (`guesty:import --staff-only`). Tags
+  give the skills (any tag with "clean" or "maint", whatever the spelling); each user's role lists
+  their homes (none listed: every home). On the Team page an admin ticks who to add.
+- **Added without an email (Alpha):** adding makes their sign-in through Supabase's admin API and
+  sends nothing. They join the field team, can be given jobs at once, and sign in later with their
+  email as the same person. Nudges go through Slack (next), where the cleaners already are.

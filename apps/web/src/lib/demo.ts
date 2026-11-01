@@ -57,6 +57,7 @@ import {
   formatMoney,
   type GuestLink,
   type GuestStay,
+  type GuestyPerson,
   type HomeTerms,
   type Insights,
   type Invitation,
@@ -70,6 +71,7 @@ import {
   type Me,
   type MemberRole,
   MemberRoleUpdateSchema,
+  MemberSkillsSchema,
   type Message,
   MessageSendSchema,
   type MessageTemplate,
@@ -116,6 +118,7 @@ import {
   type Revenue,
   RoomsUpdateSchema,
   renderTemplate,
+  type Skill,
   type StatementList,
   SUPPORT_ROLE,
   SupportAccessStartSchema,
@@ -131,6 +134,7 @@ import {
   TaskTemplateUpdateSchema,
   TaskUpdateSchema,
   type TeamList,
+  type TeamMember,
   type Thread,
   type ThreadDetail,
   type ThreadList,
@@ -181,6 +185,8 @@ interface DemoTeamMember {
   status: 'active' | 'invited';
   /** Access by home: the homes they may see; missing or null for every home. */
   propertyIds?: string[] | null;
+  /** The jobs they do; missing in older saved states (the field team then does both). */
+  skills?: Skill[];
   sinceDaysAgo: number;
   lastSeenMinutesAgo: number | null;
 }
@@ -238,6 +244,8 @@ interface DemoOperator {
   properties: PropertyDetail[];
   createdAt: string;
   team: DemoTeamMember[];
+  /** The people on the operator's Guesty account (demo stand-in), made on first look. */
+  guestyPeople?: (GuestyPerson & { email: string | null })[];
   channelAccounts: DemoAccount[];
   /** Listing links, as the API keeps them; archived ones stay for the history. */
   links: DemoLink[];
@@ -1331,6 +1339,57 @@ function memberId(email: string): string {
   const c = hex(3);
   const d = hex(4);
   return `${a}-${b.slice(0, 4)}-4${b.slice(5, 8)}-a${c.slice(1, 4)}-${c.slice(4)}${d.slice(0, 8)}`;
+}
+
+const skillsOfMember = (m: DemoTeamMember): Skill[] =>
+  m.skills ?? (m.role === 'field' ? ['cleaning', 'maintenance'] : []);
+
+/** One colleague as the API answers. */
+function memberView(m: DemoTeamMember, email = m.email, homesShown = true): TeamMember {
+  return {
+    id: memberId(m.email),
+    name: m.fullName ?? m.email,
+    email,
+    role: m.role,
+    propertyIds: homesShown ? (m.propertyIds ?? null) : null,
+    skills: skillsOfMember(m),
+  };
+}
+
+/** The demo's Guesty account: a few cleaners, one for repairs and one from the office. */
+function demoGuestyPeople(operator: DemoOperator) {
+  if (!operator.guestyPeople) {
+    const homes = operator.properties.map((p) => p.id);
+    const person = (
+      name: string,
+      email: string | null,
+      tags: string[],
+      skills: Skill[],
+      propertyIds: string[] | null,
+    ) => ({
+      id: crypto.randomUUID(),
+      name,
+      email,
+      tags,
+      skills,
+      propertyIds,
+      memberId: null,
+      memberRole: null,
+    });
+    operator.guestyPeople = [
+      person('Priya Nair', 'priya.cleans@example.com', ['cleaners'], ['cleaning'], homes.slice(0, 3)),
+      person('Tomasz Kowal', 'tomasz.k@example.com', ['cleaners'], ['cleaning'], homes.slice(2, 5)),
+      person('Grace Owusu', 'grace.o@example.com', ['cleaners'], ['cleaning'], null),
+      person('Dee Martin', null, ['cleaners'], ['cleaning'], homes.slice(0, 2)),
+      person('Sam Okafor', 'sam.fixes@example.com', ['Maintainance '], ['maintenance'], null),
+      person('Jo Reeves', 'jo.office@example.com', [], [], null),
+    ];
+  }
+  const team = operator.team.filter((m) => m.status === 'active');
+  return operator.guestyPeople.map((p) => {
+    const m = p.email ? team.find((t) => t.email.toLowerCase() === p.email?.toLowerCase()) : undefined;
+    return { ...p, memberId: m ? memberId(m.email) : null, memberRole: m?.role ?? null };
+  });
 }
 
 function memberName(operator: DemoOperator, userId: string | null): { id: string; name: string } | null {
@@ -5012,6 +5071,7 @@ export async function demoFetch<T>(
       name: parsed.data.name,
       role: parsed.data.role,
       propertyIds: parsed.data.propertyIds ?? null,
+      skills: [...new Set(parsed.data.skills ?? [])],
       invitedBy: operator.team.find((m) => m.email === DEMO_USER.email)?.fullName ?? 'Demo user',
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + 14 * 86_400_000).toISOString(),
@@ -5061,13 +5121,59 @@ export async function demoFetch<T>(
     }
     if (parsed.data.name !== undefined) member.fullName = parsed.data.name;
     save();
-    return {
-      id: memberId(member.email),
-      name: member.fullName ?? member.email,
-      email: member.email,
-      role: member.role,
-      propertyIds: member.propertyIds ?? null,
-    } as T;
+    return memberView(member) as T;
+  }
+
+  const skillsMatch = /^\/v1\/members\/([0-9a-f-]{36})\/skills$/.exec(path);
+  if (skillsMatch?.[1] && method === 'PUT') {
+    const { operator } = access(options.orgId, 'members.manage');
+    const member = operator.team.find((m) => memberId(m.email) === skillsMatch[1] && m.status === 'active');
+    if (!member) throw new ApiError(404, 'member_not_found', 'That person is not in this workspace.');
+    const parsed = MemberSkillsSchema.safeParse(options.body);
+    if (!parsed.success) invalid(parsed.error.issues);
+    member.skills = [...new Set(parsed.data.skills)];
+    save();
+    return memberView(member) as T;
+  }
+
+  if (path === '/v1/team/guesty') {
+    const { operator } = access(options.orgId, 'members.manage');
+    if (method === 'GET') {
+      const people = demoGuestyPeople(operator);
+      save();
+      return { people } as T;
+    }
+    if (method === 'POST') {
+      const ids = new Set((options.body as { ids: string[] }).ids);
+      const result = { added: 0, updated: 0, skipped: [] as { name: string; reason: string }[] };
+      for (const p of demoGuestyPeople(operator).filter((x) => ids.has(x.id))) {
+        if (!p.email) {
+          result.skipped.push({ name: p.name, reason: 'No email in Guesty.' });
+          continue;
+        }
+        const here = operator.team.find(
+          (m) => m.status === 'active' && m.email.toLowerCase() === p.email?.toLowerCase(),
+        );
+        if (here) {
+          here.skills = [...new Set([...skillsOfMember(here), ...p.skills])];
+          result.updated += 1;
+          continue;
+        }
+        operator.team.push({
+          email: p.email,
+          fullName: p.name,
+          role: 'field',
+          status: 'active',
+          propertyIds: p.propertyIds,
+          skills: p.skills,
+          sinceDaysAgo: 0,
+          lastSeenMinutesAgo: null,
+        });
+        result.added += 1;
+      }
+      save();
+      return result as T;
+    }
   }
 
   const homesMatch = /^\/v1\/members\/([0-9a-f-]{36})\/homes$/.exec(path);
@@ -5080,13 +5186,7 @@ export async function demoFetch<T>(
       throw new ApiError(400, 'admin_every_home', 'An admin always sees every home.');
     member.propertyIds = ids;
     save();
-    return {
-      id: memberId(member.email),
-      name: member.fullName ?? member.email,
-      email: member.email,
-      role: member.role,
-      propertyIds: member.propertyIds ?? null,
-    } as T;
+    return memberView(member) as T;
   }
 
   if (method === 'POST' && path === '/v1/owner-logins') {
@@ -5185,13 +5285,9 @@ export async function demoFetch<T>(
     return {
       members: operator.team
         .filter((m) => m.status === 'active')
-        .map((m) => ({
-          id: memberId(m.email),
-          name: m.fullName ?? m.email,
-          email: hide ? '' : m.email,
-          role: m.role,
-          propertyIds: can(role, 'members.manage') ? (m.propertyIds ?? null) : null,
-        }))
+        .map((m) =>
+          memberView(m, hide ? '' : m.email, can(role, 'members.manage') || can(role, 'tasks.manage')),
+        )
         .sort((a, b) => a.name.localeCompare(b.name)),
     } satisfies TeamList as T;
   }

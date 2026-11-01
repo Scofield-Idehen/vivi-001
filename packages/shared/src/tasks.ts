@@ -164,6 +164,8 @@ export const TeamMemberSchema = z.object({
   role: z.enum(MEMBER_ROLES),
   /** Access by home: the homes they are limited to, or null for every home. */
   propertyIds: z.array(Uuid).nullable(),
+  /** The jobs they do: a clean needs cleaning, a repair maintenance. */
+  skills: z.array(z.enum(['cleaning', 'maintenance'])),
 });
 export type TeamMember = z.infer<typeof TeamMemberSchema>;
 export const TeamListSchema = z.object({ members: z.array(TeamMemberSchema) });

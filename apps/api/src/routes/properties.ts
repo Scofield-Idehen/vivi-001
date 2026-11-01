@@ -44,6 +44,7 @@ import { newPhotoPath, type PhotoStore, photoPathBelongsTo } from '../photos.ts'
 import { linksOf } from './channels.ts';
 import { channexStateOf, channexStatusesOf } from './channex.ts';
 import { fieldsOf } from './fields.ts';
+import { assertCanTake } from './tasks.ts';
 
 type PropertyRow = typeof properties.$inferSelect;
 type RoomRow = typeof propertyRooms.$inferSelect;
@@ -425,15 +426,17 @@ export function propertyRoutes(
         await findProperty(tx, req.params.id);
         const changes = cleaned(req.body);
         if (changes.name === null) throw new HttpError(400, 'invalid_request', 'A property needs a name.');
-        for (const who of [changes.cleanerUserId, changes.maintainerUserId]) {
-          if (!who) continue;
-          const [member] = await tx
-            .select({ id: memberships.userId })
-            .from(memberships)
-            .where(and(eq(memberships.organisationId, ctx.orgId), eq(memberships.userId, who)));
-          if (!member)
-            throw new HttpError(400, 'not_a_member', 'That person has to be a member of this workspace.');
-        }
+        // The usual cleaner must clean, and work on this home; the same for the usual repairer.
+        if (changes.cleanerUserId)
+          await assertCanTake(tx, ctx.orgId, changes.cleanerUserId, {
+            kind: 'cleaning',
+            propertyId: req.params.id,
+          });
+        if (changes.maintainerUserId)
+          await assertCanTake(tx, ctx.orgId, changes.maintainerUserId, {
+            kind: 'maintenance',
+            propertyId: req.params.id,
+          });
         if (changes.ownerId) {
           const [owner] = await tx
             .select({ id: owners.id })

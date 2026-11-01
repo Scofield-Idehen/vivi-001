@@ -13,6 +13,16 @@ const Timestamp = z.string();
 
 export const NAME_MAX = 120;
 
+/** What jobs a person does (1 Nov 2026). A clean goes only to cleaning; a repair only to maintenance. */
+export const SKILLS = ['cleaning', 'maintenance'] as const;
+export type Skill = (typeof SKILLS)[number];
+export const SKILL_LABELS: Record<Skill, string> = { cleaning: 'Cleaning', maintenance: 'Maintenance' };
+
+/** The skill a kind of task needs, if any (an inspection: anyone). */
+export function skillFor(kind: string): Skill | null {
+  return kind === 'cleaning' ? 'cleaning' : kind === 'maintenance' ? 'maintenance' : null;
+}
+
 export const InvitationSchema = z.object({
   id: Uuid,
   email: z.string(),
@@ -22,6 +32,7 @@ export const InvitationSchema = z.object({
   invitedBy: z.string().nullable(),
   /** The homes they will be limited to; null for every home. */
   propertyIds: z.array(Uuid).nullable(),
+  skills: z.array(z.enum(SKILLS)),
   createdAt: Timestamp,
   expiresAt: Timestamp.nullable(),
 });
@@ -37,6 +48,7 @@ export const InviteSchema = z.object({
   role: z.enum(STAFF_ROLES),
   /** Only these homes; leave out for every home. Never for an admin. */
   propertyIds: z.array(Uuid).max(1000).nullable().optional(),
+  skills: z.array(z.enum(SKILLS)).max(2).optional(),
 });
 export type Invite = z.infer<typeof InviteSchema>;
 
@@ -74,3 +86,53 @@ export const INVITATION_DAYS = 14;
  */
 export const MemberHomesSchema = z.object({ propertyIds: z.array(Uuid).max(1000).nullable() });
 export type MemberHomes = z.infer<typeof MemberHomesSchema>;
+
+/** The jobs a colleague does. */
+export const MemberSkillsSchema = z.object({ skills: z.array(z.enum(SKILLS)).max(2) });
+export type MemberSkills = z.infer<typeof MemberSkillsSchema>;
+
+/**
+ * The people on the operator's Guesty account, to bring onto the team (1 Nov 2026). Adding one
+ * makes their sign-in without emailing them: they can be given jobs at once, and sign in later.
+ */
+export const GuestyPersonSchema = z.object({
+  id: Uuid,
+  name: z.string(),
+  email: z.string().nullable(),
+  /** Guesty's own tags, as written there. */
+  tags: z.array(z.string()),
+  skills: z.array(z.enum(SKILLS)),
+  /** Their homes here; null for every home. */
+  propertyIds: z.array(Uuid).nullable(),
+  /** Already on the team here (by Guesty's link or the same email). */
+  memberId: Uuid.nullable(),
+  memberRole: z.enum(MEMBER_ROLES).nullable(),
+});
+export type GuestyPerson = z.infer<typeof GuestyPersonSchema>;
+
+export const GuestyPeopleSchema = z.object({ people: z.array(GuestyPersonSchema) });
+export type GuestyPeople = z.infer<typeof GuestyPeopleSchema>;
+
+export const GuestyPeopleAddSchema = z.object({ ids: z.array(Uuid).min(1).max(200) });
+export type GuestyPeopleAdd = z.infer<typeof GuestyPeopleAddSchema>;
+
+export const GuestyPeopleAddedSchema = z.object({
+  added: z.number().int(),
+  /** Already on the team: their skills and homes from Guesty were added to what they had. */
+  updated: z.number().int(),
+  /** Left out, with the reason (no email, say). */
+  skipped: z.array(z.object({ name: z.string(), reason: z.string() })),
+});
+export type GuestyPeopleAdded = z.infer<typeof GuestyPeopleAddedSchema>;
+
+/** Whether a colleague can be given a job: the skill it needs, and that home (the API checks the same). */
+export function canTake(
+  m: { role: string; skills: readonly string[]; propertyIds: readonly string[] | null },
+  kind: string,
+  propertyId: string | null,
+): boolean {
+  if (m.role === 'owner') return false;
+  const skill = skillFor(kind);
+  if (skill && !m.skills.includes(skill)) return false;
+  return !propertyId || m.propertyIds === null || m.propertyIds.includes(propertyId);
+}

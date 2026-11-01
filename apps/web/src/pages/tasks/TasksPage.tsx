@@ -11,8 +11,10 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import {
   can,
+  canTake,
   PHOTO_STAGE_LABELS,
   type PhotoStage,
+  skillFor,
   TASK_KIND_LABELS,
   TASK_KINDS,
   type Task,
@@ -401,8 +403,12 @@ function TaskSheet({
                 onChange={(v) => patch({ assigneeId: v || null })}
                 options={[
                   { value: '', label: 'Nobody yet' },
-                  ...team.map((m) => ({ value: m.id, label: m.name })),
+                  // Only people who do this kind of job on this home (and whoever has it now).
+                  ...team
+                    .filter((m) => m.id === t.assignee?.id || canTake(m, t.kind, t.propertyId))
+                    .map((m) => ({ value: m.id, label: m.name })),
                 ]}
+                hint={whoCanText(t.kind)}
               />
             </section>
           ) : null}
@@ -624,6 +630,13 @@ function ReportDamage({ t, orgId }: { t: Task; orgId: string }) {
 }
 
 /** Making a task by hand; from the New menu it can start on a home and a day. */
+/** Who the assignee list shows, in words. */
+function whoCanText(kind: TaskKind): string | undefined {
+  const skill = skillFor(kind);
+  if (!skill) return undefined;
+  return `Only ${skill === 'cleaning' ? 'cleaners' : 'maintenance staff'} who work on this home are listed. Set jobs and homes on the Team page.`;
+}
+
 export function NewTaskSheet({
   orgId,
   team,
@@ -676,7 +689,10 @@ export function NewTaskSheet({
                   ...(notes.trim() ? { notes: notes.trim() } : {}),
                   dueOn,
                   ...(dueTime ? { dueTime } : {}),
-                  assigneeId: assigneeId || null,
+                  assigneeId:
+                    assigneeId && team.some((m) => m.id === assigneeId && canTake(m, kind, chosen))
+                      ? assigneeId
+                      : null,
                 },
                 { onSuccess: onClose },
               )
@@ -741,8 +757,9 @@ export function NewTaskSheet({
           onChange={setAssigneeId}
           options={[
             { value: '', label: 'Nobody yet; anyone on the crew can take it' },
-            ...team.map((m) => ({ value: m.id, label: m.name })),
+            ...team.filter((m) => canTake(m, kind, chosen)).map((m) => ({ value: m.id, label: m.name })),
           ]}
+          hint={whoCanText(kind)}
         />
         <TextArea
           label="Notes"

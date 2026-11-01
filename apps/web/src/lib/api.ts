@@ -41,6 +41,9 @@ import type {
   ExpenseUpdate,
   GuestLink,
   GuestStay,
+  GuestyPeople,
+  GuestyPeopleAdd,
+  GuestyPeopleAdded,
   HomeTerms,
   HomeTermsInput,
   Insights,
@@ -54,6 +57,7 @@ import type {
   Me,
   MemberHomes,
   MemberRoleUpdate,
+  MemberSkills,
   MessageSend,
   MessageTemplate,
   MessageTemplateCreate,
@@ -1819,6 +1823,46 @@ export function useMemberHomes(orgId: string | null) {
         body,
       }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['team', orgId] }),
+  });
+}
+
+export function useMemberSkills(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, ...body }: { userId: string } & MemberSkills) =>
+      apiFetch<TeamMember>(`/v1/members/${userId}/skills`, {
+        token: token as string,
+        orgId,
+        method: 'PUT',
+        body,
+      }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['team', orgId] }),
+  });
+}
+
+/** The people on the Guesty account, to bring onto the team. */
+export function useGuestyPeople(orgId: string | null, enabled = true) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['guesty-people', orgId],
+    enabled: Boolean(token && orgId && enabled),
+    queryFn: () => apiFetch<GuestyPeople>('/v1/team/guesty', { token: token as string, orgId }),
+  });
+}
+
+export function useAddGuestyPeople(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: GuestyPeopleAdd) =>
+      apiFetch<GuestyPeopleAdded>('/v1/team/guesty', { token: token as string, orgId, method: 'POST', body }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['team', orgId] }),
+        queryClient.invalidateQueries({ queryKey: ['guesty-people', orgId] }),
+      ]);
+    },
   });
 }
 

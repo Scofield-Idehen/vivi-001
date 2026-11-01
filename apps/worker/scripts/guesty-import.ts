@@ -2,6 +2,7 @@ import { GuestyClient, SecretBox } from '@v01/integrations';
 import { type ImportSummary, importFromGuesty } from '../src/guesty/import.ts';
 import { importGuestyOwners } from '../src/guesty/owners.ts';
 import { refreshGuestyPrices } from '../src/guesty/prices.ts';
+import { importGuestyStaff } from '../src/guesty/staff.ts';
 import { liveDeps } from '../src/live-deps.ts';
 
 /**
@@ -85,6 +86,21 @@ try {
     console.log(
       `Bookings read from Guesty: ${p.read}; matched here: ${p.matched}; prices set or changed: ${p.updated}; still with no price in Guesty: ${p.stillWithoutPrice}.`,
     );
+    process.exit(0);
+  }
+  if (args.includes('--staff-only')) {
+    console.log(`${dryRun ? 'Rehearsing' : 'Reading'} the people on Guesty for ${org.name}…`);
+    const st = await importGuestyStaff(deps, { orgId: org.id, guesty, dryRun });
+    console.log('');
+    console.log(
+      dryRun
+        ? `Dry run for ${org.name}: nothing was kept.`
+        : `People from Guesty ready on the Team page of ${org.name}.`,
+    );
+    console.log(
+      `People: ${st.seen} in Guesty; ${st.cleaners} cleaners, ${st.maintenance} maintenance. Nobody was emailed or added to the team.`,
+    );
+    for (const w of st.warnings) console.log(`  - ${w}`);
     process.exit(0);
   }
   if (args.includes('--owners-only')) {

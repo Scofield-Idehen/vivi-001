@@ -84,9 +84,15 @@ export const memberships = app.table(
     homesLimited: boolean('homes_limited').notNull().default(false),
     /** For the owner log-in: the owner this person is. They see only that owner's homes. FK in SQL. */
     ownerId: uuid('owner_id'),
+    /**
+     * What jobs the person does (1 Nov 2026): 'cleaning', 'maintenance'. A clean can be given only
+     * to someone with cleaning; a repair only to someone with maintenance.
+     */
+    skills: text('skills').array().notNull().default(sql`'{}'::text[]`),
     createdAt: createdAt(),
   },
   (t) => [
+    check('memberships_skills', sql`${t.skills} <@ array['cleaning', 'maintenance']::text[]`),
     unique('memberships_org_user_key').on(t.organisationId, t.userId),
     index('memberships_user_idx').on(t.userId),
   ],
@@ -113,8 +119,11 @@ export const invitations = app.table(
     propertyIds: uuid('property_ids').array(),
     /** For an owner's log-in: which owner. FK in SQL. */
     ownerId: uuid('owner_id'),
+    /** The jobs the person will do; carried onto the membership. */
+    skills: text('skills').array().notNull().default(sql`'{}'::text[]`),
   },
   (t) => [
+    check('invitations_skills', sql`${t.skills} <@ array['cleaning', 'maintenance']::text[]`),
     index('invitations_org_idx').on(t.organisationId),
     index('invitations_email_idx').on(sql`lower(${t.email})`),
   ],

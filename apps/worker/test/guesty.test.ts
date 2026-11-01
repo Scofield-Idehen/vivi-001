@@ -876,3 +876,27 @@ describe('reading Guesty before saving', () => {
     expect(paths.length).toBe(before);
   });
 });
+
+describe('people from Guesty', () => {
+  it('reads skills from tags, whatever the spelling', async () => {
+    const { skillsOf } = await import('../src/guesty/staff.ts');
+    expect(skillsOf(['cleaners'])).toEqual(['cleaning']);
+    expect(skillsOf(['Maintainance '])).toEqual(['maintenance']);
+    expect(skillsOf(['Cleaner', 'maintenance'])).toEqual(['cleaning', 'maintenance']);
+    expect(skillsOf(['office'])).toEqual([]);
+  });
+
+  it('maps a user’s listings to homes; no listings means every home', async () => {
+    const { homesOf } = await import('../src/guesty/staff.ts');
+    const map = new Map([
+      ['L1', 'p1'],
+      ['L2', 'p2'],
+    ]);
+    expect(homesOf({ _id: 'u', roles: [{ listingIds: ['L1', 'L9'] }] }, map)).toEqual({
+      homes: ['p1'],
+      unknown: 1,
+    });
+    expect(homesOf({ _id: 'u', roles: [{ listingIds: [] }] }, map)).toEqual({ homes: null, unknown: 0 });
+    expect(homesOf({ _id: 'u' }, map)).toEqual({ homes: null, unknown: 0 });
+  });
+});
