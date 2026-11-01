@@ -10,6 +10,10 @@ on:
         description: The operator's slug in V-01
         default: vivistays
         required: true
+      probe_guesty:
+        description: Also read the shape of a few Guesty bookings' money (field names only)
+        type: boolean
+        default: false
 
 jobs:
   diagnose:
@@ -31,6 +35,10 @@ jobs:
       - name: Count
         working-directory: apps/worker
         run: pnpm diagnose --org "${{ inputs.org }}"
+      - name: Guesty booking money, shape only
+        if: inputs.probe_guesty
+        working-directory: apps/worker
+        run: pnpm guesty:probe
       - name: Remove the settings file
         if: always()
         run: rm -f apps/worker/.env
