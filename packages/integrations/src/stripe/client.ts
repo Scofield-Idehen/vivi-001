@@ -286,14 +286,14 @@ export class MemoryCardGateway implements CardGateway {
 
   async capture(paymentIntentId: string, amountMinor: number): Promise<void> {
     const s = [...this.sessions.values()].find((x) => x.state.paymentIntentId === paymentIntentId);
-    if (!s || s.state.intent !== 'requires_capture') throw new CardError('Nothing is held.', 400);
+    if (s?.state.intent !== 'requires_capture') throw new CardError('Nothing is held.', 400);
     if (amountMinor > s.state.capturableMinor) throw new CardError('More than is held.', 400);
     s.state = { ...s.state, intent: 'succeeded', receivedMinor: amountMinor, capturableMinor: 0 };
   }
 
   async release(paymentIntentId: string): Promise<void> {
     const s = [...this.sessions.values()].find((x) => x.state.paymentIntentId === paymentIntentId);
-    if (!s || s.state.intent !== 'requires_capture') throw new CardError('Nothing is held.', 400);
+    if (s?.state.intent !== 'requires_capture') throw new CardError('Nothing is held.', 400);
     s.state = { ...s.state, intent: 'canceled', capturableMinor: 0 };
   }
 

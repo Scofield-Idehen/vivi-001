@@ -39,6 +39,20 @@ export {
 } from './guesty/client.ts';
 export { SecretBox } from './secrets.ts';
 export {
+  CardError,
+  type CardGateway,
+  type CardKind,
+  type CheckoutCreated,
+  type CheckoutInput,
+  type CheckoutState,
+  MemoryCardGateway,
+  STRIPE_API_URL,
+  StripeGateway,
+  signStripeBody,
+  stripeForm,
+  verifyStripeSignature,
+} from './stripe/client.ts';
+export {
   type CodeWindow,
   LockError,
   type LockProvider,
@@ -51,17 +65,3 @@ export {
   type TTLockConfig,
   TTLockProvider,
 } from './ttlock/client.ts';
-export {
-  type CardGateway,
-  CardError,
-  type CardKind,
-  type CheckoutCreated,
-  type CheckoutInput,
-  type CheckoutState,
-  MemoryCardGateway,
-  STRIPE_API_URL,
-  StripeGateway,
-  signStripeBody,
-  stripeForm,
-  verifyStripeSignature,
-} from './stripe/client.ts';

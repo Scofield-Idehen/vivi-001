@@ -66,7 +66,7 @@ export function OwnersList({ data, write }: { data: OwnerList; write: boolean })
   );
   const unowned = data.unowned.filter((h) => !needle || h.name.toLowerCase().includes(needle));
   const owned = data.owners.reduce((t, o) => t + o.homes.length, 0);
-  const canLogIn = data.owners.filter((o) => o.logins.length).length;
+  const _canLogIn = data.owners.filter((o) => o.logins.length).length;
   const many = data.owners.filter((o) => o.homes.length > 1).length;
 
   return (
