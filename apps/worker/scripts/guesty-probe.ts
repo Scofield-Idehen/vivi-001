@@ -32,6 +32,61 @@ function shape(value: unknown, depth = 0): unknown {
 }
 
 try {
+  if (process.argv.includes('--cleaners')) {
+    // Who does the cleaning in Guesty: counts and field names only, never names, emails or phones.
+    const keysOf = (items: Record<string, unknown>[]) =>
+      [...new Set(items.slice(0, 20).flatMap((i) => Object.keys(i)))].sort();
+    const tally = (values: unknown[]) => {
+      const out: Record<string, number> = {};
+      for (const v of values) {
+        const k = typeof v === 'string' ? v : JSON.stringify(v ?? null).slice(0, 40);
+        out[k] = (out[k] ?? 0) + 1;
+      }
+      return out;
+    };
+    const tries: [string, Record<string, string | number>][] = [
+      ['/v1/users', {}],
+      ['/v1/contacts', {}],
+      ['/v1/tasks-open-api/tasks', { columns: 'type status listingId assigneeId assignee supervisorId' }],
+    ];
+    for (const [path, query] of tries) {
+      try {
+        const items: Record<string, unknown>[] = [];
+        for await (const item of guesty.pages<Record<string, unknown>>(path, query)) {
+          items.push(item);
+          if (items.length >= 3000) break;
+        }
+        const report: Record<string, unknown> = { path, count: items.length, fields: keysOf(items) };
+        if (path === '/v1/users' || path === '/v1/contacts') {
+          report.withEmail = items.filter((i) => typeof i.email === 'string' && i.email).length;
+          report.withPhone = items.filter((i) => i.phone || i.phoneNumber || i.phones).length;
+          report.roles = tally(items.map((i) => i.role ?? i.roles ?? i.type ?? i.contactType ?? i.tags));
+          report.active = tally(items.map((i) => i.active ?? i.isActive ?? i.status));
+          report.listingsField = items.filter(
+            (i) => Array.isArray(i.listings) || Array.isArray(i.listingIds),
+          ).length;
+        } else {
+          report.types = tally(items.map((i) => i.type));
+          report.statuses = tally(items.map((i) => i.status));
+          const pairs = new Map<string, Set<string>>();
+          for (const i of items) {
+            const who = String(i.assigneeId ?? (i.assignee as { _id?: string } | undefined)?._id ?? '');
+            if (!who) continue;
+            const set = pairs.get(who) ?? new Set<string>();
+            set.add(String(i.listingId ?? ''));
+            pairs.set(who, set);
+          }
+          report.distinctAssignees = pairs.size;
+          report.homesPerAssignee = [...pairs.values()].map((s) => s.size).sort((a, b) => b - a);
+          report.withoutAssignee = items.filter((i) => !i.assigneeId && !i.assignee).length;
+        }
+        console.log(JSON.stringify(report, null, 2));
+      } catch (error) {
+        console.log(JSON.stringify({ path, error: String(error).slice(0, 160) }));
+      }
+    }
+    process.exit(0);
+  }
   if (process.argv.includes('--documents')) {
     // Owner documents: counts only, never names or file names.
     let owners = 0;

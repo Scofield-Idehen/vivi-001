@@ -14,6 +14,10 @@ on:
         description: Count the owners' documents in Guesty (contracts and others; counts only)
         type: boolean
         default: false
+      probe_cleaners:
+        description: Count who cleans in Guesty (users, contacts, tasks; counts and field names only)
+        type: boolean
+        default: false
       probe_guesty:
         description: Also read the shape of a few Guesty bookings' money (field names only)
         type: boolean
@@ -47,6 +51,10 @@ jobs:
         if: inputs.probe_documents
         working-directory: apps/worker
         run: pnpm guesty:probe --documents
+      - name: Guesty cleaners, counts only
+        if: inputs.probe_cleaners
+        working-directory: apps/worker
+        run: pnpm guesty:probe --cleaners
       - name: Remove the settings file
         if: always()
         run: rm -f apps/worker/.env
