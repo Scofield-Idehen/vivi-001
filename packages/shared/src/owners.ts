@@ -21,6 +21,9 @@ export const OwnerSchema = z.object({
   feeBasisPoints: z.number().int(),
   notes: z.string().nullable(),
   homes: z.array(z.object({ id: Uuid, name: z.string() })),
+  /** The owner log-in (1 Nov 2026): who can sign in as this owner, and invitations not yet used. */
+  logins: z.array(z.object({ userId: Uuid, name: z.string(), email: z.string() })),
+  invited: z.array(z.object({ id: Uuid, email: z.string(), expiresAt: z.string().nullable() })),
   createdAt: z.string(),
 });
 export type Owner = z.infer<typeof OwnerSchema>;

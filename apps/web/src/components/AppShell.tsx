@@ -10,6 +10,7 @@ import { MODULE_GROUPS } from '../lib/modules.ts';
 import { signOut } from '../lib/session.tsx';
 import { useCurrentWorkspace, useWorkspaces } from '../lib/workspace.tsx';
 import { NoWorkspace } from '../pages/misc.tsx';
+import { OwnerPortal } from '../pages/portal/OwnerPortal.tsx';
 import { OperatorMark } from './BrandMark.tsx';
 import {
   RailButton,
@@ -276,6 +277,7 @@ export function AppShell() {
   const { current } = useWorkspaces();
   const me = useMe();
   if (current?.entry.role === 'field') return <FieldFrame />;
+  if (current?.entry.role === 'owner') return <OwnerPortal />;
   if (current) return <WorkspaceFrame />;
   if (me.data?.platformRole) return <Navigate to="/console" replace />;
   return <NoWorkspace />;

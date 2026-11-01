@@ -97,7 +97,15 @@ describe('permissions', () => {
   it('lets V-01 support read a workspace but never change anything in it, nor see its secrets', () => {
     for (const [permission, roles] of Object.entries(PERMISSIONS)) {
       const allowed = (roles as readonly string[]).includes('v01_support');
-      expect(allowed, permission).toBe(permission.endsWith('.read') && permission !== 'secrets.read');
+      expect(allowed, permission).toBe(
+        permission.endsWith('.read') && permission !== 'secrets.read' && permission !== 'portal.read',
+      );
+    }
+  });
+
+  it('gives an owner’s log-in the owner pages and nothing else', () => {
+    for (const [permission, roles] of Object.entries(PERMISSIONS)) {
+      expect((roles as readonly string[]).includes('owner'), permission).toBe(permission === 'portal.read');
     }
   });
 

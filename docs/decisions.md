@@ -3,6 +3,32 @@
 Newest first. Each entry says what was decided and why. Product decisions also live in the
 V-01 Build Playbook and Design Roadmap.
 
+## 2026-11-01
+
+- **Access by home (Alpha: "do we have where we streamline what privilege each user under each
+  property uses").** An admin can limit anyone except an admin to chosen homes, on the Workspace page
+  or in the invitation. Row-level security enforces it: every table that belongs to a home has a
+  second, restrictive policy (`home_access`, migration 0042) built on `app.my_homes()`, so someone
+  limited sees only their homes on every page: Calendar, bookings, guests, Inbox, tasks, claims,
+  expenses, owners, statements, Insights and Today. The audit trail is closed to them. The worker and
+  everyone not limited see every home, as before.
+- **The owner log-in.** A new role, `owner`, tied to one owner (`memberships.owner_id`). It is given
+  from the owner's page, one owner at a time or many at once ("Invite owners to log in"), by email; the
+  owner signs in with the link, no password. Signed in, they see only `/v1/portal`: their homes' booked
+  and held nights (no guest names or contacts), this month so far, and their finalised statements
+  without the office's notes, to print or save. Their homes follow `properties.owner_id`, so an owner
+  with several homes sees them all. Every staff permission refuses the role. Owners aren't on the
+  team list or offered for tasks.
+- **Owners from Guesty.** The import now reads Guesty's owners (`/v1/owners`) and gives each their
+  homes from Guesty's list of their listings, so owners with several homes come across complete.
+  Matched by Guesty id on later runs (or by email to an owner added by hand). A home already given to
+  an owner by hand keeps them; a home Guesty gives to two owners goes to the first; both are reported.
+  `pnpm guesty:import --org vivistays --owners-only` brings just the owners for a workspace whose homes
+  are already imported (add `--dry-run` to read the report first).
+- **The Owners page, restructured:** totals, search, filter by log-in, each owner's number of homes,
+  and the homes without an owner as a list, each given to an owner in one choice.
+- **PriceLabs waits for verification** (docs/waiting.md).
+
 ## 2026-10-31
 
 - **Insights (Alpha, 31 Oct 2026: "yes lets go").** For a period (this month, last month, the last

@@ -17,7 +17,7 @@ import {
   reservations,
   type Tx,
 } from '@v01/db';
-import type { GuestyConversation, GuestyListing, SecretBox } from '@v01/integrations';
+import type { GuestyConversation, GuestyListing, GuestyOwner, SecretBox } from '@v01/integrations';
 import {
   addDays,
   CHANNEL_LABELS,
@@ -39,6 +39,7 @@ import {
   propertyFromListing,
   reservationFrom,
 } from './mapping.ts';
+import { saveGuestyOwners } from './owners.ts';
 import { calendarWindows, type GuestyReader, GuestySnapshot } from './snapshot.ts';
 
 /**
@@ -77,6 +78,8 @@ export interface ImportOptions {
 export interface ImportSummary {
   dryRun: boolean;
   listings: { seen: number; created: number; updated: number; archived: number; skipped: string[] };
+  /** Owners from Guesty, and how many homes were given to them. */
+  owners: { seen: number; created: number; updated: number; homesLinked: number };
   photos: number;
   amenities: { set: number; unknown: string[] };
   fields: { created: string[]; valuesSet: number; secretsSkipped: number };
@@ -118,6 +121,7 @@ function emptySummary(dryRun: boolean): ImportSummary {
   return {
     dryRun,
     listings: { seen: 0, created: 0, updated: 0, archived: 0, skipped: [] },
+    owners: { seen: 0, created: 0, updated: 0, homesLinked: 0 },
     photos: 0,
     amenities: { set: 0, unknown: [] },
     fields: { created: [], valuesSet: 0, secretsSkipped: 0 },
@@ -193,6 +197,7 @@ export async function importFromGuesty(
 
       const importer = new Importer(tx, options, org, today, now, summary);
       await importer.listings();
+      await importer.owners();
       await importer.reservations(addDays(today, -(options.bookingsDaysBack ?? 365)));
       const messagesBack = options.messagesDaysBack ?? 90;
       if (messagesBack > 0) await importer.conversations(addDays(today, -messagesBack));
@@ -260,6 +265,28 @@ class Importer {
       }
       await this.listing(listing);
     }
+  }
+
+  /** The owners, after the listings, so each Guesty listing they own has its home here. */
+  async owners(): Promise<void> {
+    const list: GuestyOwner[] = [];
+    try {
+      for await (const o of this.options.guesty.owners()) list.push(o);
+    } catch (error) {
+      this.warn(
+        'Owners',
+        `Guesty wouldn't give the owners: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    const done = await saveGuestyOwners(this.tx, this.options.orgId, list, this.propertyOf);
+    this.summary.owners = {
+      seen: done.seen,
+      created: done.created,
+      updated: done.updated,
+      homesLinked: done.homesLinked,
+    };
+    for (const w of done.warnings) this.warn('Owners', w);
   }
 
   private async loadFields(): Promise<void> {

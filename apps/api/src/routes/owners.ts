@@ -3,6 +3,8 @@ import {
   appUsers,
   claims,
   expenses,
+  invitations,
+  memberships,
   organisationSettings,
   ownerStatements,
   owners,
@@ -67,13 +69,13 @@ const receiptPathBelongs = (path: string, orgId: string, expenseId: string) =>
   /^[0-9a-f-]{36}\/expenses\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(jpg|png|webp|heic|pdf)$/.test(path) &&
   path.startsWith(`${orgId}/expenses/${expenseId}/`);
 
-const monthOf = (m: string) => {
+export const monthOf = (m: string) => {
   const [y, mo] = m.split('-').map(Number) as [number, number];
   const next = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`;
   return { first: `${m}-01`, next: `${next}-01` };
 };
 
-async function settingsOf(tx: Tx, now?: Date): Promise<{ today: string; currency: string }> {
+export async function settingsOf(tx: Tx, now?: Date): Promise<{ today: string; currency: string }> {
   const [s] = await tx
     .select({ timeZone: organisationSettings.timeZone, currency: organisationSettings.currency })
     .from(organisationSettings);
@@ -82,7 +84,7 @@ async function settingsOf(tx: Tx, now?: Date): Promise<{ today: string; currency
 
 // Owners -----------------------------------------------------------------------------------------
 
-async function loadOwners(tx: Tx, where?: SQL): Promise<Owner[]> {
+export async function loadOwners(tx: Tx, where?: SQL): Promise<Owner[]> {
   const rows = await tx.select().from(owners).where(where).orderBy(asc(owners.name));
   if (!rows.length) return [];
   const homes = await tx
@@ -98,6 +100,32 @@ async function loadOwners(tx: Tx, where?: SQL): Promise<Owner[]> {
       ),
     )
     .orderBy(asc(properties.name));
+  const ids = rows.map((r) => r.id);
+  const logins = await tx
+    .select({
+      ownerId: memberships.ownerId,
+      userId: appUsers.id,
+      name: sql<string>`coalesce(${appUsers.fullName}, ${appUsers.email})`,
+      email: appUsers.email,
+    })
+    .from(memberships)
+    .innerJoin(appUsers, eq(appUsers.id, memberships.userId))
+    .where(and(eq(memberships.role, 'owner'), inArray(memberships.ownerId, ids)));
+  const invited = await tx
+    .select({
+      ownerId: invitations.ownerId,
+      id: invitations.id,
+      email: invitations.email,
+      expiresAt: invitations.expiresAt,
+    })
+    .from(invitations)
+    .where(
+      and(
+        inArray(invitations.ownerId, ids),
+        isNull(invitations.acceptedAt),
+        sql`(${invitations.expiresAt} is null or ${invitations.expiresAt} > now())`,
+      ),
+    );
   return rows.map((o) => ({
     id: o.id,
     name: o.name,
@@ -107,11 +135,17 @@ async function loadOwners(tx: Tx, where?: SQL): Promise<Owner[]> {
     feeBasisPoints: o.feeBasisPoints,
     notes: o.notes,
     homes: homes.filter((h) => h.ownerId === o.id).map((h) => ({ id: h.id, name: h.name })),
+    logins: logins
+      .filter((l) => l.ownerId === o.id)
+      .map(({ userId, name, email }) => ({ userId, name, email })),
+    invited: invited
+      .filter((i) => i.ownerId === o.id)
+      .map((i) => ({ id: i.id, email: i.email, expiresAt: i.expiresAt ? toIso(String(i.expiresAt)) : null })),
     createdAt: toIso(String(o.createdAt)),
   }));
 }
 
-async function oneOwner(tx: Tx, id: string): Promise<Owner> {
+export async function oneOwner(tx: Tx, id: string): Promise<Owner> {
   const [owner] = await loadOwners(tx, eq(owners.id, id));
   if (!owner) throw new HttpError(404, 'owner_not_found', 'That owner is not in this workspace.');
   return owner;
@@ -289,7 +323,7 @@ async function computeMonth(
 }
 
 /** A finalised statement as saved, with receipt addresses signed afresh (they only last a while). */
-async function savedStatement(
+export async function savedStatement(
   tx: Tx,
   ownerId: string,
   month: string,
@@ -307,6 +341,8 @@ async function savedStatement(
   const receiptOf = new Map(fresh.map((e) => [e.id, e.receipt]));
   return {
     ...snap,
+    // Statements saved before owner log-ins existed have no list of them.
+    owner: { ...snap.owner, logins: snap.owner.logins ?? [], invited: snap.owner.invited ?? [] },
     expenses: snap.expenses.map((e) => ({ ...e, receipt: receiptOf.get(e.id) ?? null })),
     statement: {
       status: row.s.status as 'final' | 'paid',

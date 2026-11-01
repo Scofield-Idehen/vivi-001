@@ -288,6 +288,27 @@
       "when": 1793481571380,
       "tag": "0040_owner_statements_security",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1793533084201,
+      "tag": "0041_member_homes",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1793533090004,
+      "tag": "0042_home_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1793533684626,
+      "tag": "0043_owners_from_guesty",
+      "breakpoints": true
     }
   ]
 }

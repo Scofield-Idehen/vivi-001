@@ -3,8 +3,11 @@
  * The database enums in packages/db are built from these lists, so they cannot drift.
  */
 
-export const MEMBER_ROLES = ['admin', 'operations', 'guest_comms', 'accounts', 'field'] as const;
+export const MEMBER_ROLES = ['admin', 'operations', 'guest_comms', 'accounts', 'field', 'owner'] as const;
 export type MemberRole = (typeof MEMBER_ROLES)[number];
+/** The roles of the operator's own team. `owner` is a home owner's log-in, made from the owner's page. */
+export const STAFF_ROLES = ['admin', 'operations', 'guest_comms', 'accounts', 'field'] as const;
+export type StaffRole = (typeof STAFF_ROLES)[number];
 
 /**
  * A V-01 staff member looking at an operator's workspace through support access.
@@ -20,6 +23,7 @@ export const ROLE_LABELS: Record<WorkspaceRole, string> = {
   guest_comms: 'Guest comms',
   accounts: 'Accounts',
   field: 'Field team',
+  owner: 'Owner',
   v01_support: 'V-01 support, read-only',
 };
 

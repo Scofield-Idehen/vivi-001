@@ -3,6 +3,7 @@ import type {
   GuestyConversation,
   GuestyCustomField,
   GuestyListing,
+  GuestyOwner,
   GuestyPost,
   GuestyReservation,
 } from '@v01/integrations';
@@ -16,6 +17,7 @@ import { addDays } from '@v01/shared';
  */
 export interface GuestyReader {
   listings(): AsyncIterable<GuestyListing>;
+  owners(): AsyncIterable<GuestyOwner>;
   reservations(checkOutFrom: string): AsyncIterable<GuestyReservation>;
   calendar(listingId: string, from: string, to: string): Promise<GuestyCalendarDay[]>;
   customFields(listingId: string): Promise<GuestyCustomField[]>;
@@ -53,6 +55,7 @@ function give<T>(kept: Kept<T> | undefined, what: string): T {
 
 export class GuestySnapshot implements GuestyReader {
   private listingList: GuestyListing[] = [];
+  private ownerList: Kept<GuestyOwner[]> = { ok: true, value: [] };
   private reservationList: GuestyReservation[] = [];
   private reservationsFrom = '';
   private readonly calendars = new Map<string, Kept<GuestyCalendarDay[]>>();
@@ -89,7 +92,13 @@ export class GuestySnapshot implements GuestyReader {
         if (!days.ok) break;
       }
     }
-    say('Listings read. Reading bookings…');
+    say('Listings read. Reading owners…');
+    s.ownerList = await keep(async () => {
+      const found: GuestyOwner[] = [];
+      for await (const o of guesty.owners()) found.push(o);
+      return found;
+    });
+    say('Reading bookings…');
     s.reservationsFrom = plan.bookingsFrom;
     for await (const r of guesty.reservations(plan.bookingsFrom)) {
       s.reservationList.push(r);
@@ -134,6 +143,10 @@ export class GuestySnapshot implements GuestyReader {
 
   async *listings(): AsyncIterable<GuestyListing> {
     yield* this.listingList;
+  }
+
+  async *owners(): AsyncIterable<GuestyOwner> {
+    yield* give(this.ownerList, 'The owners');
   }
 
   async *reservations(checkOutFrom: string): AsyncIterable<GuestyReservation> {

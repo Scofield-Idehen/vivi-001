@@ -173,6 +173,8 @@ interface DemoTeamMember {
   fullName: string | null;
   role: MemberRole;
   status: 'active' | 'invited';
+  /** Access by home: the homes they may see; missing or null for every home. */
+  propertyIds?: string[] | null;
   sinceDaysAgo: number;
   lastSeenMinutesAgo: number | null;
 }
@@ -243,7 +245,9 @@ interface DemoOperator {
   /** Damage claims, one per booking. Missing in older saved states. */
   claims?: DemoClaim[];
   /** Owners (homes point at them through `owner` on the property) and money spent. Missing in older saved states. */
-  owners?: Omit<Owner, 'homes'>[];
+  owners?: DemoOwner[];
+  /** In the demo, which owner the owner's log-in view shows. */
+  demoOwnerId?: string;
   expenses?: DemoExpense[];
   statements?: DemoStatement[];
   /** Open invitations to the team. Missing in older saved states. */
@@ -280,6 +284,12 @@ interface DemoThread {
   seeded: boolean;
   messages: Message[];
 }
+
+/** An owner as the demo keeps them; log-ins and invitations are added as they are made. */
+type DemoOwner = Omit<Owner, 'homes' | 'logins' | 'invited'> & {
+  logins?: Owner['logins'];
+  invited?: Owner['invited'];
+};
 
 /** A booking as the API keeps it: what the calendar shows, and what the reservation page adds. */
 interface DemoStay extends Omit<CalendarStay, 'status'> {
@@ -1831,6 +1841,14 @@ export function setDemoRole(orgId: string, role: MemberRole): void {
   operator.originalRole ??= operator.role;
   operator.role = role;
   save();
+}
+
+/** "See what this owner sees": the owner's log-in, as that owner. */
+export function setDemoOwnerView(orgId: string, ownerId: string): void {
+  const operator = findOperator(orgId);
+  if (!operator?.role) return;
+  operator.demoOwnerId = ownerId;
+  setDemoRole(orgId, 'owner');
 }
 
 export function demoOriginalRole(orgId: string): MemberRole | null {
@@ -3509,7 +3527,7 @@ interface DemoExpense extends Omit<Expense, 'propertyName' | 'ownerName' | 'rece
 }
 
 /** The demo's owners, the first time from the "Owner: …" tags on the sample homes. */
-function settleOwners(operator: DemoOperator): Omit<Owner, 'homes'>[] {
+function settleOwners(operator: DemoOperator): DemoOwner[] {
   if (operator.owners) return operator.owners;
   operator.owners = [];
   const known: Record<string, { name: string; company: string | null; fee: number; email: string }> = {
@@ -3551,9 +3569,112 @@ function settleOwners(operator: DemoOperator): Omit<Owner, 'homes'>[] {
   return operator.owners;
 }
 
-function ownerView(operator: DemoOperator, o: Omit<Owner, 'homes'>): Owner {
+/**
+ * In the demo an invited owner signs in at once (there is no email to wait for), so the
+ * owner's log-in view has someone to show. The first owner invited stays an invitation, to show both.
+ */
+function demoInviteOwner(o: DemoOwner, email: string): void {
+  const firstEver = !o.logins?.length && !o.invited?.length && o.name.length % 2 === 0;
+  if (firstEver) {
+    o.invited = [
+      ...(o.invited ?? []),
+      { id: crypto.randomUUID(), email, expiresAt: new Date(Date.now() + 14 * 86_400_000).toISOString() },
+    ];
+  } else {
+    o.invited = [];
+    o.logins = [...(o.logins ?? []), { userId: memberId(email), name: o.name, email }];
+  }
+}
+
+/** The owner's log-in, in the demo: the owner chosen with "See as an owner". */
+function demoPortal(orgId: string | null | undefined, path: string): unknown {
+  const { operator } = access(orgId, 'portal.read');
+  const list = settleOwners(operator);
+  const o = list.find((x) => x.id === operator.demoOwnerId) ?? list[0];
+  if (!o) throw new ApiError(403, 'no_owner', 'This log-in is no longer tied to an owner. Ask the office.');
+  const mine = operator.properties.filter((p) => p.owner?.id === o.id);
+  const ids = new Set(mine.map((p) => p.id));
+  const url = new URL(path, 'https://demo.invalid');
+  const today = todayIn(operator.workspace.settings.timeZone);
+  if (url.pathname === '/v1/portal/calendar') {
+    const from = url.searchParams.get('from') ?? today;
+    const to = url.searchParams.get('to') ?? today;
+    return {
+      from,
+      to,
+      stays: operator.calendar.stays
+        .filter(
+          (s) => ids.has(s.propertyId) && s.status === 'confirmed' && s.checkIn <= to && s.checkOut > from,
+        )
+        .map((s) => ({
+          id: s.id,
+          propertyId: s.propertyId,
+          checkIn: s.checkIn,
+          checkOut: s.checkOut,
+          channel: s.channel,
+        })),
+      blocks: operator.calendar.blocks
+        .filter((b) => ids.has(b.propertyId) && b.startsOn <= to && b.endsOn > from)
+        .map((b) => ({ id: b.id, propertyId: b.propertyId, startsOn: b.startsOn, endsOn: b.endsOn })),
+    };
+  }
+  const statementMatch = /^\/v1\/portal\/statements\/(\d{4}-\d{2})$/.exec(url.pathname);
+  const saved = (operator.statements ?? []).filter((x) => x.ownerId === o.id);
+  if (statementMatch) {
+    const st = saved.find((x) => x.month === statementMatch[1]);
+    if (!st) throw new ApiError(404, 'statement_not_found', 'That month has no finalised statement yet.');
+    return {
+      ...st.snapshot,
+      owner: { ...st.snapshot.owner, notes: null, logins: [], invited: [] },
+      statement: {
+        status: st.status,
+        finalisedAt: st.finalisedAt,
+        finalisedBy: null,
+        paidOn: st.paidOn,
+        paidReference: st.paidReference,
+      },
+    };
+  }
+  const month = today.slice(0, 7);
+  let nights = 0;
+  let earned = 0;
+  for (const s of operator.calendar.stays) {
+    if (!ids.has(s.propertyId) || s.status !== 'confirmed') continue;
+    const all = Math.max(1, Math.round((Date.parse(s.checkOut) - Date.parse(s.checkIn)) / 86_400_000));
+    for (let d = s.checkIn; d < s.checkOut; d = addDays(d, 1)) {
+      if (d.slice(0, 7) !== month) continue;
+      nights += 1;
+      earned += Math.round((s.totalMinor ?? 0) / all);
+    }
+  }
+  return {
+    owner: { name: o.name, company: o.company },
+    organisationName: operator.workspace.organisation.name,
+    currency: operator.workspace.settings.currency,
+    today,
+    homes: mine
+      .map((p) => ({ id: p.id, name: p.name, area: p.area }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    thisMonth: { month, bookedNights: nights, earnedMinor: earned },
+    statements: saved
+      .map((x) => ({
+        month: x.month,
+        status: x.status,
+        earnedMinor: x.snapshot.earnedMinor,
+        feeMinor: x.snapshot.feeMinor,
+        expensesMinor: x.snapshot.expensesMinor,
+        netMinor: x.snapshot.netMinor,
+        paidOn: x.paidOn,
+      }))
+      .sort((a, b) => b.month.localeCompare(a.month)),
+  };
+}
+
+function ownerView(operator: DemoOperator, o: DemoOwner): Owner {
   return {
     ...o,
+    logins: o.logins ?? [],
+    invited: o.invited ?? [],
     homes: operator.properties
       .filter((p) => p.owner?.id === o.id)
       .map((p) => ({ id: p.id, name: p.name }))
@@ -3665,11 +3786,7 @@ interface DemoStatement {
 }
 
 /** An owner's month worked out from the demo's stays and expenses, as the API does. */
-async function demoComputeMonth(
-  operator: DemoOperator,
-  o: Omit<Owner, 'homes'>,
-  month: string,
-): Promise<OwnerMonth> {
+async function demoComputeMonth(operator: DemoOperator, o: DemoOwner, month: string): Promise<OwnerMonth> {
   const { first, next } = monthRange(month);
   const owner = ownerView(operator, o);
   const ids = new Set(owner.homes.map((h) => h.id));
@@ -3987,6 +4104,32 @@ async function demoMoney(
       operator.owners = list.filter((x) => x !== o);
       save();
       return null;
+    }
+    if (parts[3] === 'logins' && parts.length === 4 && method === 'POST') {
+      const email = String((body as { email: string }).email)
+        .trim()
+        .toLowerCase();
+      if (operator.team.some((m) => m.email.toLowerCase() === email))
+        throw new ApiError(
+          409,
+          'already_member',
+          `${email} is on the team, so it can't be an owner's log-in too. Use another address.`,
+        );
+      if (list.some((x) => x.logins?.some((l) => l.email === email)))
+        throw new ApiError(409, 'already_member', `${email} already has an owner's log-in here.`);
+      demoInviteOwner(o, email);
+      save();
+      return ownerView(operator, o);
+    }
+    if (parts[3] === 'logins' && parts[4] && method === 'DELETE') {
+      o.logins = (o.logins ?? []).filter((l) => l.userId !== parts[4]);
+      save();
+      return ownerView(operator, o);
+    }
+    if (parts[3] === 'invitations' && parts[4] && method === 'DELETE') {
+      o.invited = (o.invited ?? []).filter((i) => i.id !== parts[4]);
+      save();
+      return ownerView(operator, o);
     }
     if (parts[3] === 'homes' && method === 'PUT') {
       const ids = new Set((body as { propertyIds: string[] }).propertyIds);
@@ -4614,6 +4757,7 @@ export async function demoFetch<T>(
       email,
       name: parsed.data.name,
       role: parsed.data.role,
+      propertyIds: parsed.data.propertyIds ?? null,
       invitedBy: operator.team.find((m) => m.email === DEMO_USER.email)?.fullName ?? 'Demo user',
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + 14 * 86_400_000).toISOString(),
@@ -4659,6 +4803,7 @@ export async function demoFetch<T>(
       if (member.role === 'admin' && parsed.data.role !== 'admin' && adminCount <= 1)
         throw new ApiError(400, 'last_admin', 'The workspace needs at least one admin.');
       member.role = parsed.data.role;
+      if (member.role === 'admin') member.propertyIds = null;
     }
     if (parsed.data.name !== undefined) member.fullName = parsed.data.name;
     save();
@@ -4667,7 +4812,53 @@ export async function demoFetch<T>(
       name: member.fullName ?? member.email,
       email: member.email,
       role: member.role,
+      propertyIds: member.propertyIds ?? null,
     } as T;
+  }
+
+  const homesMatch = /^\/v1\/members\/([0-9a-f-]{36})\/homes$/.exec(path);
+  if (homesMatch?.[1] && method === 'PUT') {
+    const { operator } = access(options.orgId, 'members.manage');
+    const member = operator.team.find((m) => memberId(m.email) === homesMatch[1] && m.status === 'active');
+    if (!member) throw new ApiError(404, 'member_not_found', 'That person is not in this workspace.');
+    const ids = (options.body as { propertyIds: string[] | null }).propertyIds;
+    if (member.role === 'admin' && ids !== null)
+      throw new ApiError(400, 'admin_every_home', 'An admin always sees every home.');
+    member.propertyIds = ids;
+    save();
+    return {
+      id: memberId(member.email),
+      name: member.fullName ?? member.email,
+      email: member.email,
+      role: member.role,
+      propertyIds: member.propertyIds ?? null,
+    } as T;
+  }
+
+  if (method === 'POST' && path === '/v1/owner-logins') {
+    const { operator } = access(options.orgId, 'owners.write');
+    const ids = new Set((options.body as { ownerIds: string[] }).ownerIds);
+    const result = { invited: 0, skipped: [] as { name: string; reason: string }[] };
+    for (const o of settleOwners(operator).filter((x) => ids.has(x.id))) {
+      const why = !o.email
+        ? 'No email on their record.'
+        : o.logins?.length
+          ? 'Can already log in.'
+          : o.invited?.length
+            ? 'Already invited.'
+            : null;
+      if (why) result.skipped.push({ name: o.name, reason: why });
+      else {
+        demoInviteOwner(o, o.email as string);
+        result.invited += 1;
+      }
+    }
+    save();
+    return result as T;
+  }
+
+  if (path === '/v1/portal' || path.startsWith('/v1/portal/') || path.startsWith('/v1/portal?')) {
+    return demoPortal(options.orgId, path) as T;
   }
 
   // Door locks: the pretend TTLock.
@@ -4745,6 +4936,7 @@ export async function demoFetch<T>(
           name: m.fullName ?? m.email,
           email: hide ? '' : m.email,
           role: m.role,
+          propertyIds: can(role, 'members.manage') ? (m.propertyIds ?? null) : null,
         }))
         .sort((a, b) => a.name.localeCompare(b.name)),
     } satisfies TeamList as T;

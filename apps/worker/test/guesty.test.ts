@@ -1,6 +1,12 @@
 import { WorkerDatabase } from '@v01/db';
 import { createTestDatabase, seedOperator, type TestDatabase } from '@v01/db/testing';
-import { GuestyClient, type GuestyListing, type GuestyReservation, SecretBox } from '@v01/integrations';
+import {
+  GuestyClient,
+  type GuestyListing,
+  type GuestyOwner,
+  type GuestyReservation,
+  SecretBox,
+} from '@v01/integrations';
 import { addDays } from '@v01/shared';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -17,6 +23,7 @@ import {
   reservationFrom,
   reservationStatusOf,
 } from '../src/guesty/mapping.ts';
+import { importGuestyOwners } from '../src/guesty/owners.ts';
 import { GuestySnapshot } from '../src/guesty/snapshot.ts';
 
 /**
@@ -147,8 +154,23 @@ const RESERVATIONS: GuestyReservation[] = [
   },
 ];
 
-function stubGuesty(options: { listings?: GuestyListing[]; reservations?: GuestyReservation[] } = {}) {
+const OWNERS: GuestyOwner[] = [
+  {
+    _id: 'O1',
+    fullName: 'Ellis Grant',
+    email: 'Ellis@Owner.test',
+    phone: '+44 7700 900123',
+    listings: ['L1', 'L2'],
+    businessInformation: { businessName: 'Grant Lets', ownerCommission: 18 },
+  },
+  { _id: 'O2', firstName: 'Sam', lastName: 'Cole', listings: ['L2'] },
+];
+
+function stubGuesty(
+  options: { listings?: GuestyListing[]; reservations?: GuestyReservation[]; owners?: GuestyOwner[] } = {},
+) {
   const listings = options.listings ?? [HARBOUR, MILL, PARENT];
+  const ownerList = options.owners ?? OWNERS;
   const reservations = options.reservations ?? RESERVATIONS;
   const paths: string[] = [];
   const page = (items: unknown[], url: URL) => {
@@ -230,6 +252,7 @@ function stubGuesty(options: { listings?: GuestyListing[]; reservations?: Guesty
       });
     }
     if (url.pathname === '/v1/listings') return Response.json(page(listings, url));
+    if (url.pathname === '/v1/owners') return Response.json(page(ownerList, url));
     if (url.pathname === '/v1/reservations') return Response.json(page(reservations, url));
     if (url.pathname === '/v1/properties-api/custom-fields/L1') {
       return Response.json([
@@ -738,6 +761,63 @@ describe('importing an account', () => {
       await owner("select id from app.property_photos where storage_path like 'guesty/L1/%'"),
     ).toHaveLength(2);
     expect(await owner('select id from app.messages where organisation_id = $1', [op.orgId])).toHaveLength(3);
+  });
+
+  it('brings the owners, each with every home Guesty says is theirs', async () => {
+    const homes = await owner<{ home: string; owner: string; fee: number; company: string; email: string }>(
+      `select p.name as home, o.name as owner, o.fee_basis_points as fee, o.company, o.email
+         from app.properties p join app.owners o on o.id = p.owner_id
+        where p.organisation_id = $1 order by p.name`,
+      [op.orgId],
+    );
+    expect(homes).toEqual([
+      {
+        home: 'Harbour House (renamed)',
+        owner: 'Ellis Grant',
+        fee: 1800,
+        company: 'Grant Lets',
+        email: 'ellis@owner.test',
+      },
+      {
+        home: 'Mill Street Flat',
+        owner: 'Ellis Grant',
+        fee: 1800,
+        company: 'Grant Lets',
+        email: 'ellis@owner.test',
+      },
+    ]);
+    expect(
+      await owner('select name from app.owners where organisation_id = $1 order by name', [op.orgId]),
+    ).toEqual([{ name: 'Ellis Grant' }, { name: 'Sam Cole' }]);
+  });
+
+  it('owners only: updates them, moves a home Guesty moved, and keeps one given by hand', async () => {
+    const [hand] = await owner<{ id: string }>(
+      "insert into app.owners (organisation_id, name) values ($1, 'Hand Picked') returning id",
+      [op.orgId],
+    );
+    await owner("update app.properties set owner_id = $1 where name = 'Mill Street Flat'", [hand!.id]);
+    const { client } = stubGuesty({
+      owners: [
+        { ...(OWNERS[0] as GuestyOwner), fullName: 'Ellis Grant-Hall', listings: ['L1'] },
+        { _id: 'O2', firstName: 'Sam', lastName: 'Cole', listings: ['L1', 'L2'] },
+      ],
+    });
+    const summary = await importGuestyOwners(deps(), { orgId: op.orgId, guesty: client });
+    expect(summary).toMatchObject({ seen: 2, created: 0, updated: 2 });
+    expect(summary.warnings).toEqual([
+      'Harbour House (renamed): Guesty lists Ellis Grant-Hall and Sam Cole as owners; kept Ellis Grant-Hall.',
+      'Mill Street Flat: Guesty says Sam Cole, but it was given to Hand Picked here; left as it is.',
+    ]);
+    const homes = await owner<{ home: string; owner: string }>(
+      `select p.name as home, o.name as owner from app.properties p join app.owners o on o.id = p.owner_id
+        where p.organisation_id = $1 order by p.name`,
+      [op.orgId],
+    );
+    expect(homes).toEqual([
+      { home: 'Harbour House (renamed)', owner: 'Ellis Grant-Hall' },
+      { home: 'Mill Street Flat', owner: 'Hand Picked' },
+    ]);
   });
 });
 

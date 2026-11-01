@@ -1,15 +1,16 @@
-import { appUsers, invitations, memberships, type Tx } from '@v01/db';
+import { appUsers, invitations, memberHomes, memberships, properties, type Tx } from '@v01/db';
 import {
   INVITATION_DAYS,
   type Invitation,
   InvitationListSchema,
   InviteResultSchema,
   InviteSchema,
+  MemberHomesSchema,
   MemberRoleUpdateSchema,
   type TeamMember,
   TeamMemberSchema,
 } from '@v01/shared';
-import { and, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -38,6 +39,8 @@ async function openInvitations(tx: Tx): Promise<Invitation[]> {
       and(
         isNull(invitations.acceptedAt),
         or(isNull(invitations.expiresAt), gt(invitations.expiresAt, sql`now()`)),
+        // Owners' log-ins are handled on the owner's page.
+        ne(invitations.role, 'owner'),
       ),
     )
     .orderBy(desc(invitations.createdAt));
@@ -47,9 +50,32 @@ async function openInvitations(tx: Tx): Promise<Invitation[]> {
     name: i.fullName,
     role: i.role,
     invitedBy: i.invitedBy ? invitedBy : null,
+    propertyIds: i.propertyIds ?? null,
     createdAt: toIso(i.createdAt),
     expiresAt: i.expiresAt ? toIso(i.expiresAt) : null,
   }));
+}
+
+/** The homes each limited person may see; people missing from the map see every home. */
+export async function homesByMember(tx: Tx, orgId: string): Promise<Map<string, string[]>> {
+  const rows = await tx
+    .select({ userId: memberships.userId, propertyId: memberHomes.propertyId })
+    .from(memberships)
+    .leftJoin(
+      memberHomes,
+      and(
+        eq(memberHomes.organisationId, memberships.organisationId),
+        eq(memberHomes.userId, memberships.userId),
+      ),
+    )
+    .where(and(eq(memberships.organisationId, orgId), eq(memberships.homesLimited, true)));
+  const map = new Map<string, string[]>();
+  for (const r of rows) {
+    const list = map.get(r.userId) ?? [];
+    if (r.propertyId) list.push(r.propertyId);
+    map.set(r.userId, list);
+  }
+  return map;
 }
 
 async function memberOr404(tx: Tx, orgId: string, userId: string): Promise<TeamMember> {
@@ -59,7 +85,31 @@ async function memberOr404(tx: Tx, orgId: string, userId: string): Promise<TeamM
     .innerJoin(appUsers, eq(appUsers.id, memberships.userId))
     .where(and(eq(memberships.organisationId, orgId), eq(memberships.userId, userId)));
   if (!row) throw new HttpError(404, 'member_not_found', 'That person is not in this workspace.');
-  return row;
+  return { ...row, propertyIds: (await homesByMember(tx, orgId)).get(userId) ?? null };
+}
+
+/** The homes asked for, checked: every one must be a home in this workspace. */
+async function checkHomes(tx: Tx, ids: string[]): Promise<string[]> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return unique;
+  const found = await tx.select({ id: properties.id }).from(properties).where(inArray(properties.id, unique));
+  if (found.length !== unique.length)
+    throw new HttpError(400, 'unknown_home', 'One of those homes is not in this workspace.');
+  return unique;
+}
+
+async function setHomes(tx: Tx, orgId: string, userId: string, ids: string[] | null): Promise<void> {
+  await tx
+    .update(memberships)
+    .set({ homesLimited: ids !== null })
+    .where(and(eq(memberships.organisationId, orgId), eq(memberships.userId, userId)));
+  await tx
+    .delete(memberHomes)
+    .where(and(eq(memberHomes.organisationId, orgId), eq(memberHomes.userId, userId)));
+  if (ids?.length)
+    await tx
+      .insert(memberHomes)
+      .values(ids.map((propertyId) => ({ organisationId: orgId, userId, propertyId })));
 }
 
 async function admins(tx: Tx, orgId: string): Promise<number> {
@@ -92,6 +142,10 @@ export function memberRoutes(
           .innerJoin(appUsers, eq(appUsers.id, memberships.userId))
           .where(and(eq(memberships.organisationId, ctx.orgId), sql`lower(${appUsers.email}) = ${email}`));
         if (already) throw new HttpError(409, 'already_member', `${email} is already in this workspace.`);
+        const limit = req.body.propertyIds ?? null;
+        if (limit !== null && req.body.role === 'admin')
+          throw new HttpError(400, 'admin_every_home', 'An admin always sees every home.');
+        const propertyIds = limit === null ? null : await checkHomes(tx, limit);
         // One open invitation per email: inviting again renews it with the new role.
         await tx
           .update(invitations)
@@ -104,6 +158,7 @@ export function memberRoutes(
             email,
             fullName: req.body.name,
             role: req.body.role,
+            propertyIds,
             invitedBy: ctx.userId,
             expiresAt: sql`now() + interval '${sql.raw(String(INVITATION_DAYS))} days'`,
           })
@@ -152,9 +207,13 @@ export function memberRoutes(
           throw new HttpError(400, 'own_role', 'Ask another admin to change your role.');
         const member = await memberOr404(tx, ctx.orgId, req.params.userId);
         if (req.body.role !== undefined) {
+          if (member.role === 'owner')
+            throw new HttpError(400, 'owner_login', "An owner's log-in is managed on the owner's page.");
           if (member.role === 'admin' && req.body.role !== 'admin' && (await admins(tx, ctx.orgId)) <= 1) {
             throw new HttpError(400, 'last_admin', 'The workspace needs at least one admin.');
           }
+          // An admin sees every home.
+          if (req.body.role === 'admin') await setHomes(tx, ctx.orgId, req.params.userId, null);
           await tx
             .update(memberships)
             .set({ role: req.body.role })
@@ -165,6 +224,26 @@ export function memberRoutes(
             sql`select app.rename_member(${ctx.orgId}::uuid, ${req.params.userId}::uuid, ${req.body.name})`,
           );
         }
+        return memberOr404(tx, ctx.orgId, req.params.userId);
+      }),
+  );
+
+  typed.put(
+    '/v1/members/:userId/homes',
+    { schema: { params: MemberParams, body: MemberHomesSchema, response: { 200: TeamMemberSchema } } },
+    async (req) =>
+      deps.scope.inOrg(req, 'members.manage', async (tx, ctx) => {
+        const member = await memberOr404(tx, ctx.orgId, req.params.userId);
+        if (member.role === 'owner')
+          throw new HttpError(
+            400,
+            'owner_login',
+            "An owner sees their own homes; change them on the owner's page.",
+          );
+        if (member.role === 'admin' && req.body.propertyIds !== null)
+          throw new HttpError(400, 'admin_every_home', 'An admin always sees every home.');
+        const ids = req.body.propertyIds === null ? null : await checkHomes(tx, req.body.propertyIds);
+        await setHomes(tx, ctx.orgId, req.params.userId, ids);
         return memberOr404(tx, ctx.orgId, req.params.userId);
       }),
   );

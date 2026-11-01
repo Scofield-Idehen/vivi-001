@@ -228,6 +228,26 @@ export class GuestyClient {
     return this.pages<GuestyListing>('/v1/listings', { fields: LISTING_FIELDS, sort: '_id' });
   }
 
+  /**
+   * The owners of the homes, each with the listings they own (1 Nov 2026). Guesty answers either
+   * a page (`results`) or a plain list; both are read.
+   */
+  async *owners(): AsyncGenerator<GuestyOwner, void, void> {
+    const pageSize = 100;
+    for (let skip = 0; ; ) {
+      const answer = await this.get<GuestyOwner[] | Page<GuestyOwner>>('/v1/owners', {
+        fields: OWNER_FIELDS,
+        limit: pageSize,
+        skip,
+      });
+      const items = Array.isArray(answer) ? answer : (answer.results ?? answer.items ?? []);
+      for (const item of items) yield item;
+      skip += items.length;
+      if (Array.isArray(answer) || items.length < pageSize) return;
+      if (answer.count !== undefined && skip >= answer.count) return;
+    }
+  }
+
   /** Bookings leaving on or after `checkOutFrom` (YYYY-MM-DD), every status. */
   reservations(checkOutFrom: string): AsyncGenerator<GuestyReservation, void, void> {
     return this.pages<GuestyReservation>('/v1/reservations', {
@@ -359,6 +379,34 @@ const RESERVATION_FIELDS = [
   'createdAt',
   'canceledAt',
 ].join(' ');
+
+const OWNER_FIELDS = [
+  '_id',
+  'firstName',
+  'lastName',
+  'fullName',
+  'email',
+  'phone',
+  'notes',
+  'listings',
+  'active',
+  'businessInformation',
+].join(' ');
+
+/** An owner as Guesty keeps them: who they are and which listings are theirs. */
+export interface GuestyOwner {
+  _id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  fullName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+  /** Guesty listing ids. */
+  listings?: string[] | null;
+  active?: boolean | null;
+  businessInformation?: { businessName?: string | null; ownerCommission?: number | null } | null;
+}
 
 /** As much of a Guesty listing as the import reads. Anything else stays in `raw`. */
 export interface GuestyListing {

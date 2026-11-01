@@ -48,6 +48,8 @@ export const PERMISSIONS = {
   'workspace.read': ['admin', 'operations', 'guest_comms', 'accounts', 'field', 'v01_support'],
   'workspace.manage': ['admin'],
   'members.manage': ['admin'],
+  /** The owner log-in: an owner's own homes' calendar and statements, nothing else. */
+  'portal.read': ['owner'],
 } as const satisfies Record<string, readonly WorkspaceRole[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

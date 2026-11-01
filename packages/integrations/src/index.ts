@@ -31,6 +31,7 @@ export {
   GuestyError,
   type GuestyIntegration,
   type GuestyListing,
+  type GuestyOwner,
   type GuestyPost,
   type GuestyReservation,
   type GuestyToken,

@@ -1,5 +1,6 @@
 import { GuestyClient, SecretBox } from '@v01/integrations';
 import { type ImportSummary, importFromGuesty } from '../src/guesty/import.ts';
+import { importGuestyOwners } from '../src/guesty/owners.ts';
 import { liveDeps } from '../src/live-deps.ts';
 
 /**
@@ -11,6 +12,9 @@ import { liveDeps } from '../src/live-deps.ts';
  * and the account map for the move-over. Reads GUESTY_CLIENT_ID and GUESTY_CLIENT_SECRET (and
  * FIELD_SECRET_KEY for lock codes) from apps/worker/.env. Run again any time: it updates.
  * --dry-run does everything and keeps nothing, so the report can be read first.
+ *
+ * --owners-only brings just the owners and which homes are theirs (one owner can have many),
+ * for a workspace whose homes are already imported. Quick, and it updates on every run.
  */
 
 const args = process.argv.slice(2);
@@ -62,6 +66,18 @@ try {
       'FIELD_SECRET_KEY is not set: lock codes and other secret fields will be reported, not stored.',
     );
   }
+  if (args.includes('--owners-only')) {
+    console.log(`${dryRun ? 'Rehearsing' : 'Bringing'} the owners from Guesty for ${org.name}…`);
+    const o = await importGuestyOwners(deps, { orgId: org.id, guesty, dryRun });
+    console.log('');
+    console.log(dryRun ? `Dry run for ${org.name}: nothing was kept.` : `Owners imported into ${org.name}.`);
+    console.log(
+      `Owners: ${o.seen} in Guesty; ${o.created} new, ${o.updated} updated. Homes given to an owner: ${o.homesLinked}.`,
+    );
+    for (const w of o.warnings) console.log(`  - ${w}`);
+    console.log(`Guesty tokens left today: ${guesty.tokensRemainingToday ?? '?'} of 5.`);
+    process.exit(0);
+  }
   console.log(`${dryRun ? 'Rehearsing' : 'Running'} the Guesty import for ${org.name}…`);
   const summary = await importFromGuesty(deps, {
     orgId: org.id,
@@ -87,6 +103,9 @@ function report(s: ImportSummary, orgName: string): string {
     `Listings: ${s.listings.seen} seen; ${s.listings.created} new, ${s.listings.updated} updated, ${s.listings.archived} archived (inactive in Guesty).`,
   );
   for (const sk of s.listings.skipped) lines.push(`  skipped ${sk}`);
+  lines.push(
+    `Owners: ${s.owners.seen} in Guesty; ${s.owners.created} new, ${s.owners.updated} updated; ${s.owners.homesLinked} homes given to an owner.`,
+  );
   lines.push(`Photos: ${s.photos} (still on Guesty's addresses). Amenities set: ${s.amenities.set}.`);
   lines.push(
     `Custom fields: ${s.fields.valuesSet} values set${s.fields.created.length ? `; new fields: ${s.fields.created.join(', ')}` : ''}${s.fields.secretsSkipped ? `; ${s.fields.secretsSkipped} secrets NOT stored (set FIELD_SECRET_KEY)` : ''}.`,

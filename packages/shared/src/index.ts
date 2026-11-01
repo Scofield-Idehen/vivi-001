@@ -29,6 +29,7 @@ export * from './owners.ts';
 export * from './owners.ts';
 export * from './permissions.ts';
 export * from './permissions.ts';
+export * from './portal.ts';
 export * from './reservations.ts';
 export * from './reservations.ts';
 export * from './schemas.ts';

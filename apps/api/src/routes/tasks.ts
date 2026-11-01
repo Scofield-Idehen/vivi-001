@@ -35,13 +35,14 @@ import {
   TeamListSchema,
   todayIn,
 } from '@v01/shared';
-import { and, asc, desc, eq, gt, gte, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { type RequestScope, toIso } from '../context.ts';
 import { HttpError } from '../errors.ts';
 import type { PhotoStore } from '../photos.ts';
+import { homesByMember } from './members.ts';
 
 const TaskParams = z.object({ id: z.uuid() });
 const PhotoParams = z.object({ id: z.uuid(), photoId: z.uuid() });
@@ -611,11 +612,19 @@ export function taskRoutes(
         .select({ id: appUsers.id, name: personName, email: appUsers.email, role: memberships.role })
         .from(memberships)
         .innerJoin(appUsers, eq(appUsers.id, memberships.userId))
-        .where(eq(memberships.organisationId, ctx.orgId))
+        // Owners' log-ins are not part of the team.
+        .where(and(eq(memberships.organisationId, ctx.orgId), ne(memberships.role, 'owner')))
         .orderBy(sql`lower(${personName}) collate "C"`);
       // Email addresses are for the office; the crew and support see names.
       const hide = !can(ctx.role, 'members.manage') && ctx.role !== 'operations';
-      return { members: rows.map((r) => ({ ...r, email: hide ? '' : r.email })) };
+      const homes = can(ctx.role, 'members.manage') ? await homesByMember(tx, ctx.orgId) : new Map();
+      return {
+        members: rows.map((r) => ({
+          ...r,
+          email: hide ? '' : r.email,
+          propertyIds: homes.get(r.id) ?? null,
+        })),
+      };
     }),
   );
 }

@@ -1,6 +1,7 @@
-import { can, MEMBER_ROLES, type MemberRole, ROLE_LABELS, type WorkspaceRole } from '@v01/shared';
+import { can, ROLE_LABELS, STAFF_ROLES, type StaffRole, type WorkspaceRole } from '@v01/shared';
 import { useState } from 'react';
 import { SelectField, TextField } from '../../components/fields.tsx';
+import { HomesPicker, homesText } from '../../components/HomesPicker.tsx';
 import { Button, Notice } from '../../components/ui.tsx';
 import {
   ApiError,
@@ -8,6 +9,8 @@ import {
   useChangeRole,
   useInvitations,
   useInvite,
+  useMemberHomes,
+  useProperties,
   useRemoveMember,
   useTeam,
 } from '../../lib/api.ts';
@@ -21,7 +24,7 @@ import { shortDate } from '../../lib/format.ts';
 const explain = (error: unknown) =>
   error instanceof ApiError ? error.message : 'That didn’t go through. Try again.';
 
-const ROLE_HELP: Record<MemberRole, string> = {
+const ROLE_HELP: Record<StaffRole, string> = {
   admin: 'Everything, including the team and settings.',
   operations: 'Properties, calendar, bookings, tasks and the Inbox.',
   guest_comms: 'Bookings and the Inbox; no property settings.',
@@ -29,7 +32,7 @@ const ROLE_HELP: Record<MemberRole, string> = {
   field: 'Their own jobs on a phone; no guest names.',
 };
 
-const ROLE_OPTIONS = MEMBER_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }));
+const ROLE_OPTIONS = STAFF_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }));
 
 export function TeamSection({ orgId, role, selfId }: { orgId: string; role: WorkspaceRole; selfId: string }) {
   const manage = can(role, 'members.manage');
@@ -39,10 +42,18 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
   const cancel = useCancelInvitation(orgId);
   const change = useChangeRole(orgId);
   const remove = useRemoveMember(orgId);
+  const homesOf = useMemberHomes(orgId);
+  const properties = useProperties(manage ? orgId : null);
+  const homes = (properties.data?.properties ?? [])
+    .map((p) => ({ id: p.id, name: p.name }))
+    .sort((x, y) => x.name.localeCompare(y.name));
+  const [picking, setPicking] = useState<{ userId: string; name: string; ids: string[] | null } | null>(null);
+  const [newHomes, setNewHomes] = useState<string[] | null>(null);
+  const [pickingNew, setPickingNew] = useState(false);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
-  const [newRole, setNewRole] = useState<MemberRole>('operations');
+  const [newRole, setNewRole] = useState<StaffRole>('operations');
   const [done, setDone] = useState<string | null>(null);
   const members = team.data?.members ?? [];
   const open = invitations.data?.invitations ?? [];
@@ -52,11 +63,17 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
   const send = () => {
     if (!ready) return;
     invite.mutate(
-      { email: email.trim(), name: name.trim(), role: newRole },
+      {
+        email: email.trim(),
+        name: name.trim(),
+        role: newRole,
+        propertyIds: newRole === 'admin' ? null : newHomes,
+      },
       {
         onSuccess: (r) => {
           setEmail('');
           setName('');
+          setNewHomes(null);
           setDone(
             r.email === 'invited'
               ? `${r.invitation.email} has an email with a sign-in link.`
@@ -130,6 +147,22 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
               {m.email && m.email !== m.name ? (
                 <p className="truncate text-[12.5px] text-slate">{m.email}</p>
               ) : null}
+              {manage ? (
+                <p className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-slate">
+                  <span className={m.propertyIds ? 'text-ink' : ''}>
+                    {m.role === 'admin' ? 'Every home (admin)' : homesText(m.propertyIds, homes)}
+                  </span>
+                  {m.role !== 'admin' && m.role !== 'owner' ? (
+                    <button
+                      type="button"
+                      className="action !h-6 text-[12px]"
+                      onClick={() => setPicking({ userId: m.id, name: m.name, ids: m.propertyIds })}
+                    >
+                      Change homes
+                    </button>
+                  ) : null}
+                </p>
+              ) : null}
             </div>
             <div className="flex items-center gap-2">
               {manage && m.id !== selfId ? (
@@ -137,7 +170,7 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
                   aria-label={`${m.name}’s role`}
                   value={m.role}
                   disabled={change.isPending}
-                  onChange={(e) => change.mutate({ userId: m.id, role: e.target.value as MemberRole })}
+                  onChange={(e) => change.mutate({ userId: m.id, role: e.target.value as StaffRole })}
                   className="h-8 rounded-lg border border-hairline bg-canvas px-2 text-[13px] text-ink"
                 >
                   {ROLE_OPTIONS.map((o) => (
@@ -168,6 +201,37 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
           </li>
         ))}
       </ul>
+      {picking ? (
+        <HomesPicker
+          person={picking.name}
+          homes={homes}
+          selected={picking.ids}
+          busy={homesOf.isPending}
+          error={homesOf.error ? explain(homesOf.error) : null}
+          onClose={() => {
+            homesOf.reset();
+            setPicking(null);
+          }}
+          onSave={(ids) =>
+            homesOf.mutate(
+              { userId: picking.userId, propertyIds: ids },
+              { onSuccess: () => setPicking(null) },
+            )
+          }
+        />
+      ) : null}
+      {pickingNew ? (
+        <HomesPicker
+          person={name.trim() || 'they'}
+          homes={homes}
+          selected={newHomes}
+          onClose={() => setPickingNew(false)}
+          onSave={(ids) => {
+            setNewHomes(ids);
+            setPickingNew(false);
+          }}
+        />
+      ) : null}
       {change.error || remove.error ? (
         <div className="mt-3">
           <Notice tone="urgent">{explain(change.error ?? remove.error)}</Notice>
@@ -191,7 +255,11 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
                         {i.name ? <span className="text-slate"> · {i.email}</span> : null}
                       </p>
                       <p className="text-[12.5px] text-slate">
-                        {ROLE_LABELS[i.role]} · invited {shortDate(i.createdAt)}
+                        {ROLE_LABELS[i.role]}
+                        {i.propertyIds
+                          ? `, ${homesText(i.propertyIds, homes).replace(/^Only /, 'only ')}`
+                          : ''}{' '}
+                        · invited {shortDate(i.createdAt)}
                         {i.invitedBy ? ` by ${i.invitedBy}` : ''}
                         {i.expiresAt ? ` · open until ${shortDate(i.expiresAt)}` : ''}
                       </p>
@@ -230,10 +298,21 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
             <SelectField
               label="Role"
               value={newRole}
-              onChange={(v) => setNewRole(v as MemberRole)}
+              onChange={(v) => setNewRole(v as StaffRole)}
               options={ROLE_OPTIONS}
               hint={ROLE_HELP[newRole]}
             />
+            {newRole === 'admin' ? null : (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-hairline bg-white px-3.5 py-2.5 text-[14px]">
+                <span>
+                  <span className="block text-[12.5px] text-slate">Homes they can see</span>
+                  <span className="text-ink">{homesText(newHomes, homes)}</span>
+                </span>
+                <button type="button" className="action" onClick={() => setPickingNew(true)}>
+                  Choose homes
+                </button>
+              </div>
+            )}
             {invite.error ? <Notice tone="urgent">{explain(invite.error)}</Notice> : null}
             {done ? <Notice tone="done">{done}</Notice> : null}
             <div>

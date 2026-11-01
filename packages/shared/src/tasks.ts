@@ -158,6 +158,8 @@ export const TeamMemberSchema = z.object({
   name: z.string(),
   email: z.string(),
   role: z.enum(MEMBER_ROLES),
+  /** Access by home: the homes they are limited to, or null for every home. */
+  propertyIds: z.array(Uuid).nullable(),
 });
 export type TeamMember = z.infer<typeof TeamMemberSchema>;
 export const TeamListSchema = z.object({ members: z.array(TeamMemberSchema) });

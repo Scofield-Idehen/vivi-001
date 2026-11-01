@@ -9,6 +9,7 @@ import {
   integer,
   jsonb,
   numeric,
+  primaryKey,
   text,
   time,
   timestamp,
@@ -300,5 +301,27 @@ export const propertyFieldValues = app.table(
     unique('property_field_values_property_field_key').on(t.propertyId, t.fieldId),
     check('property_field_values_one_kind', sql`${t.value} is null or ${t.secret} is null`),
     check('property_field_values_value_length', sql`${t.value} is null or char_length(${t.value}) <= 4000`),
+  ],
+);
+
+/**
+ * Access by home (1 Nov 2026): the homes a person limited to some homes may see. Only read when
+ * their membership has `homes_limited`; row-level security uses it on every home's records.
+ */
+export const memberHomes = app.table(
+  'member_homes',
+  {
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    propertyId: uuid('property_id')
+      .notNull()
+      .references(() => properties.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.organisationId, t.userId, t.propertyId] }),
+    index('member_homes_property_idx').on(t.propertyId),
   ],
 );

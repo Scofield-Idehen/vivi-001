@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MEMBER_ROLES } from './enums.ts';
+import { MEMBER_ROLES, STAFF_ROLES } from './enums.ts';
 
 /**
  * The team: who belongs to a workspace, in which role, and who has been invited and not yet
@@ -20,6 +20,8 @@ export const InvitationSchema = z.object({
   name: z.string().nullable(),
   role: z.enum(MEMBER_ROLES),
   invitedBy: z.string().nullable(),
+  /** The homes they will be limited to; null for every home. */
+  propertyIds: z.array(Uuid).nullable(),
   createdAt: Timestamp,
   expiresAt: Timestamp.nullable(),
 });
@@ -32,7 +34,9 @@ export const InviteSchema = z.object({
   email: z.email('An email address like name@example.com').max(254),
   /** Their name, as the team knows them. */
   name: z.string().trim().min(1, 'Their name, so the team sees a person, not an address.').max(NAME_MAX),
-  role: z.enum(MEMBER_ROLES),
+  role: z.enum(STAFF_ROLES),
+  /** Only these homes; leave out for every home. Never for an admin. */
+  propertyIds: z.array(Uuid).max(1000).nullable().optional(),
 });
 export type Invite = z.infer<typeof InviteSchema>;
 
@@ -51,7 +55,7 @@ export type InviteResult = z.infer<typeof InviteResultSchema>;
 /** An admin changes a member's role, or corrects their name. */
 export const MemberRoleUpdateSchema = z
   .object({
-    role: z.enum(MEMBER_ROLES).optional(),
+    role: z.enum(STAFF_ROLES).optional(),
     name: z.string().trim().min(1).max(NAME_MAX).optional(),
   })
   .refine((u) => u.role !== undefined || u.name !== undefined, 'Nothing to change');
@@ -63,3 +67,10 @@ export type MeUpdate = z.infer<typeof MeUpdateSchema>;
 
 /** How long an invitation stays open. */
 export const INVITATION_DAYS = 14;
+
+/**
+ * Access by home (1 Nov 2026): limit a colleague to some homes, or give them every home again
+ * (null). The database enforces it on every page. Admins always see every home.
+ */
+export const MemberHomesSchema = z.object({ propertyIds: z.array(Uuid).max(1000).nullable() });
+export type MemberHomes = z.infer<typeof MemberHomesSchema>;

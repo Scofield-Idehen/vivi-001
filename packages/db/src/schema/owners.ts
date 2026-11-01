@@ -36,11 +36,14 @@ export const owners = app.table(
     /** Hundredths of a percent: 1800 is 18%. */
     feeBasisPoints: integer('fee_basis_points').notNull().default(0),
     notes: text('notes'),
+    /** The owner's id in Guesty, when they came from there; a later import updates them. */
+    guestyOwnerId: text('guesty_owner_id'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     index('owners_org_idx').on(t.organisationId),
+    unique('owners_guesty_key').on(t.organisationId, t.guestyOwnerId),
     check('owners_name_length', sql`char_length(${t.name}) between 1 and 120`),
     check('owners_fee', sql`${t.feeBasisPoints} between 0 and 10000`),
     check('owners_notes_length', sql`${t.notes} is null or char_length(${t.notes}) <= 2000`),

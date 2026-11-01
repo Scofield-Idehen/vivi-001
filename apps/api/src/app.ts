@@ -31,6 +31,7 @@ import { meRoutes } from './routes/me.ts';
 import { memberRoutes } from './routes/members.ts';
 import { overviewRoutes } from './routes/overview.ts';
 import { ownerRoutes } from './routes/owners.ts';
+import { portalRoutes } from './routes/portal.ts';
 import { propertyRoutes } from './routes/properties.ts';
 import { reservationRoutes } from './routes/reservations.ts';
 import { taskRoutes } from './routes/tasks.ts';
@@ -162,19 +163,18 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
           })
         : null;
   lockRoutes(app, { scope, provider: lockProvider, box });
-  memberRoutes(app, {
-    scope,
-    mailer:
-      deps.mailer ??
-      (deps.env.SUPABASE_URL && deps.env.SUPABASE_SERVICE_ROLE_KEY
-        ? new SupabaseInviteMailer({
-            supabaseUrl: deps.env.SUPABASE_URL,
-            serviceKey: deps.env.SUPABASE_SERVICE_ROLE_KEY,
-          })
-        : NO_INVITE_MAILER),
-    // The app's address, for the link in the invitation: the first allowed browser origin.
-    appUrl: (deps.env.CORS_ORIGINS.split(',')[0] ?? 'http://localhost:5173').trim().replace(/\/$/, ''),
-  });
+  const mailer =
+    deps.mailer ??
+    (deps.env.SUPABASE_URL && deps.env.SUPABASE_SERVICE_ROLE_KEY
+      ? new SupabaseInviteMailer({
+          supabaseUrl: deps.env.SUPABASE_URL,
+          serviceKey: deps.env.SUPABASE_SERVICE_ROLE_KEY,
+        })
+      : NO_INVITE_MAILER);
+  // The app's address, for the link in the invitation: the first allowed browser origin.
+  const appUrl = (deps.env.CORS_ORIGINS.split(',')[0] ?? 'http://localhost:5173').trim().replace(/\/$/, '');
+  memberRoutes(app, { scope, mailer, appUrl });
+  portalRoutes(app, { scope, mailer, appUrl, files: taskPhotos, now: deps.now });
   guestRoutes(app, { db: deps.db, scope, box, now: deps.now });
   consoleRoutes(app, { scope });
   await webhookRoutes(app, { db: deps.db, channexSecret: deps.env.CHANNEX_WEBHOOK_SECRET });

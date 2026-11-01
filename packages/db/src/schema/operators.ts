@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { char, check, index, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { boolean, char, check, index, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { app, createdAt, memberRole, updatedAt } from './common.ts';
 
 /** One row per operator (Vivistays is the first). Created by V-01, not by sign-up. */
@@ -77,6 +77,13 @@ export const memberships = app.table(
       .notNull()
       .references(() => appUsers.id, { onDelete: 'cascade' }),
     role: memberRole('role').notNull(),
+    /**
+     * Access by home (1 Nov 2026): when true, the person sees only the homes in `member_homes`.
+     * Row-level security enforces it on every table that belongs to a home.
+     */
+    homesLimited: boolean('homes_limited').notNull().default(false),
+    /** For the owner log-in: the owner this person is. They see only that owner's homes. FK in SQL. */
+    ownerId: uuid('owner_id'),
     createdAt: createdAt(),
   },
   (t) => [
@@ -102,6 +109,10 @@ export const invitations = app.table(
     expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }),
     acceptedAt: timestamp('accepted_at', { withTimezone: true, mode: 'string' }),
     acceptedBy: uuid('accepted_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    /** The homes the person will be limited to; null means every home. */
+    propertyIds: uuid('property_ids').array(),
+    /** For an owner's log-in: which owner. FK in SQL. */
+    ownerId: uuid('owner_id'),
   },
   (t) => [
     index('invitations_org_idx').on(t.organisationId),

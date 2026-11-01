@@ -46,6 +46,7 @@ import type {
   LocksView,
   LockUpdate,
   Me,
+  MemberHomes,
   MemberRoleUpdate,
   MessageSend,
   MessageTemplate,
@@ -57,11 +58,16 @@ import type {
   Owner,
   OwnerInput,
   OwnerList,
+  OwnerLoginBulk,
+  OwnerLoginBulkResult,
+  OwnerLoginInvite,
   OwnerMonth,
   OwnerUpdate,
   PaymentCreate,
   PhotoStage,
   PhotoUploadTicket,
+  Portal,
+  PortalCalendar,
   PropertyCreate,
   PropertyDetail,
   PropertyField,
@@ -1741,5 +1747,106 @@ export function useInsights(orgId: string | null, from: string, to: string, enab
     placeholderData: keepPreviousData,
     queryFn: () =>
       apiFetch<Insights>(`/v1/insights?from=${from}&to=${to}`, { token: token as string, orgId }),
+  });
+}
+
+// Access by home and the owner log-in (1 Nov 2026) ------------------------------------------------
+
+export function useMemberHomes(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, ...body }: { userId: string } & MemberHomes) =>
+      apiFetch<TeamMember>(`/v1/members/${userId}/homes`, {
+        token: token as string,
+        orgId,
+        method: 'PUT',
+        body,
+      }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['team', orgId] }),
+  });
+}
+
+export function useGiveOwnerLogin(orgId: string | null, id: string) {
+  return useOwnerMutation<OwnerLoginInvite, Owner>(orgId, (token, body) =>
+    apiFetch<Owner>(`/v1/owners/${id}/logins`, { token, orgId, method: 'POST', body }),
+  );
+}
+
+export function useRemoveOwnerLogin(orgId: string | null, id: string) {
+  return useOwnerMutation<string, Owner>(orgId, (token, userId) =>
+    apiFetch<Owner>(`/v1/owners/${id}/logins/${userId}`, { token, orgId, method: 'DELETE' }),
+  );
+}
+
+export function useCancelOwnerInvitation(orgId: string | null, id: string) {
+  return useOwnerMutation<string, Owner>(orgId, (token, invitationId) =>
+    apiFetch<Owner>(`/v1/owners/${id}/invitations/${invitationId}`, { token, orgId, method: 'DELETE' }),
+  );
+}
+
+export function usePortal(orgId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['portal', orgId],
+    enabled: Boolean(token && orgId),
+    queryFn: () => apiFetch<Portal>('/v1/portal', { token: token as string, orgId }),
+  });
+}
+
+export function usePortalCalendar(orgId: string | null, from: string, to: string) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['portal-calendar', orgId, from, to],
+    enabled: Boolean(token && orgId),
+    placeholderData: keepPreviousData,
+    queryFn: () =>
+      apiFetch<PortalCalendar>(`/v1/portal/calendar?from=${from}&to=${to}`, {
+        token: token as string,
+        orgId,
+      }),
+  });
+}
+
+export function usePortalStatement(orgId: string | null, month: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['portal-statement', orgId, month],
+    enabled: Boolean(token && orgId && month),
+    queryFn: () => apiFetch<OwnerMonth>(`/v1/portal/statements/${month}`, { token: token as string, orgId }),
+  });
+}
+
+/** Give a home to an owner (or none), from the Owners page's list of homes without one. */
+export function useGiveHome(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ propertyId, ownerId }: { propertyId: string; ownerId: string | null }) =>
+      apiFetch(`/v1/properties/${propertyId}`, {
+        token: token as string,
+        orgId,
+        method: 'PATCH',
+        body: { ownerId },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['owners', orgId] });
+      void queryClient.invalidateQueries({ queryKey: ['properties', orgId] });
+    },
+  });
+}
+
+export function useInviteOwners(orgId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: OwnerLoginBulk) =>
+      apiFetch<OwnerLoginBulkResult>('/v1/owner-logins', {
+        token: token as string,
+        orgId,
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['owners', orgId] }),
   });
 }

@@ -1,4 +1,5 @@
 import { IconArrowLeft, IconMail, IconPhone, IconPrinter } from '@tabler/icons-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { CHANNEL_LABELS, can, EXPENSE_CATEGORY_LABELS, type OwnerMonth, todayIn } from '@v01/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -18,9 +19,12 @@ import {
   useStatementAction,
   useWorkspace,
 } from '../../lib/api.ts';
+import { config } from '../../lib/config.ts';
+import { setDemoOwnerView } from '../../lib/demo.ts';
 import { useCurrentWorkspace } from '../../lib/workspace.tsx';
 import { NotFound } from '../misc.tsx';
 import { moneyText } from '../properties/money.ts';
+import { OwnerLogin } from './OwnerLogin.tsx';
 import { feeText, OwnerSheet } from './OwnersPage.tsx';
 import { StatementDocument } from './StatementDocument.tsx';
 
@@ -243,6 +247,7 @@ export function OwnerPage() {
   const data = useOwnerMonth(orgId, id ?? null, month);
   const remove = useRemoveOwner(orgId, id ?? '');
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const write = can(entry.role, 'owners.write');
@@ -294,6 +299,16 @@ export function OwnerPage() {
             </div>
             {write ? (
               <div className="flex gap-2">
+                {config.demo ? (
+                  <Button
+                    onClick={() => {
+                      setDemoOwnerView(orgId as string, o.id);
+                      void queryClient.invalidateQueries();
+                    }}
+                  >
+                    See what {o.name.split(' ')[0]} sees (demo)
+                  </Button>
+                ) : null}
                 <Button onClick={() => setEditing(true)}>Edit</Button>
                 <Button
                   variant="quiet"
@@ -312,6 +327,7 @@ export function OwnerPage() {
           {o.notes ? (
             <p className="mb-6 max-w-[70ch] text-[14px] leading-relaxed text-slate">{o.notes}</p>
           ) : null}
+          <OwnerLogin ownerId={o.id} write={write} />
 
           <section aria-labelledby="month" className={data.isPlaceholderData ? 'opacity-60' : ''}>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
