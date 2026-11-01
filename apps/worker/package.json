@@ -11,6 +11,7 @@
     "cross-check": "tsx --env-file-if-exists=.env scripts/cross-check.ts",
     "diagnose": "tsx --env-file-if-exists=.env scripts/diagnose.ts",
     "guesty:probe": "tsx --env-file-if-exists=.env scripts/guesty-probe.ts",
+    "stripe:check": "tsx --env-file-if-exists=.env scripts/stripe-check.ts",
     "guesty:import": "tsx --env-file-if-exists=.env scripts/guesty-import.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"

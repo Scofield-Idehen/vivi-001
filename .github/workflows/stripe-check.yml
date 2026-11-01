@@ -1,0 +1,26 @@
+name: Stripe check
+
+# Proves the Stripe key works, test mode only: a payment page, a held deposit kept in part, and a
+# held deposit released. Touches no V-01 data. Prints statuses only, never the key.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check
+        working-directory: apps/worker
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+        run: pnpm stripe:check
