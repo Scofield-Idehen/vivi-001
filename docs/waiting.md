@@ -2,6 +2,15 @@
 
 Things decided but parked. Nothing here blocks building. Newest first.
 
+## Waiting verification, 1 Nov 2026
+
+- **PriceLabs.** Built: a home can be marked "priced by PriceLabs"; V-01 then refuses price changes
+  on the Calendar and sends the channels stay rules only. Waiting: PriceLabs' answer to the API
+  access request (drafted 19 Oct, not yet sent by Alpha), then the connection itself (PriceLabs'
+  prices into V-01 and on to the channels, which also needs Channex live), and the list of
+  PriceLabs-priced homes from the first Guesty import. No PriceLabs-priced home can leave Guesty
+  before this, or its prices stop updating.
+
 ## Parked by Alpha, 20 Oct 2026
 
 Guesty stays on for a long time, so we build almost everything first and come back to these.
