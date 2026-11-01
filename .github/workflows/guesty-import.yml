@@ -17,6 +17,10 @@ on:
         description: Rehearse only (nothing is kept)
         type: boolean
         default: true
+      owners_only:
+        description: Owners only (who owns which homes; the homes must be imported already)
+        type: boolean
+        default: false
 
 concurrency:
   group: guesty-import
@@ -54,12 +58,12 @@ jobs:
         env:
           ORG: ${{ inputs.org }}
           REHEARSE: ${{ inputs.rehearse }}
+          OWNERS_ONLY: ${{ inputs.owners_only }}
         run: |
-          if [ "$REHEARSE" = "true" ]; then
-            pnpm guesty:import --org "$ORG" --dry-run
-          else
-            pnpm guesty:import --org "$ORG"
-          fi
+          flags=""
+          if [ "$OWNERS_ONLY" = "true" ]; then flags="$flags --owners-only"; fi
+          if [ "$REHEARSE" = "true" ]; then flags="$flags --dry-run"; fi
+          pnpm guesty:import --org "$ORG" $flags
       - name: Remove the settings file
         if: always()
         run: rm -f apps/worker/.env
