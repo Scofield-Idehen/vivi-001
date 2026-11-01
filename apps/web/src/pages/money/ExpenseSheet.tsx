@@ -9,6 +9,7 @@ import {
   todayIn,
 } from '@v01/shared';
 import { useRef, useState } from 'react';
+import { useConfirm } from '../../components/Confirm.tsx';
 import { DateField } from '../../components/DateField.tsx';
 import { MoneyField, SelectField, TextField } from '../../components/fields.tsx';
 import { Sheet } from '../../components/Sheet.tsx';
@@ -46,6 +47,7 @@ export function ExpenseSheet({
   const claims = useClaims(orgId, 'active');
   const save = useSaveExpense(orgId);
   const remove = useRemoveExpense(orgId);
+  const confirm = useConfirm();
   const removeReceipt = useRemoveReceipt(orgId);
   const locale = workspace.data?.settings.locale ?? 'en-GB';
   const currency = expense?.currency ?? workspace.data?.settings.currency ?? 'GBP';
@@ -117,8 +119,15 @@ export function ExpenseSheet({
               variant="quiet"
               className="action-urgent"
               disabled={remove.isPending}
-              onClick={() => {
-                if (window.confirm('Remove this expense and its receipt?'))
+              onClick={async () => {
+                if (
+                  await confirm({
+                    title: 'Remove this expense?',
+                    body: 'Its receipt goes too. Statements already finalised keep their figures.',
+                    action: 'Remove expense',
+                    tone: 'urgent',
+                  })
+                )
                   remove.mutate(expense.id, { onSuccess: onClose });
               }}
             >

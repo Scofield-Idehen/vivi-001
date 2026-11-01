@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
+import { ConfirmProvider } from './components/Confirm.tsx';
 import { ApiError } from './lib/api.ts';
 import { applyAppBrand } from './lib/brand.ts';
 import { SessionProvider } from './lib/session.tsx';
@@ -27,7 +28,9 @@ createRoot(root).render(
   <StrictMode>
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        <App />
+        <ConfirmProvider>
+          <App />
+        </ConfirmProvider>
       </QueryClientProvider>
     </SessionProvider>
   </StrictMode>,

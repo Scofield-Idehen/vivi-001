@@ -1,5 +1,6 @@
 import { can, LOW_BATTERY, type Lock, type WorkspaceRole } from '@v01/shared';
 import { useState } from 'react';
+import { useConfirm } from '../../components/Confirm.tsx';
 import { TextField } from '../../components/fields.tsx';
 import { Button, Notice, StatusDot } from '../../components/ui.tsx';
 import {
@@ -29,6 +30,7 @@ export function LocksSection({ orgId, role }: { orgId: string; role: WorkspaceRo
   const connect = useConnectLocks(orgId);
   const refresh = useRefreshLocks(orgId);
   const disconnect = useDisconnectLocks(orgId);
+  const confirm = useConfirm();
   const update = useUpdateLock(orgId);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -136,11 +138,14 @@ export function LocksSection({ orgId, role }: { orgId: string; role: WorkspaceRo
                   type="button"
                   className="action action-urgent"
                   disabled={disconnect.isPending}
-                  onClick={() => {
+                  onClick={async () => {
                     if (
-                      window.confirm(
-                        'Disconnect TTLock? V-01 stops making codes. Codes already on the locks keep working until they end.',
-                      )
+                      await confirm({
+                        title: 'Disconnect TTLock?',
+                        body: 'V-01 stops making codes. Codes already on the locks keep working until they end.',
+                        action: 'Disconnect',
+                        tone: 'urgent',
+                      })
                     )
                       disconnect.mutate();
                   }}

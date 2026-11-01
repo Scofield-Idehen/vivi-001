@@ -1,5 +1,6 @@
 import { can, ROLE_LABELS, STAFF_ROLES, type StaffRole, type WorkspaceRole } from '@v01/shared';
 import { useState } from 'react';
+import { useConfirm } from '../../components/Confirm.tsx';
 import { SelectField, TextField } from '../../components/fields.tsx';
 import { HomesPicker, homesText } from '../../components/HomesPicker.tsx';
 import { Button, Notice } from '../../components/ui.tsx';
@@ -42,6 +43,7 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
   const cancel = useCancelInvitation(orgId);
   const change = useChangeRole(orgId);
   const remove = useRemoveMember(orgId);
+  const confirm = useConfirm();
   const homesOf = useMemberHomes(orgId);
   const properties = useProperties(manage ? orgId : null);
   const homes = (properties.data?.properties ?? [])
@@ -185,9 +187,14 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
               {manage && m.id !== selfId ? (
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     if (
-                      window.confirm(`Remove ${m.name} from this workspace? They can be invited again later.`)
+                      await confirm({
+                        title: `Remove ${m.name}?`,
+                        body: 'They can no longer sign in to this workspace. You can invite them again later.',
+                        action: 'Remove',
+                        tone: 'urgent',
+                      })
                     )
                       remove.mutate(m.id);
                   }}

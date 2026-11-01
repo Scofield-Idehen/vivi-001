@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CHANNEL_LABELS, can, EXPENSE_CATEGORY_LABELS, type OwnerMonth, todayIn } from '@v01/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
+import { useConfirm } from '../../components/Confirm.tsx';
 import { DateField } from '../../components/DateField.tsx';
 import { TextField } from '../../components/fields.tsx';
 import { MonthPicker, monthName } from '../../components/MonthPicker.tsx';
@@ -123,6 +124,7 @@ function StatementBar({
 }) {
   const { orgId } = useCurrentWorkspace();
   const act = useStatementAction(orgId, m.owner.id, m.month);
+  const confirm = useConfirm();
   const workspace = useWorkspace(orgId);
   const today = todayIn(workspace.data?.settings.timeZone ?? 'Europe/London');
   const [paying, setPaying] = useState(false);
@@ -167,8 +169,14 @@ function StatementBar({
             <Button
               variant="primary"
               disabled={act.isPending}
-              onClick={() => {
-                if (window.confirm('Finalise this statement? Its figures are kept as they are now.'))
+              onClick={async () => {
+                if (
+                  await confirm({
+                    title: `Finalise ${monthName(m.month)}?`,
+                    body: 'The figures are kept as they are now: later changes to bookings or expenses won’t move them. You can reopen it until it’s marked paid.',
+                    action: 'Finalise',
+                  })
+                )
                   act.mutate({ kind: 'finalise' });
               }}
             >
@@ -246,6 +254,7 @@ export function OwnerPage() {
   const setMonth = (v: string) => setParams(v === thisMonth ? {} : { month: v }, { replace: true });
   const data = useOwnerMonth(orgId, id ?? null, month);
   const remove = useRemoveOwner(orgId, id ?? '');
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
@@ -314,8 +323,15 @@ export function OwnerPage() {
                   variant="quiet"
                   className="action-urgent"
                   disabled={remove.isPending}
-                  onClick={() => {
-                    if (window.confirm(`Remove ${o.name}? Their homes stay, with no owner recorded.`))
+                  onClick={async () => {
+                    if (
+                      await confirm({
+                        title: `Remove ${o.name}?`,
+                        body: 'Their homes stay, with no owner recorded, and their log-in ends.',
+                        action: 'Remove owner',
+                        tone: 'urgent',
+                      })
+                    )
                       remove.mutate(undefined, { onSuccess: () => navigate('/owners') });
                   }}
                 >

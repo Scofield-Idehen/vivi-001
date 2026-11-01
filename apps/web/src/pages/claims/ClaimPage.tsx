@@ -28,6 +28,7 @@ import {
 } from '@v01/shared';
 import { type ReactNode, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { useConfirm } from '../../components/Confirm.tsx';
 import { DateField } from '../../components/DateField.tsx';
 import { MoneyField, SelectField, TextArea, TextField } from '../../components/fields.tsx';
 import { Spinner } from '../../components/Spinner.tsx';
@@ -548,6 +549,7 @@ function Evidence({ claim, write }: { claim: Claim; write: boolean }) {
   const { orgId } = useCurrentWorkspace();
   const addFiles = useAddClaimFiles(orgId, claim.id);
   const removeFile = useRemoveClaimFile(orgId, claim.id);
+  const confirm = useConfirm();
   const me = useMe();
   const cameraInput = useRef<HTMLInputElement>(null);
   const photosInput = useRef<HTMLInputElement>(null);
@@ -572,11 +574,16 @@ function Evidence({ claim, write }: { claim: Claim; write: boolean }) {
       type="button"
       aria-label={`Remove ${f.fileName}`}
       disabled={removeFile.isPending}
-      onClick={() => {
+      onClick={async () => {
         if (
-          window.confirm(
-            `Remove ${f.fileName} from this claim?${f.original ? ' Its original goes too.' : ''}`,
-          )
+          await confirm({
+            title: `Remove ${f.fileName}?`,
+            body: f.original
+              ? 'It comes off this claim, and the original without the date stamp goes too.'
+              : 'It comes off this claim.',
+            action: 'Remove file',
+            tone: 'urgent',
+          })
         )
           removeFile.mutate(f.id);
       }}

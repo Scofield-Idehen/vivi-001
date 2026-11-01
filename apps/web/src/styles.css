@@ -176,6 +176,30 @@ dialog.sheet::backdrop {
   }
 }
 
+/* V-01's own confirmation: rises from the bottom on a phone, settles in the middle on a laptop. */
+dialog.confirm {
+  transition:
+    translate 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease-out,
+    scale 200ms ease-out;
+}
+
+@starting-style {
+  dialog.confirm[open] {
+    translate: 0 40px;
+    opacity: 0;
+  }
+}
+
+@media (min-width: 640px) {
+  @starting-style {
+    dialog.confirm[open] {
+      translate: 0 0;
+      scale: 0.97;
+    }
+  }
+}
+
 /* Printing a statement: only the document, on white, nothing of the app around it. */
 @media print {
   body * {

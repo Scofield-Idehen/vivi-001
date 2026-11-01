@@ -1,5 +1,6 @@
 import { IconLogin2 } from '@tabler/icons-react';
 import { useState } from 'react';
+import { useConfirm } from '../../components/Confirm.tsx';
 import { Button, Notice } from '../../components/ui.tsx';
 import {
   ApiError,
@@ -25,6 +26,7 @@ export function OwnerLogin({ ownerId, write }: { ownerId: string; write: boolean
   const o = owners.data?.owners.find((x) => x.id === ownerId);
   const give = useGiveOwnerLogin(orgId, ownerId);
   const remove = useRemoveOwnerLogin(orgId, ownerId);
+  const confirm = useConfirm();
   const cancel = useCancelOwnerInvitation(orgId, ownerId);
   const [email, setEmail] = useState<string | null>(null);
   if (!o) return null;
@@ -66,8 +68,16 @@ export function OwnerLogin({ ownerId, write }: { ownerId: string; write: boolean
                   type="button"
                   className="action action-urgent -mr-2.5"
                   disabled={remove.isPending}
-                  onClick={() => {
-                    if (window.confirm(`Stop ${l.email} signing in as ${o.name}?`)) remove.mutate(l.userId);
+                  onClick={async () => {
+                    if (
+                      await confirm({
+                        title: `Remove ${l.email}’s log-in?`,
+                        body: `They can no longer sign in to see ${o.name}’s homes and statements. You can invite them again later.`,
+                        action: 'Remove log-in',
+                        tone: 'urgent',
+                      })
+                    )
+                      remove.mutate(l.userId);
                   }}
                 >
                   Remove log-in
