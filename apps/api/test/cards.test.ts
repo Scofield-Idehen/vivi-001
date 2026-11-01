@@ -151,7 +151,7 @@ describe('card payments', () => {
     const booking = await call('GET', `/v1/reservations/${stay}`, { as: asA() });
     expect(booking.body.payments).toHaveLength(1);
     expect(booking.body.payments[0]).toMatchObject({ amountMinor: 45000, method: 'card' });
-    expect(booking.body.payments[0].note).toContain('Stripe test');
+    expect(booking.body.payments[0].note).toBe('Stripe, test');
     expect(booking.body.balanceMinor).toBe(0);
   });
 

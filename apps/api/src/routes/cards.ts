@@ -62,7 +62,7 @@ function view(row: Row, by: string | null): CardRequest {
   };
 }
 
-const note = (row: Row, words: string) => `${words}${row.live ? '' : ' (Stripe test)'}`;
+const note = (row: Row, words: string) => `${words}${row.live ? '' : ', test'}`;
 
 /** What the booking owes now for a kept deposit: a charge and a matching card payment. */
 async function recordKept(tx: Tx, row: Row, amountMinor: number, reason: string, today: string) {
@@ -84,7 +84,7 @@ async function recordKept(tx: Tx, row: Row, amountMinor: number, reason: string,
       amountMinor,
       method: 'card',
       paidOn: today,
-      note: note(row, 'Kept from the deposit'),
+      note: note(row, 'Deposit'),
       recordedBy: row.createdBy,
     })
     .returning({ id: reservationPayments.id });
@@ -118,7 +118,7 @@ export async function settle(tx: Tx, gateway: CardGateway, id: string): Promise<
           amountMinor: state.receivedMinor,
           method: 'card',
           paidOn: await operatorToday(tx),
-          note: note(row, 'Paid by card through Stripe'),
+          note: note(row, 'Stripe'),
           recordedBy: row.createdBy,
         })
         .returning({ id: reservationPayments.id });

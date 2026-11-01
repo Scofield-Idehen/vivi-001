@@ -6019,7 +6019,7 @@ export async function demoFetch<T>(
       if (card.status !== 'open')
         throw new ApiError(409, 'card_request_closed', 'That link is no longer open.');
       if (card.kind === 'payment') {
-        pay(card.amountMinor, 'Paid by card through Stripe (Stripe test)');
+        pay(card.amountMinor, 'Stripe, test');
         Object.assign(card, { status: 'paid', url: null, settledAt: now });
       } else Object.assign(card, { status: 'held', url: null });
       return answer();
@@ -6048,7 +6048,7 @@ export async function demoFetch<T>(
       createdBy: by,
       createdAt: now,
     });
-    pay(parsed.data.amountMinor, 'Kept from the deposit (Stripe test)');
+    pay(parsed.data.amountMinor, 'Deposit, test');
     Object.assign(card, {
       status: 'kept',
       keptMinor: parsed.data.amountMinor,
