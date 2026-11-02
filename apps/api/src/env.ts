@@ -44,6 +44,8 @@ const EnvSchema = z
      * A live key is refused unless STRIPE_LIVE is "true", so real charges are always a decision.
      */
     STRIPE_SECRET_KEY: z.string().min(20).optional(),
+    /** The Slack app's bot token (xoxb-…): job messages to the team. Only ever a GitHub secret. */
+    SLACK_BOT_TOKEN: z.string().startsWith('xoxb-').optional(),
     /** The signing secret of the Stripe webhook (whsec_…). Without it V-01 checks with Stripe instead. */
     STRIPE_WEBHOOK_SECRET: z.string().min(16).optional(),
     STRIPE_LIVE: z

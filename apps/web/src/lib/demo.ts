@@ -5211,6 +5211,11 @@ export async function demoFetch<T>(
   const s = load();
   if (path.startsWith('/v1/site/')) return (await demoSiteFetch(path, method, options.body)) as T;
   if (path === '/v1/workspace/booking-site') return demoBookingSite(options.orgId, method, options.body) as T;
+  // The demo has no Slack: it shows as connected, and the test message is pretend.
+  if (path === '/v1/workspace/slack' || path === '/v1/workspace/slack/test') {
+    access(options.orgId, 'workspace.read');
+    return { connected: true, team: 'Demo Slack', error: null } as T;
+  }
 
   const homeSetup = /^\/v1\/properties\/([0-9a-f-]{36})\/(terms|payee|payee\/bank|cleaning-cost)$/.exec(path);
   if (homeSetup)

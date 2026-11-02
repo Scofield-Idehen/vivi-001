@@ -126,6 +126,7 @@ jobs:
           # Kept as their own secrets so they can be added or changed without editing API_ENV.
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         shell: python3 {0}
         run: |
           import json, os, sys
@@ -148,7 +149,7 @@ jobs:
                   f.write('\n'.join(lines) + '\n')
               return len(lines)
           api_text = os.environ.get('API_ENV') or ''
-          for extra in ('STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'):
+          for extra in ('STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'SLACK_BOT_TOKEN'):
               value = (os.environ.get(extra) or '').strip()
               if value and f'\n{extra}=' not in f'\n{api_text}':
                   api_text += f'\n{extra}={value}'

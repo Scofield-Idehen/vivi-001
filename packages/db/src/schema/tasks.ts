@@ -131,3 +131,34 @@ export const taskPhotos = app.table(
     check('task_photos_stamp_length', sql`${t.stamp} is null or char_length(${t.stamp}) <= 300`),
   ],
 );
+
+/**
+ * Slack messages about a job (2 Nov 2026), one per job, person and kind, so nobody hears the same
+ * thing twice: `assigned` when it's given to them, `reminder` on the day if not started,
+ * `overdue` to the office when it runs past its time. A failed send keeps its error and is tried
+ * again by the next run.
+ */
+export const taskNudges = app.table(
+  'task_nudges',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => appUsers.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    error: text('error'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('task_nudges_once').on(t.taskId, t.userId, t.kind),
+    index('task_nudges_org_idx').on(t.organisationId),
+    check('task_nudges_kind', sql`${t.kind} in ('assigned', 'reminder', 'overdue')`),
+  ],
+);

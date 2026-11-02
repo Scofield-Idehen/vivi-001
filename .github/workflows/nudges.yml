@@ -1,0 +1,57 @@
+name: Slack nudges
+
+# Job messages to the team on Slack (apps/worker/scripts/nudges.ts): every half hour through the
+# day, reminders for today's jobs not yet started, word to the office about late ones, and any
+# "new job" message that didn't go. Runs here so it needs no always-on worker. Needs the
+# SLACK_BOT_TOKEN secret (the Slack app's bot token) and WORKER_ENV's DATABASE_URL.
+
+on:
+  schedule:
+    # 06:00–20:30 UTC, every 30 minutes (7:00–21:30 in London in summer).
+    - cron: '7,37 6-20 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nudges
+  cancel-in-progress: false
+
+jobs:
+  nudges:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - name: Is Slack set up?
+        id: ready
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        run: |
+          if [ -z "$SLACK_BOT_TOKEN" ]; then
+            echo "No SLACK_BOT_TOKEN secret yet: nothing to send."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.ready.outputs.go == 'true'
+        uses: actions/checkout@v4
+      - if: steps.ready.outputs.go == 'true'
+        uses: pnpm/action-setup@v4
+      - if: steps.ready.outputs.go == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - if: steps.ready.outputs.go == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Send
+        if: steps.ready.outputs.go == 'true'
+        working-directory: apps/worker
+        env:
+          WORKER_ENV: ${{ secrets.WORKER_ENV }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          APP_URL: https://vivi-os.web.app
+        run: |
+          DATABASE_URL=$(printf '%s\n' "$WORKER_ENV" | tr -d '\r' | sed -n 's/^DATABASE_URL=//p' | head -1 | sed "s/^[\"']//; s/[\"']$//")
+          if [ -z "$DATABASE_URL" ]; then echo "::error::WORKER_ENV has no DATABASE_URL."; exit 1; fi
+          echo "::add-mask::$DATABASE_URL"
+          DATABASE_URL="$DATABASE_URL" pnpm -s nudges

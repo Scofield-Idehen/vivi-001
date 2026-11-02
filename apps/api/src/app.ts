@@ -7,6 +7,8 @@ import {
   type CardGateway,
   type LockProvider,
   SecretBox,
+  SlackBot,
+  type SlackSender,
   StripeGateway,
   TTLockProvider,
 } from '@v01/integrations';
@@ -29,6 +31,7 @@ import {
   SupabaseUserDirectory,
   type UserDirectory,
 } from './invites.ts';
+import { nudgeAssigned } from './nudges.ts';
 import { NO_PHOTO_STORE, type PhotoStore, SupabasePhotoStore } from './photos.ts';
 import { calendarRoutes } from './routes/calendar.ts';
 import { cardRoutes } from './routes/cards.ts';
@@ -50,6 +53,7 @@ import { portalRoutes } from './routes/portal.ts';
 import { propertyRoutes } from './routes/properties.ts';
 import { reservationRoutes } from './routes/reservations.ts';
 import { bookingSiteSettingsRoutes, siteRoutes } from './routes/site.ts';
+import { slackRoutes } from './routes/slack.ts';
 import { taskRoutes } from './routes/tasks.ts';
 import { termRoutes } from './routes/terms.ts';
 import { todayRoutes } from './routes/today.ts';
@@ -74,6 +78,8 @@ export interface AppDeps {
   directory?: UserDirectory;
   /** Card payments; defaults to Stripe when STRIPE_SECRET_KEY is set. */
   cards?: CardGateway | null;
+  /** Slack messages to the team; defaults to the Slack app when SLACK_BOT_TOKEN is set. */
+  slack?: SlackSender | null;
   /** Describe every route as OpenAPI, for the docs site's API reference (scripts/openapi.ts). */
   openapi?: boolean;
 }
@@ -191,7 +197,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   channelRoutes(app, { scope });
   todayRoutes(app, { scope, now: deps.now });
   overviewRoutes(app, { scope, now: deps.now });
-  taskRoutes(app, { scope, photos: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, box });
 
   insightRoutes(app, { scope });
   ownerRoutes(app, { scope, files: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, now: deps.now });
@@ -232,6 +237,20 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       : deps.env.STRIPE_SECRET_KEY
         ? new StripeGateway({ secretKey: deps.env.STRIPE_SECRET_KEY })
         : null;
+  const slack =
+    deps.slack !== undefined
+      ? deps.slack
+      : deps.env.SLACK_BOT_TOKEN
+        ? new SlackBot({ token: deps.env.SLACK_BOT_TOKEN })
+        : null;
+  taskRoutes(app, {
+    scope,
+    photos: taskPhotos,
+    bucket: deps.env.TASK_PHOTO_BUCKET,
+    box,
+    nudge: (input) => nudgeAssigned({ db: deps.db, slack, appUrl, log: app.log }, input),
+  });
+  slackRoutes(app, { scope, slack });
   memberRoutes(app, { scope, mailer, appUrl, directory });
   portalRoutes(app, { scope, mailer, appUrl, files: taskPhotos, now: deps.now });
   guestRoutes(app, { db: deps.db, scope, box, now: deps.now, cards, appUrl });

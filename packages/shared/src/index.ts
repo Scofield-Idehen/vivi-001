@@ -24,6 +24,7 @@ export * from './locks.ts';
 export * from './locks.ts';
 export * from './money.ts';
 export * from './money.ts';
+export * from './nudges.ts';
 export * from './overview.ts';
 export * from './overview.ts';
 export * from './owners.ts';

@@ -14,7 +14,8 @@
     "stripe:check": "tsx --env-file-if-exists=.env scripts/stripe-check.ts",
     "guesty:import": "tsx --env-file-if-exists=.env scripts/guesty-import.ts",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "nudges": "tsx --env-file-if-exists=.env scripts/nudges.ts"
   },
   "dependencies": {
     "@v01/channels": "workspace:*",

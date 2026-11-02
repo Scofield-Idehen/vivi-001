@@ -7,6 +7,7 @@ import { dateTime, duration, useNow } from '../lib/format.ts';
 import { useCurrentWorkspace } from '../lib/workspace.tsx';
 import { BookingSiteSection } from './workspace/BookingSiteSection.tsx';
 import { LocksSection } from './workspace/LocksSection.tsx';
+import { SlackSection } from './workspace/SlackSection.tsx';
 import { TeamSection } from './workspace/TeamSection.tsx';
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -97,6 +98,7 @@ export function WorkspacePage() {
           <TeamSection orgId={orgId} role={entry.role} selfId={me.data?.user.id ?? ''} short />
           {can(entry.role, 'properties.read') ? <LocksSection orgId={orgId} role={entry.role} /> : null}
           {can(entry.role, 'properties.read') ? <BookingSiteSection orgId={orgId} role={entry.role} /> : null}
+          <SlackSection orgId={orgId} />
         </div>
       ) : null}
       <SupportVisits orgId={orgId} />

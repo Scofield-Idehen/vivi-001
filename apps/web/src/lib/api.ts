@@ -108,6 +108,7 @@ import type {
   SiteNights,
   SiteQuote,
   SiteQuoteRequest,
+  SlackStatus,
   StatementList,
   SupportAccessStart,
   SupportGrant,
@@ -1045,6 +1046,24 @@ export function useSiteBooking(slug: string, bookingId: string) {
     retry: false,
     // While the guest is between Stripe and here, look again every few seconds.
     refetchInterval: (q) => (q.state.data?.status === 'open' ? 3000 : false),
+  });
+}
+
+/** Slack for job messages: connected or not, and a test message to yourself. */
+export function useSlackStatus(orgId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['slack', orgId],
+    enabled: Boolean(token && orgId),
+    queryFn: () => apiFetch<SlackStatus>('/v1/workspace/slack', { token: token as string, orgId }),
+  });
+}
+
+export function useSlackTest(orgId: string | null) {
+  const token = useToken();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<SlackStatus>('/v1/workspace/slack/test', { token: token as string, orgId, method: 'POST' }),
   });
 }
 

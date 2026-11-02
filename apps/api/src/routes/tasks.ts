@@ -268,9 +268,25 @@ function toTemplate(row: typeof taskTemplates.$inferSelect): TaskTemplate {
 
 export function taskRoutes(
   app: FastifyInstance,
-  deps: { scope: RequestScope; photos: PhotoStore; bucket?: string; box?: SecretBox },
+  deps: {
+    scope: RequestScope;
+    photos: PhotoStore;
+    bucket?: string;
+    box?: SecretBox;
+    /** Slack messages about jobs; null when Slack isn't set up. */
+    nudge?: (input: {
+      orgId: string;
+      taskId: string;
+      assigneeId: string | null;
+      byUserId: string;
+    }) => Promise<void>;
+  },
 ) {
   const typed = app.withTypeProvider<ZodTypeProvider>();
+  /** Runs after the change is saved, so the message never tells of a job that wasn't. */
+  const tell = (input: { orgId: string; taskId: string; assigneeId: string | null; byUserId: string }) => {
+    void deps.nudge?.(input);
+  };
 
   typed.get(
     '/v1/tasks',
@@ -336,8 +352,12 @@ export function taskRoutes(
   typed.post(
     '/v1/tasks',
     { schema: { body: TaskCreateSchema, response: { 201: TaskSchema } } },
-    async (req, reply) =>
-      deps.scope.inOrg(req, 'tasks.manage', async (tx, ctx) => {
+    async (req, reply) => {
+      let by = '';
+      let orgId = '';
+      const made = await deps.scope.inOrg(req, 'tasks.manage', async (tx, ctx) => {
+        by = ctx.userId;
+        orgId = ctx.orgId;
         const [property] = await tx
           .select({
             id: properties.id,
@@ -385,17 +405,26 @@ export function taskRoutes(
         if (!task) throw new Error('The task was not found after insert.');
         reply.code(201);
         return task;
-      }),
+      });
+      tell({ orgId, taskId: made.id, assigneeId: made.assignee?.id ?? null, byUserId: by });
+      return made;
+    },
   );
 
   typed.patch(
     '/v1/tasks/:id',
     { schema: { params: TaskParams, body: TaskUpdateSchema, response: { 200: TaskSchema } } },
-    async (req) =>
-      deps.scope.inOrg(req, 'tasks.write', async (tx, ctx) => {
+    async (req) => {
+      let before: string | null = null;
+      let by = '';
+      let orgId = '';
+      const changed = await deps.scope.inOrg(req, 'tasks.write', async (tx, ctx) => {
+        by = ctx.userId;
+        orgId = ctx.orgId;
         const [current] = await tx.select().from(tasks).where(eq(tasks.id, req.params.id));
         if (!current)
           throw new HttpError(404, 'task_not_found', 'That task does not exist in this workspace.');
+        before = current.assigneeUserId;
         const crew = ctx.role === 'field';
         if (crew) {
           // The crew works their own jobs: start, tick off, note, finish. Assigning and moving is the office's.
@@ -459,7 +488,12 @@ export function taskRoutes(
         const [task] = await loadTasks(tx, eq(tasks.id, current.id), 'asc', deps.photos);
         if (!task) throw new Error('The task was not found after update.');
         return task;
-      }),
+      });
+      // Given to someone new: they hear about it.
+      if (changed.assignee && changed.assignee.id !== before)
+        tell({ orgId, taskId: changed.id, assigneeId: changed.assignee.id, byUserId: by });
+      return changed;
+    },
   );
 
   /** The crew reporting damage from a job: a maintenance task on the same property, for the office to assign. */

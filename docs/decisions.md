@@ -5,6 +5,20 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-11-02
 
+- **Slack messages about jobs (Alpha: "all our cleaners are on slack so slack works for nudging them
+  once assigned"; "ok go ahead").** One Slack app with a bot token (`SLACK_BOT_TOKEN`, a GitHub
+  secret only; scopes chat:write, im:write, users:read.email). People are found by the email they
+  sign in to V-01 with. Three messages, each once per job, person and kind (`task_nudges`,
+  migrations 0056–0057): "New job for you" the moment a job is made or given to someone (not to
+  yourself), from the API after the change is saved; "Reminder" from 8:00 on the day if not
+  started; "Running late" an hour past the job's time (or the day after) to whoever made it, or
+  the admins and operations for automatic cleans. Reminders, late jobs and any "new job" message
+  that didn't go (the worker's automatic cleans, Slack down) come from a scheduled GitHub run every
+  half hour in the day (`.github/workflows/nudges.yml`), so they need no always-on worker. A Slack
+  failure is recorded and never stops the change that caused it. Workspace → Slack shows the
+  connection and sends you a test message. One Slack app per operator's Slack; a second operator
+  would bring its own token.
+
 - **Getting paid for a claim, on the claim (Alpha: "yes go ahead and build 1 to 3").** A "Get paid"
   panel under where the claim stands. Filed with a channel: a button to its claim page (Airbnb's
   Resolution Centre, the Booking.com extranet, Vrbo's damage claim steps, Expedia Partner Central),

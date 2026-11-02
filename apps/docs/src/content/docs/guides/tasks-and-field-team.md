@@ -49,3 +49,16 @@ Every photo has the time, the home and its address, and who took it written onto
 On **Workspace → Team**, **From Guesty** lists the people on your Guesty account, grouped as cleaners, maintenance and everyone else. Their Guesty tags give their skills, and their Guesty homes give the homes they work on.
 
 Tick who to add and press **Add to the team**. Nobody is sent an email. They join the field team, can be given jobs straight away, and sign in later with their email as the same person. Someone with no email in Guesty can't be added this way; invite them instead.
+
+## Slack messages
+
+If your Slack is connected (Workspace → Slack), the team hears about jobs where they already are:
+
+- **New job:** the moment a job is given to someone, they get a direct message with the home, the day and a link
+  to the job. Nobody is messaged about a job they gave themselves.
+- **Reminder:** from 8:00 on the day, anyone whose job hasn't been started gets a reminder.
+- **Running late:** an hour after a job's time (or the day after, for jobs with no time), whoever made the job
+  hears it isn't done. For automatic check-out cleans, your admins and operations hear instead.
+
+Each message is sent once. People are found on Slack by the email they sign in to V-01 with, so their Slack
+email must match. Use **Send me a test message** on the Workspace page to check yours.

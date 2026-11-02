@@ -39,6 +39,7 @@ export {
   MemoryTokenStore,
 } from './guesty/client.ts';
 export { SecretBox } from './secrets.ts';
+export { MemorySlack, SlackBot, SlackError, type SlackSender } from './slack/bot.ts';
 export {
   CardError,
   type CardGateway,

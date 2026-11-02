@@ -9,4 +9,5 @@ export {
   WorkerDatabase,
 } from './client.ts';
 export { saveLockList } from './locks.ts';
+export { type NudgeSlack, sendNudge } from './nudges.ts';
 export * from './schema/index.ts';
