@@ -192,7 +192,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   todayRoutes(app, { scope, now: deps.now });
   overviewRoutes(app, { scope, now: deps.now });
   taskRoutes(app, { scope, photos: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, box });
-  claimRoutes(app, { scope, files: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, now: deps.now });
+
   insightRoutes(app, { scope });
   ownerRoutes(app, { scope, files: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, now: deps.now });
   termRoutes(app, { scope, files: taskPhotos, bucket: deps.env.TASK_PHOTO_BUCKET, box, now: deps.now });
@@ -237,6 +237,14 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   guestRoutes(app, { db: deps.db, scope, box, now: deps.now, cards, appUrl });
   consoleRoutes(app, { scope });
   cardRoutes(app, { scope, gateway: cards, appUrl });
+  claimRoutes(app, {
+    scope,
+    files: taskPhotos,
+    bucket: deps.env.TASK_PHOTO_BUCKET,
+    now: deps.now,
+    cards,
+    appUrl,
+  });
   siteRoutes(app, { db: deps.db, scope, cards, appUrl, now: deps.now });
   bookingSiteSettingsRoutes(app, { scope, cards });
   await webhookRoutes(app, {

@@ -19,6 +19,7 @@ import {
   CardKeepSchema,
   type CardRequest,
   CardRequestCreateSchema,
+  type CardStatus,
   CHANNEL_LABELS,
   type Channel,
   type ChannelAccount,
@@ -3190,6 +3191,8 @@ interface DemoClaim {
   }[];
   createdBy: string | null;
   createdAt: string;
+  /** Payment links sent to the guest for this claim (Stripe stand-in). */
+  links?: { id: string; status: CardStatus; amountMinor: number; url: string | null; createdAt: string }[];
   updatedAt: string;
 }
 
@@ -3412,6 +3415,17 @@ async function claimView(operator: DemoOperator, c: DemoClaim): Promise<Claim> {
         .filter((e) => e.claimId === c.id)
         .map((e) => expenseView(operator, e)),
     ),
+    collect: (() => {
+      const stay = operator.calendar.stays.find((x) => x.id === c.reservationId);
+      const held = (stay?.cards ?? []).find((r) => r.kind === 'deposit' && r.status === 'held');
+      return {
+        enabled: true,
+        testMode: true,
+        deposit: held ? { requestId: held.id, amountMinor: held.amountMinor } : null,
+        links: c.links ?? [],
+        guestPhone: stay?.guestPhone ?? null,
+      };
+    })(),
   };
 }
 
@@ -3526,6 +3540,37 @@ async function demoClaims(
 ): Promise<unknown> {
   const url = new URL(path, 'https://demo.invalid');
   const parts = url.pathname.split('/').filter(Boolean); // v1, claims, id?, items|files?, sub?
+  if (method === 'POST' && (parts[3] === 'keep-deposit' || parts[3] === 'payment-link')) {
+    const { operator } = access(orgId, 'claims.write');
+    const claim = findClaim(operator, parts[2] ?? '');
+    const amountMinor = (body as { amountMinor: number }).amountMinor;
+    const stay = operator.calendar.stays.find((x) => x.id === claim.reservationId);
+    const today = todayIn(operator.workspace.settings.timeZone);
+    const now = new Date().toISOString();
+    if (parts[3] === 'keep-deposit') {
+      const held = (stay?.cards ?? []).find((r) => r.kind === 'deposit' && r.status === 'held');
+      if (!held)
+        throw new ApiError(409, 'not_held', 'No deposit is held on the guest’s card for this booking.');
+      if (amountMinor > held.amountMinor)
+        throw new ApiError(400, 'too_much', 'That is more than the deposit held.');
+      held.status = 'kept';
+      held.keptMinor = amountMinor;
+      held.keptReason = 'Damage claim';
+      held.settledAt = now;
+    } else {
+      // The demo has no Stripe page: the guest pays the link at once.
+      claim.links = [
+        { id: crypto.randomUUID(), status: 'paid', amountMinor, url: null, createdAt: now },
+        ...(claim.links ?? []),
+      ];
+    }
+    claim.receivedMinor = (claim.receivedMinor ?? 0) + amountMinor;
+    if (claim.status !== 'closed') claim.status = 'paid';
+    claim.place = 'guest';
+    claim.filedOn ??= today;
+    save();
+    return claimView(operator, claim);
+  }
   if (method === 'GET' && parts.length === 2) {
     const { operator } = access(orgId, 'claims.read');
     return demoClaimList(operator, url.searchParams.get('view') ?? 'active');

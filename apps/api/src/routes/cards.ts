@@ -34,7 +34,7 @@ import { settleSiteBooking } from './site.ts';
  * way the same `settle` runs, under a row lock, so nothing is recorded twice.
  */
 
-type Row = typeof cardRequests.$inferSelect;
+export type Row = typeof cardRequests.$inferSelect;
 
 const personName = sql<string>`coalesce(${appUsers.fullName}, ${appUsers.email})`;
 
@@ -93,6 +93,45 @@ async function recordKept(tx: Tx, row: Row, amountMinor: number, reason: string,
 }
 
 /**
+ * Money from the guest for a damage claim (2 Nov 2026): the claim is marked paid with it, received
+ * today (so it reaches the owner's statement this month), and filed with the guest if it wasn't filed.
+ */
+export async function creditClaim(
+  tx: Tx,
+  claimId: string,
+  amountMinor: number,
+  today: string,
+): Promise<void> {
+  await tx.execute(sql`
+    update app.claims
+       set received_minor = coalesce(received_minor, 0) + ${amountMinor},
+           received_on = coalesce(received_on, ${today}::date),
+           filed_on = coalesce(filed_on, ${today}::date),
+           status = case when status = 'closed' then status else 'paid' end
+     where id = ${claimId}::uuid`);
+}
+
+/** Keeps some or all of a held deposit: charged at Stripe, recorded on the booking. */
+export async function keepHeld(
+  tx: Tx,
+  gateway: CardGateway,
+  row: Row,
+  amountMinor: number,
+  reason: string,
+): Promise<void> {
+  if (row.status !== 'held' || !row.paymentIntentId)
+    throw new HttpError(409, 'not_held', 'Nothing is held on the guest’s card for this.');
+  if (amountMinor > row.amountMinor)
+    throw new HttpError(400, 'too_much', 'That is more than the deposit held.');
+  await gateway.capture(row.paymentIntentId, amountMinor).catch(cardFailure);
+  const ids = await recordKept(tx, row, amountMinor, reason, await operatorToday(tx));
+  await tx
+    .update(cardRequests)
+    .set({ status: 'kept', keptMinor: amountMinor, keptReason: reason, ...ids, settledAt: new Date() })
+    .where(eq(cardRequests.id, row.id));
+}
+
+/**
  * Brings one request up to date with Stripe. Locks the row first, so the webhook and a page load
  * arriving together record a payment once.
  */
@@ -119,10 +158,11 @@ export async function settle(tx: Tx, gateway: CardGateway, id: string): Promise<
           amountMinor: state.receivedMinor,
           method: 'card',
           paidOn: await operatorToday(tx),
-          note: note(row, 'Stripe'),
+          note: note(row, row.claimId ? 'Stripe, damage claim' : 'Stripe'),
           recordedBy: row.createdBy,
         })
         .returning({ id: reservationPayments.id });
+      if (row.claimId) await creditClaim(tx, row.claimId, state.receivedMinor, await operatorToday(tx));
       await tx
         .update(cardRequests)
         .set({
@@ -203,6 +243,9 @@ export async function createCardRequest(
     createdBy: string | null;
     successUrl: string;
     cancelUrl: string;
+    /** For a damage claim: what the guest sees on Stripe's page, and the claim it pays. */
+    claimId?: string;
+    description?: string;
   },
 ): Promise<Row> {
   const [b] = await tx
@@ -230,7 +273,7 @@ export async function createCardRequest(
       kind: input.kind,
       amountMinor: input.amountMinor,
       currency,
-      description: `Stay at ${b.home}, ${b.checkIn} to ${b.checkOut}`,
+      description: input.description ?? `Stay at ${b.home}, ${b.checkIn} to ${b.checkOut}`,
       successUrl: input.successUrl,
       cancelUrl: input.cancelUrl,
       customerEmail: b.email,
@@ -252,6 +295,7 @@ export async function createCardRequest(
       expiresAt: created.expiresAt,
       live: gateway.live,
       createdBy: input.createdBy,
+      claimId: input.claimId ?? null,
     })
     .returning();
   if (!row) throw new Error('Saving the card request returned nothing.');
@@ -395,22 +439,7 @@ export function cardRoutes(
       deps.scope.inOrg(req, 'money.write', async (tx) => {
         if (!gateway) throw off();
         const row = await requestOf(tx, req.params.requestId);
-        if (row.status !== 'held' || !row.paymentIntentId)
-          throw new HttpError(409, 'not_held', 'Nothing is held on the guest’s card for this.');
-        if (req.body.amountMinor > row.amountMinor)
-          throw new HttpError(400, 'too_much', 'That is more than the deposit held.');
-        await gateway.capture(row.paymentIntentId, req.body.amountMinor).catch(cardFailure);
-        const ids = await recordKept(tx, row, req.body.amountMinor, req.body.reason, await operatorToday(tx));
-        await tx
-          .update(cardRequests)
-          .set({
-            status: 'kept',
-            keptMinor: req.body.amountMinor,
-            keptReason: req.body.reason,
-            ...ids,
-            settledAt: new Date(),
-          })
-          .where(eq(cardRequests.id, row.id));
+        await keepHeld(tx, gateway, row, req.body.amountMinor, req.body.reason);
         return list(tx, row.reservationId);
       }),
   );

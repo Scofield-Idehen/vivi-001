@@ -374,3 +374,69 @@ describe('the deposit on the guest’s page', () => {
     ).toBe(201);
   });
 });
+
+describe('collecting a damage claim from the guest', () => {
+  it('keeps some of a held deposit, then sends a payment link for the rest', async () => {
+    const dep = await call('POST', `/v1/reservations/${stay}/card-requests`, {
+      as: asA(),
+      body: { kind: 'deposit', amountMinor: 10000 },
+    });
+    const depositId = dep.body.requests.find(
+      (r: { kind: string; status: string }) => r.kind === 'deposit' && r.status === 'open',
+    ).id;
+    gateway.complete(await sessionOf(depositId));
+    await call('GET', `/v1/reservations/${stay}/card-requests`, { as: asA() });
+
+    const made = await call('POST', '/v1/claims', { as: asA(), body: { reservationId: stay } });
+    expect(made.status).toBe(201);
+    const claimId = made.body.id;
+    const first = await call('GET', `/v1/claims/${claimId}`, { as: asA() });
+    expect(first.body.collect).toMatchObject({
+      enabled: true,
+      deposit: { requestId: depositId, amountMinor: 10000 },
+    });
+
+    // More than is held is refused; then 40.00 is kept.
+    expect(
+      (await call('POST', `/v1/claims/${claimId}/keep-deposit`, { as: asA(), body: { amountMinor: 20000 } }))
+        .status,
+    ).toBe(400);
+    const kept = await call('POST', `/v1/claims/${claimId}/keep-deposit`, {
+      as: asA(),
+      body: { amountMinor: 4000 },
+    });
+    expect(kept.status).toBe(200);
+    expect(kept.body).toMatchObject({ status: 'paid', place: 'guest', receivedMinor: 4000 });
+    expect(kept.body.collect.deposit).toBeNull();
+
+    // A payment link for 25.00; once the guest pays, the claim has 65.00.
+    const link = await call('POST', `/v1/claims/${claimId}/payment-link`, {
+      as: asA(),
+      body: { amountMinor: 2500 },
+    });
+    expect(link.status).toBe(200);
+    expect(link.body.collect.links[0]).toMatchObject({ status: 'open', amountMinor: 2500 });
+    const [row] = await owner<{ id: string; session_id: string }>(
+      'select id, session_id from app.card_requests where claim_id = $1',
+      [claimId],
+    );
+    expect(gateway.sessions.get(row!.session_id)!.input.description).toContain('Damage during your stay');
+    gateway.complete(row!.session_id);
+    const paid = await call('GET', `/v1/claims/${claimId}`, { as: asA() });
+    expect(paid.body).toMatchObject({ receivedMinor: 6500, status: 'paid' });
+    expect(paid.body.collect.links[0].status).toBe('paid');
+    const booking = (await call('GET', `/v1/reservations/${stay}`, { as: asA() })).body;
+    expect(booking.payments.map((p: { note: string }) => p.note)).toContain('Stripe, damage claim, test');
+  });
+
+  it('says card payments are off when Stripe isn’t set up', async () => {
+    const [c] = await owner<{ id: string }>('select id from app.claims limit 1');
+    const claimId = c!.id;
+    const r = await call('POST', `/v1/claims/${claimId}/payment-link`, {
+      as: asA(),
+      on: offApp,
+      body: { amountMinor: 100 },
+    });
+    expect(r.status).toBe(503);
+  });
+});

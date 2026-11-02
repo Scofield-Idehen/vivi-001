@@ -5,6 +5,18 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-11-02
 
+- **Getting paid for a claim, on the claim (Alpha: "yes go ahead and build 1 to 3").** A "Get paid"
+  panel under where the claim stands. Filed with a channel: a button to its claim page (Airbnb's
+  Resolution Centre, the Booking.com extranet, Vrbo's damage claim steps, Expedia Partner Central),
+  the booking code to copy, and what to upload; no channel lets software file a claim, Guesty
+  included, so a person files it. Filed with the guest: keep some of a deposit still held on their
+  card (charged, recorded on the booking, the rest released), or make a payment link
+  (`card_requests.claim_id`, migrations 0054–0055) to copy or send on WhatsApp. Money in either way
+  marks the claim paid with it, dated today so it reaches that month's owner statement, and the
+  claim page asks Stripe about any open link when it's opened. Guesty's own damage claims are its
+  paid protection product (Guesty Shield), not a channel claim; V-01's equivalent waits on choosing
+  a provider.
+
 - **The Team list is one line per person (Alpha: "this scrolling takes too much space").** Name,
   role, jobs and homes on one line; a line drops down to rename, change the role, homes and jobs, or
   remove. With more than six people, a search and a "Show" choice (Everyone, Office, Cleaners,

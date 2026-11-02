@@ -49,6 +49,7 @@ import { NotFound } from '../misc.tsx';
 import { ExpenseSheet } from '../money/ExpenseSheet.tsx';
 import { currencySymbol, minorToInput, moneyText } from '../properties/money.ts';
 import { Countdown } from './ClaimsPage.tsx';
+import { Collect } from './Collect.tsx';
 import { downloadEvidence } from './evidence.ts';
 
 /**
@@ -836,6 +837,11 @@ export function ClaimPage() {
             </div>
             <div className="order-first flex min-w-0 flex-col gap-6 lg:sticky lg:top-20 lg:order-none">
               <Standing key={`${c.id}-${c.status}`} claim={c} write={write} locale={locale} />
+              {c.status !== 'closed' ? (
+                <Section id="get-paid" title="Get paid">
+                  <Collect claim={c} write={write} locale={locale} />
+                </Section>
+              ) : null}
               {write || c.summary ? (
                 <Section id="summary" title="In short">
                   <Summary claim={c} write={write} />

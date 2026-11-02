@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   appUsers,
+  cardRequests,
   claimFiles,
   claimItems,
   claims,
@@ -10,12 +11,15 @@ import {
   reservations,
   type Tx,
 } from '@v01/db';
+import type { CardGateway } from '@v01/integrations';
 import {
   addDays,
+  type CardStatus,
   type Channel,
   CLAIM_DAYS,
   CLAIM_FILE_MAX,
   type Claim,
+  ClaimCollectRequestSchema,
   ClaimCreateSchema,
   ClaimFileRegisterSchema,
   ClaimFileUploadRequestSchema,
@@ -31,14 +35,16 @@ import {
   PhotoUploadTicketSchema,
   todayIn,
 } from '@v01/shared';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { type RequestScope, toIso } from '../context.ts';
 import { HttpError } from '../errors.ts';
 import type { PhotoStore } from '../photos.ts';
+import { createCardRequest, creditClaim, keepHeld, settle } from './cards.ts';
 import { claimExpenses } from './owners.ts';
+import { operatorToday } from './reservations.ts';
 
 /**
  * Damage claims (built 30 Oct 2026): one per booking. The team lists what was damaged and what it
@@ -143,7 +149,20 @@ function summaries(tx: Tx) {
     .leftJoin(guests, eq(guests.id, reservations.guestId));
 }
 
-async function loadClaim(tx: Tx, id: string, store: PhotoStore): Promise<Claim> {
+async function loadClaim(
+  tx: Tx,
+  id: string,
+  store: PhotoStore,
+  cards: CardGateway | null = null,
+): Promise<Claim> {
+  // A link the guest may have paid since: ask Stripe, so the claim shows it (and is marked paid).
+  if (cards) {
+    const open = await tx
+      .select({ id: cardRequests.id })
+      .from(cardRequests)
+      .where(and(eq(cardRequests.claimId, id), eq(cardRequests.status, 'open')));
+    for (const o of open) await settle(tx, cards, o.id).catch(() => undefined);
+  }
   const { currency } = await settingsOf(tx);
   const [row] = await summaries(tx).where(eq(claims.id, id));
   if (!row) throw new HttpError(404, 'claim_not_found', 'That claim does not exist in this workspace.');
@@ -296,6 +315,52 @@ async function loadClaim(tx: Tx, id: string, store: PhotoStore): Promise<Claim> 
     reports: reports.map((r) => ({ taskId: r.task_id, day: r.due_on, what: r.notes, by: r.by })),
     nextCheckIn: next,
     costs: await claimExpenses(tx, id, store),
+    collect: await collectOf(tx, id, row.reservationId, cards),
+  };
+}
+
+/** What can be collected from the guest for a claim: a held deposit, and the links already sent. */
+async function collectOf(tx: Tx, claimId: string, reservationId: string, cards: CardGateway | null) {
+  const [deposit] = await tx
+    .select({ id: cardRequests.id, amountMinor: cardRequests.amountMinor })
+    .from(cardRequests)
+    .where(
+      and(
+        eq(cardRequests.reservationId, reservationId),
+        eq(cardRequests.kind, 'deposit'),
+        eq(cardRequests.status, 'held'),
+      ),
+    )
+    .orderBy(desc(cardRequests.createdAt))
+    .limit(1);
+  const links = await tx
+    .select({
+      id: cardRequests.id,
+      status: cardRequests.status,
+      amountMinor: cardRequests.amountMinor,
+      url: cardRequests.url,
+      createdAt: cardRequests.createdAt,
+    })
+    .from(cardRequests)
+    .where(eq(cardRequests.claimId, claimId))
+    .orderBy(desc(cardRequests.createdAt));
+  const [guest] = await tx
+    .select({ phone: guests.phone })
+    .from(reservations)
+    .leftJoin(guests, eq(guests.id, reservations.guestId))
+    .where(eq(reservations.id, reservationId));
+  return {
+    enabled: Boolean(cards),
+    testMode: cards ? !cards.live : false,
+    deposit: deposit ? { requestId: deposit.id, amountMinor: Number(deposit.amountMinor) } : null,
+    links: links.map((l) => ({
+      id: l.id,
+      status: l.status as CardStatus,
+      amountMinor: Number(l.amountMinor),
+      url: l.status === 'open' ? l.url : null,
+      createdAt: toIso(String(l.createdAt)),
+    })),
+    guestPhone: guest?.phone ?? null,
   };
 }
 
@@ -307,9 +372,79 @@ async function ownClaim(tx: Tx, id: string): Promise<typeof claims.$inferSelect>
 
 export function claimRoutes(
   app: FastifyInstance,
-  deps: { scope: RequestScope; files: PhotoStore; bucket: string; now?: () => Date },
+  deps: {
+    scope: RequestScope;
+    files: PhotoStore;
+    bucket: string;
+    now?: () => Date;
+    cards?: CardGateway | null;
+    appUrl?: string;
+  },
 ) {
   const typed = app.withTypeProvider<ZodTypeProvider>();
+  const cardsOff = () =>
+    new HttpError(503, 'cards_off', 'Card payments aren’t switched on here yet (Stripe).');
+
+  /** Keep some of the guest's held deposit for this claim: charged, on the booking, and the claim paid. */
+  typed.post(
+    '/v1/claims/:id/keep-deposit',
+    { schema: { params: Params, body: ClaimCollectRequestSchema, response: { 200: ClaimSchema } } },
+    async (req) =>
+      deps.scope.inOrg(req, 'claims.write', async (tx) => {
+        const gateway = deps.cards;
+        if (!gateway) throw cardsOff();
+        const claim = await ownClaim(tx, req.params.id);
+        const [held] = await tx
+          .select()
+          .from(cardRequests)
+          .where(
+            and(
+              eq(cardRequests.reservationId, claim.reservationId),
+              eq(cardRequests.kind, 'deposit'),
+              eq(cardRequests.status, 'held'),
+            ),
+          )
+          .orderBy(desc(cardRequests.createdAt))
+          .limit(1)
+          .for('update');
+        if (!held)
+          throw new HttpError(409, 'not_held', 'No deposit is held on the guest’s card for this booking.');
+        await keepHeld(tx, gateway, held, req.body.amountMinor, 'Damage claim');
+        await creditClaim(tx, claim.id, req.body.amountMinor, await operatorToday(tx));
+        await tx.update(claims).set({ place: 'guest' }).where(eq(claims.id, claim.id));
+        return loadClaim(tx, claim.id, deps.files, deps.cards);
+      }),
+  );
+
+  /** Ask the guest to pay for the damage: a Stripe link; once paid, the claim is marked paid with it. */
+  typed.post(
+    '/v1/claims/:id/payment-link',
+    { schema: { params: Params, body: ClaimCollectRequestSchema, response: { 200: ClaimSchema } } },
+    async (req) =>
+      deps.scope.inOrg(req, 'claims.write', async (tx, ctx) => {
+        const gateway = deps.cards;
+        if (!gateway) throw cardsOff();
+        const claim = await ownClaim(tx, req.params.id);
+        const [b] = await tx
+          .select({ home: properties.name, checkIn: reservations.checkIn, checkOut: reservations.checkOut })
+          .from(reservations)
+          .innerJoin(properties, eq(properties.id, reservations.propertyId))
+          .where(eq(reservations.id, claim.reservationId));
+        await createCardRequest(tx, gateway, {
+          orgId: ctx.orgId,
+          reservationId: claim.reservationId,
+          kind: 'payment',
+          amountMinor: req.body.amountMinor,
+          createdBy: ctx.userId,
+          successUrl: `${deps.appUrl ?? ''}/paid`,
+          cancelUrl: `${deps.appUrl ?? ''}/paid?not=1`,
+          claimId: claim.id,
+          description: `Damage during your stay at ${b?.home ?? 'the home'}, ${b?.checkIn ?? ''} to ${b?.checkOut ?? ''}`,
+        });
+        await tx.update(claims).set({ place: 'guest' }).where(eq(claims.id, claim.id));
+        return loadClaim(tx, claim.id, deps.files, deps.cards);
+      }),
+  );
 
   typed.get(
     '/v1/claims',
@@ -406,7 +541,7 @@ export function claimRoutes(
         // One claim per booking: asking again opens the one there is.
         if (existing) {
           reply.code(200);
-          return await loadClaim(tx, existing.id, deps.files);
+          return await loadClaim(tx, existing.id, deps.files, deps.cards);
         }
         const next = await nextCheckIn(tx, booking.propertyId, booking.checkOut);
         const [row] = await tx
@@ -421,12 +556,12 @@ export function claimRoutes(
           .returning({ id: claims.id });
         if (!row) throw new Error('Inserting the claim returned nothing.');
         reply.code(201);
-        return await loadClaim(tx, row.id, deps.files);
+        return await loadClaim(tx, row.id, deps.files, deps.cards);
       }),
   );
 
   typed.get('/v1/claims/:id', { schema: { params: Params, response: { 200: ClaimSchema } } }, async (req) =>
-    deps.scope.inOrg(req, 'claims.read', async (tx) => loadClaim(tx, req.params.id, deps.files)),
+    deps.scope.inOrg(req, 'claims.read', async (tx) => loadClaim(tx, req.params.id, deps.files, deps.cards)),
   );
 
   typed.patch(
@@ -468,7 +603,7 @@ export function claimRoutes(
             ...(b.outcome !== undefined ? { outcome: blank(b.outcome) } : {}),
           })
           .where(eq(claims.id, claim.id));
-        return loadClaim(tx, claim.id, deps.files);
+        return loadClaim(tx, claim.id, deps.files, deps.cards);
       }),
   );
 
@@ -493,7 +628,7 @@ export function claimRoutes(
           position: pos?.n ?? 0,
         });
         reply.code(201);
-        return await loadClaim(tx, claim.id, deps.files);
+        return await loadClaim(tx, claim.id, deps.files, deps.cards);
       }),
   );
 
@@ -509,7 +644,7 @@ export function claimRoutes(
           .where(and(eq(claimItems.id, req.params.itemId), eq(claimItems.claimId, claim.id)))
           .returning({ id: claimItems.id });
         if (!updated.length) throw new HttpError(404, 'item_not_found', 'That line is not on this claim.');
-        return loadClaim(tx, claim.id, deps.files);
+        return loadClaim(tx, claim.id, deps.files, deps.cards);
       }),
   );
 
@@ -522,7 +657,7 @@ export function claimRoutes(
         await tx
           .delete(claimItems)
           .where(and(eq(claimItems.id, req.params.itemId), eq(claimItems.claimId, claim.id)));
-        return loadClaim(tx, claim.id, deps.files);
+        return loadClaim(tx, claim.id, deps.files, deps.cards);
       }),
   );
 
@@ -612,7 +747,7 @@ export function claimRoutes(
           originalBytes: original?.bytes ?? null,
         });
         reply.code(201);
-        return await loadClaim(tx, claim.id, deps.files);
+        return await loadClaim(tx, claim.id, deps.files, deps.cards);
       }),
   );
 
@@ -634,7 +769,7 @@ export function claimRoutes(
         await tx.delete(claimFiles).where(eq(claimFiles.id, file.id));
         await deps.files.remove(file.storagePath).catch(() => {});
         if (file.originalPath) await deps.files.remove(file.originalPath).catch(() => {});
-        return loadClaim(tx, claim.id, deps.files);
+        return loadClaim(tx, claim.id, deps.files, deps.cards);
       }),
   );
 }

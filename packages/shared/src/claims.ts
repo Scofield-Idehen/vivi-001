@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CARD_STATUSES } from './cards.ts';
 import { addDays } from './dates.ts';
 import { CHANNELS, type Channel } from './enums.ts';
 import { ExpenseSchema } from './owners.ts';
@@ -164,6 +165,27 @@ export const ClaimSchema = ClaimSummarySchema.extend({
   createdBy: z.string().nullable(),
   /** Money already spent putting it right, recorded as expenses for this claim. */
   costs: z.array(ExpenseSchema),
+  /**
+   * Collecting from the guest (2 Nov 2026): a deposit still held on their card that some of the
+   * claim can be kept from, and payment links sent for this claim.
+   */
+  collect: z.object({
+    /** Card payments are set up (Stripe). */
+    enabled: z.boolean(),
+    testMode: z.boolean(),
+    deposit: z.object({ requestId: Uuid, amountMinor: z.number().int() }).nullable(),
+    links: z.array(
+      z.object({
+        id: Uuid,
+        status: z.enum(CARD_STATUSES),
+        amountMinor: z.number().int(),
+        url: z.string().nullable(),
+        createdAt: z.string(),
+      }),
+    ),
+    /** For a message to the guest. */
+    guestPhone: z.string().nullable(),
+  }),
 });
 export type Claim = z.infer<typeof ClaimSchema>;
 
@@ -193,6 +215,12 @@ export const ClaimListSchema = z.object({
 export type ClaimList = z.infer<typeof ClaimListSchema>;
 
 export const ClaimCreateSchema = z.object({ reservationId: Uuid });
+
+/** Keep from the deposit, or ask the guest to pay: how much, in minor units. */
+export const ClaimCollectRequestSchema = z.object({
+  amountMinor: z.number().int().positive().max(100_000_000),
+});
+export type ClaimCollectRequest = z.infer<typeof ClaimCollectRequestSchema>;
 
 export const ClaimUpdateSchema = z
   .object({

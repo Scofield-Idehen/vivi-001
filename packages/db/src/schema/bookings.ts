@@ -289,6 +289,11 @@ export const cardRequests = app.table(
     chargeId: uuid('charge_id').references(() => reservationCharges.id, { onDelete: 'set null' }),
     /** Test or live: a test request never becomes real money. */
     live: boolean('live').notNull().default(false),
+    /**
+     * A payment asked for a damage claim (2 Nov 2026): when it's paid, the claim is marked paid with
+     * it. The foreign key to claims is in migration 0055 (claims.ts imports this file).
+     */
+    claimId: uuid('claim_id'),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -296,6 +301,7 @@ export const cardRequests = app.table(
   },
   (t) => [
     index('card_requests_reservation_idx').on(t.reservationId),
+    index('card_requests_claim_idx').on(t.claimId),
     unique('card_requests_session_key').on(t.sessionId),
     check('card_requests_kind', sql`${t.kind} in ('payment', 'deposit')`),
     check(

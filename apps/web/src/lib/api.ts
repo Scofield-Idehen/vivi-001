@@ -1624,6 +1624,17 @@ export function useStartClaim(orgId: string | null) {
   );
 }
 
+/** Getting paid for a claim by the guest: keep some of a held deposit, or send a payment link. */
+export function useClaimCollect(orgId: string | null, id: string) {
+  const keep = useClaimMutation<number>(orgId, (token, amountMinor) =>
+    apiFetch<Claim>(`/v1/claims/${id}/keep-deposit`, { token, orgId, method: 'POST', body: { amountMinor } }),
+  );
+  const link = useClaimMutation<number>(orgId, (token, amountMinor) =>
+    apiFetch<Claim>(`/v1/claims/${id}/payment-link`, { token, orgId, method: 'POST', body: { amountMinor } }),
+  );
+  return { keep, link };
+}
+
 export function useUpdateClaim(orgId: string | null, id: string) {
   return useClaimMutation<ClaimUpdate>(orgId, (token, body) =>
     apiFetch<Claim>(`/v1/claims/${id}`, { token, orgId, method: 'PATCH', body }),
