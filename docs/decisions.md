@@ -5,11 +5,9 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-11-02
 
-- **The docs, lighter (Alpha: "design is too block wise … make it more intuitive").** No rules
-  between header, sidebar and page; the page you're on is teal with a thin mark, not a filled block;
-  tables are rows, not grids; the API pages lose their grey panels. The guides are grouped and ordered
-  the way a day runs (Every day, Guests and money, Your homes, Running the business) instead of A to
-  Z, and the front page starts from what people want to do ("Give a cleaner or repairer a job").
+- **The docs keep their first design (Alpha, after seeing a lighter, regrouped version: "just go back
+  to what it was before").** The lighter look, the guides grouped by the day and the task-led front
+  page were tried and taken out again.
 - **Help and docs in the app's sidebar** opens the docs site.
 - **The team can preview the booking website with every home (Alpha couldn't see it on staging).**
   Every Vivistays home is still run by Guesty, so the site had nothing to show. Workspace → Booking

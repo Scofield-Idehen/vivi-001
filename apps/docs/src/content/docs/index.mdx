@@ -1,49 +1,45 @@
 ---
-title: How to run your homes on V-01
-description: Set-up, every screen, and the API behind V-01, in plain words.
+title: V-01 docs
+description: How to run your homes on V-01, from set-up to every screen, and the API behind it.
 template: splash
+hero:
+  tagline: Everything an operator and their team need to run short-term rentals on V-01, and everything a developer needs to build on it.
+  actions:
+    - text: Set up a new operator
+      link: /start/set-up/
+      icon: right-arrow
+    - text: API reference
+      link: /reference/api/
+      variant: minimal
 ---
 
-<p class="v-intro">
-  Short guides for operators and their teams, in the order you'll need them. New to V-01? Start with
-  <a href="/start/what-is-v01/">what V-01 is</a>, then <a href="/start/set-up/">set up your workspace</a>.
-</p>
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-<div class="v-ways not-content">
-  <section>
-    <h2>Every day</h2>
-    <ul>
-      <li><a href="/guides/today/"><span>See what needs doing today</span><small>Arrivals, departures, cleans and anything waiting on you.</small></a></li>
-      <li><a href="/guides/calendar/"><span>Check what's free and change prices</span><small>Every home by night, with bookings, blocks and prices.</small></a></li>
-      <li><a href="/guides/reservations/"><span>Find a booking, or take one by phone</span><small>Every booking from every channel, its money and its guest.</small></a></li>
-      <li><a href="/guides/inbox/"><span>Answer guests</span><small>One inbox for every booking's messages, and automatic ones.</small></a></li>
-      <li><a href="/guides/tasks-and-field-team/"><span>Give a cleaner or repairer a job</span><small>Only people with the right skill, for homes they cover.</small></a></li>
-    </ul>
-  </section>
-  <section>
-    <h2>Guests and money</h2>
-    <ul>
-      <li><a href="/guides/guest-stay-page/"><span>Send guests their check-in details</span><small>Each stay's own page, with the door code on the day.</small></a></li>
-      <li><a href="/guides/booking-website/"><span>Take bookings on your own website</span><small>Guests pick dates and pay by card, with no channel fee.</small></a></li>
-      <li><a href="/guides/payments-and-deposits/"><span>Take a card payment or a deposit</span><small>Payment links, and deposits held on the card, not charged.</small></a></li>
-      <li><a href="/guides/claims/"><span>Claim for damage</span><small>One claim per booking, with photos and receipts.</small></a></li>
-    </ul>
-  </section>
-  <section>
-    <h2>Your homes</h2>
-    <ul>
-      <li><a href="/guides/properties/"><span>Add a home and its listing</span><small>Photos, rooms, rules, prices and your own details.</small></a></li>
-      <li><a href="/guides/channels/"><span>Connect Airbnb, Booking.com and Vrbo</span><small>Prices and free nights out; bookings in.</small></a></li>
-      <li><a href="/guides/door-locks/"><span>Make door codes automatically</span><small>A code for each stay and each job.</small></a></li>
-    </ul>
-  </section>
-  <section>
-    <h2>Running the business</h2>
-    <ul>
-      <li><a href="/guides/owners-and-statements/"><span>Pay owners and send statements</span><small>Owners, expenses, statements and the owner log-in.</small></a></li>
-      <li><a href="/guides/insights/"><span>See how the homes are doing</span><small>Occupancy, rates, revenue and costs.</small></a></li>
-      <li><a href="/guides/team-and-access/"><span>Add your team and choose what they see</span><small>Roles, homes per person, and V-01 support access.</small></a></li>
-      <li><a href="/reference/api/"><span>Build on V-01</span><small>The API, written from V-01's own code on every release.</small></a></li>
-    </ul>
-  </section>
-</div>
+<CardGrid>
+  <Card title="Running the day" icon="calendar">
+    [Today](/guides/today/), the [Calendar](/guides/calendar/) and [Reservations](/guides/reservations/):
+    who's arriving, what's free, and every booking from every channel in one place.
+  </Card>
+  <Card title="Guests" icon="comment">
+    The [Inbox](/guides/inbox/), each guest's [stay page](/guides/guest-stay-page/), and your
+    [booking website](/guides/booking-website/) where guests book and pay directly.
+  </Card>
+  <Card title="The team" icon="rocket">
+    [Tasks and the field team](/guides/tasks-and-field-team/): cleans and repairs go only to people with the right
+    skill, for the homes they cover.
+  </Card>
+  <Card title="Money" icon="seti:csv">
+    [Payments and deposits](/guides/payments-and-deposits/), [claims](/guides/claims/), and
+    [owners and statements](/guides/owners-and-statements/).
+  </Card>
+</CardGrid>
+
+## New here?
+
+<CardGrid>
+  <LinkCard title="What V-01 is" href="/start/what-is-v01/" description="The parts, and how V-01 fits with Airbnb, Booking.com and Vrbo." />
+  <LinkCard title="Roles" href="/reference/roles/" description="Who on the team can see and change what." />
+</CardGrid>
+
+These docs are rebuilt with every change to V-01, so they describe what V-01 does today. The API reference and the
+roles table are written from V-01's own code.
