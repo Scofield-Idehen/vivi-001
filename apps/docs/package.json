@@ -1,0 +1,24 @@
+{
+  "name": "@v01/docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "tsx ../api/scripts/openapi.ts src/openapi.json && tsx scripts/reference.ts",
+    "dev": "pnpm generate && astro dev",
+    "build": "pnpm generate && astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.42.8",
+    "astro": "7.4.4",
+    "sharp": "0.35.5",
+    "starlight-openapi": "0.27.0",
+    "@v01/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15",
+    "@v01/api": "workspace:*",
+    "@v01/db": "workspace:*"
+  }
+}

@@ -5,6 +5,16 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-11-02
 
+- **Documentation site on Starlight (Alpha: "use starlight"; "this should run alongside every
+  build").** `apps/docs`, built by `.github/workflows/docs.yml` on every push to main and published
+  to its own Firebase Hosting site, `vivi-os-docs.web.app`, until it has its own address. Guides for
+  operators and their teams (start here, one page per screen), how V-01 works, and the API. Pages
+  that could drift are written from the code on each build: the API reference from the API's own
+  route schemas (`apps/api/scripts/openapi.ts`, every endpoint grouped by area), the roles table
+  from `permissions.ts`, and the decision log and security notes from `docs/`. Starlight over
+  Mintlify: free, in the repo, and built in the same pipeline; Mintlify is a monthly bill on their
+  service. CI builds the docs too, so a change that breaks them fails the build.
+
 - **The booking website replaces Guesty's booking engine (Alpha: "lets build the booking website
   now"; "yes" to replacing vivistays.guestybookings.com).** vivistays.com's "Browse all properties"
   and "Our properties" buttons lead to Guesty's site today, which ends when Guesty does. V-01's site

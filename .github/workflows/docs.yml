@@ -1,0 +1,76 @@
+name: Docs
+
+# The documentation site, rebuilt with every push to main so it always matches what V-01 does:
+# the API reference is written from the API's own code and the roles page from its permissions
+# (apps/docs). Published to its own Firebase Hosting site in the staging project,
+# https://vivi-os-docs.web.app, until it has its own address.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: docs
+  cancel-in-progress: true
+
+env:
+  PROJECT: ${{ secrets.GCP_PROJECT_ID || vars.GCP_PROJECT_ID }}
+  SITE: vivi-os-docs
+
+jobs:
+  docs:
+    name: Build and publish the docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          # The docs' site builder needs a recent Node 22.
+          node-version: 22
+          check-latest: true
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build
+        env:
+          DOCS_SITE_URL: https://vivi-os-docs.web.app
+        run: pnpm --filter @v01/docs build
+      # Kept on the run either way, so the built site can be downloaded and looked at.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs-site
+          path: apps/docs/dist
+          retention-days: 7
+      - name: Is hosting set up?
+        id: hosting
+        run: |
+          if [ -z "$PROJECT" ]; then
+            echo "GCP_PROJECT_ID is not set: built, not published."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.hosting.outputs.ready == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - name: Make the docs' hosting site, once
+        if: steps.hosting.outputs.ready == 'true'
+        run: |
+          if npx --yes firebase-tools@14 hosting:sites:get "$SITE" --project "$PROJECT" >/dev/null 2>&1; then
+            echo "Hosting site $SITE is there."
+          else
+            npx --yes firebase-tools@14 hosting:sites:create "$SITE" --project "$PROJECT" --non-interactive
+          fi
+      - name: Publish
+        if: steps.hosting.outputs.ready == 'true'
+        run: |
+          set -o pipefail
+          if ! npx --yes firebase-tools@14 deploy --config firebase.docs.json --only hosting --project "$PROJECT" --non-interactive 2>&1 | tee firebase.log; then
+            tail -n 15 firebase.log | sed 's/^/::error title=Docs hosting::/'
+            exit 1
+          fi
+          echo "Published: https://$SITE.web.app"

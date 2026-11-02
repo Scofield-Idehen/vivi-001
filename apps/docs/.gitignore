@@ -1,0 +1,7 @@
+# Written on every build from the code (scripts/reference.ts, apps/api/scripts/openapi.ts).
+src/openapi.json
+src/content/docs/reference/roles.md
+src/content/docs/how-it-works/decisions.md
+src/content/docs/how-it-works/security.md
+dist/
+.astro/

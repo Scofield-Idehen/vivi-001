@@ -34,6 +34,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          # The docs' site builder needs a recent Node 22.
+          check-latest: true
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Lint

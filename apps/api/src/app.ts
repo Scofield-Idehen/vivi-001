@@ -13,6 +13,7 @@ import {
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import {
   hasZodFastifySchemaValidationErrors,
+  jsonSchemaTransform,
   serializerCompiler,
   validatorCompiler,
 } from 'fastify-type-provider-zod';
@@ -73,6 +74,8 @@ export interface AppDeps {
   directory?: UserDirectory;
   /** Card payments; defaults to Stripe when STRIPE_SECRET_KEY is set. */
   cards?: CardGateway | null;
+  /** Describe every route as OpenAPI, for the docs site's API reference (scripts/openapi.ts). */
+  openapi?: boolean;
 }
 
 function photoStoreFrom(env: Env, bucket: string): PhotoStore {
@@ -103,6 +106,27 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  if (deps.openapi) {
+    const swagger = (await import('@fastify/swagger')).default;
+    await app.register(swagger, {
+      openapi: {
+        info: {
+          title: 'V-01 API',
+          version: '1',
+          description:
+            'Everything V-01’s own screens use. Signed-in calls carry a Supabase access token (`Authorization: Bearer …`) and the workspace (`x-org-id`). The booking website (`/v1/site/…`) and the guest’s stay page (`/v1/stay/…`) are public.',
+        },
+        components: {
+          securitySchemes: {
+            bearer: { type: 'http', scheme: 'bearer', description: 'A Supabase access token.' },
+            workspace: { type: 'apiKey', in: 'header', name: 'x-org-id', description: 'The workspace’s id.' },
+          },
+        },
+      },
+      transform: jsonSchemaTransform,
+    });
+  }
 
   await app.register(helmet);
   await app.register(cors, {

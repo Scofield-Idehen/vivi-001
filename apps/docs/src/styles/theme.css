@@ -1,0 +1,24 @@
+/* V-01's colours on Starlight: the app's deep teal accent on its soft white. */
+:root {
+  --sl-color-accent-low: #d9e6e5;
+  --sl-color-accent: #1e4d4f;
+  --sl-color-accent-high: #0f2a2b;
+  --sl-color-white: #14181a;
+  --sl-color-bg: #fcfbf8;
+  --sl-color-bg-nav: #ffffff;
+  --sl-color-bg-sidebar: #f6f4ef;
+}
+:root[data-theme="light"] {
+  --sl-color-accent-low: #d9e6e5;
+  --sl-color-accent: #1e4d4f;
+  --sl-color-accent-high: #0f2a2b;
+}
+:root[data-theme="dark"] {
+  --sl-color-accent-low: #12302f;
+  --sl-color-accent: #7fb3b0;
+  --sl-color-accent-high: #d4e8e6;
+  --sl-color-bg: #121516;
+  --sl-color-bg-nav: #171b1c;
+  --sl-color-bg-sidebar: #151819;
+  --sl-color-white: #ffffff;
+}
