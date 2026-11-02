@@ -365,6 +365,20 @@
       "when": 1793550092307,
       "tag": "0051_guest_deposit",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1793596203651,
+      "tag": "0052_booking_site",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1793596205245,
+      "tag": "0053_booking_site_security",
+      "breakpoints": true
     }
   ]
 }

@@ -205,6 +205,8 @@ export const PropertyDetailSchema = PropertySchema.extend({
   depositGatesCodes: z.boolean(),
   /** Airbnb bookings are asked too (only when the Airbnb listing states the deposit). */
   depositOnAirbnb: z.boolean(),
+  /** Shown and bookable on the booking website. */
+  onBookingSite: z.boolean(),
   // Legal.
   licenceNumber: z.string().nullable(),
   cleaner: z.object({ id: Uuid, name: z.string() }).nullable(),
@@ -340,6 +342,7 @@ export const PropertyUpdateSchema = z
     depositAsk: z.boolean().optional(),
     depositGatesCodes: z.boolean().optional(),
     depositOnAirbnb: z.boolean().optional(),
+    onBookingSite: z.boolean().optional(),
     licenceNumber: Text(80),
     tags: TagsSchema.optional(),
     /** Who usually cleans it; the check-out clean is assigned to them. Null: nobody yet. */

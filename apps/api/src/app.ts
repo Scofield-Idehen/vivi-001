@@ -48,6 +48,7 @@ import { ownerRoutes } from './routes/owners.ts';
 import { portalRoutes } from './routes/portal.ts';
 import { propertyRoutes } from './routes/properties.ts';
 import { reservationRoutes } from './routes/reservations.ts';
+import { bookingSiteSettingsRoutes, siteRoutes } from './routes/site.ts';
 import { taskRoutes } from './routes/tasks.ts';
 import { termRoutes } from './routes/terms.ts';
 import { todayRoutes } from './routes/today.ts';
@@ -212,6 +213,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   guestRoutes(app, { db: deps.db, scope, box, now: deps.now, cards, appUrl });
   consoleRoutes(app, { scope });
   cardRoutes(app, { scope, gateway: cards, appUrl });
+  siteRoutes(app, { db: deps.db, cards, appUrl, now: deps.now });
+  bookingSiteSettingsRoutes(app, { scope, cards });
   await webhookRoutes(app, {
     db: deps.db,
     channexSecret: deps.env.CHANNEX_WEBHOOK_SECRET,

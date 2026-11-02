@@ -2,7 +2,6 @@ import {
   appUsers,
   channelAccounts,
   channelListings,
-  memberships,
   owners,
   properties,
   propertyAmenities,
@@ -181,6 +180,7 @@ async function loadDetail(tx: Tx, id: string, viewer: Viewer): Promise<PropertyD
     depositAsk: row.depositAsk,
     depositGatesCodes: row.depositGatesCodes,
     depositOnAirbnb: row.depositOnAirbnb,
+    onBookingSite: row.onBookingSite,
     licenceNumber: row.licenceNumber,
     cleaner: await cleanerOf(tx, row.cleanerUserId),
     maintainer: await cleanerOf(tx, row.maintainerUserId),
@@ -247,6 +247,8 @@ async function listingsOf(tx: Tx, id: string): Promise<PropertyDetail['listings'
 /** Database rules turned into messages a person can act on. */
 const CONSTRAINT_MESSAGES: Record<string, string> = {
   properties_price_limits: 'The lowest price is above the highest.',
+  properties_booking_site_managed:
+    'Guesty still runs this home’s channels, so a booking on the website wouldn’t close its nights on Airbnb or Booking.com. It can go on the website once V-01 runs its channels.',
   properties_stay_lengths: 'The shortest stay is longer than the longest.',
   properties_quiet_hours: 'Give quiet hours a start and an end.',
   properties_title_length: 'Keep the title to 50 characters.',

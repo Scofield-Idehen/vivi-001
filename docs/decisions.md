@@ -3,6 +3,36 @@
 Newest first. Each entry says what was decided and why. Product decisions also live in the
 V-01 Build Playbook and Design Roadmap.
 
+## 2026-11-02
+
+- **The booking website replaces Guesty's booking engine (Alpha: "lets build the booking website
+  now"; "yes" to replacing vivistays.guestybookings.com).** vivistays.com's "Browse all properties"
+  and "Our properties" buttons lead to Guesty's site today, which ends when Guesty does. V-01's site
+  is at `/book/{workspace}`: the homes with photos and "from" prices, a search by dates and guests
+  (with a bedrooms and pets filter), each home's page with its description, amenities, rules,
+  cancellation policy and a calendar of free nights with prices, then the guest's details, the
+  terms, and Stripe's page. Guesty's site was the measure: same search, same price box (nights,
+  cleaning, service fee, total), same details form. Migrations 0052–0053.
+- **The card is authorised on Stripe's page and charged by V-01 once the booking is saved.** If the
+  nights went to a channel booking while the guest was paying, the hold is let go (or refunded if
+  it was somehow already taken) and the guest is told; nobody pays for a stay they can't have.
+  Guesty saves the card and charges it 7 days before arrival; V-01 takes it at booking, which is
+  simpler and doesn't fail later on an expired card. The price is worked out again on the server
+  at "Pay"; the page's figure is never trusted. Payment pages last 30 minutes.
+- **Only homes whose channels V-01 runs (or that have none) can go on the site**, enforced by a
+  check on `properties` as well as the screens: a website booking must close the nights on Airbnb
+  and Booking.com, which only happens once V-01 runs the channels. Homes still on Guesty say so.
+- **Switched on per workspace and per home.** Workspace → Booking website: on or off, a service fee
+  as a percentage (Guesty's site shows one), and the terms guests accept. Each home's Settings has
+  its own switch. The site shows a test-mode line while Stripe is on a test key.
+- **What a website booking becomes:** a confirmed direct booking with the guest's details and
+  request in its notes, the total and cleaning fee, and the card payment recorded, so the balance
+  shows "Paid in full". The guest is sent to their stay page. With no webhook secret set, bookings
+  whose guest paid but never came back are saved the next time the site or its settings are opened;
+  setting `STRIPE_WEBHOOK_SECRET` saves them at once.
+- **Still to come:** the site on its own address (book.vivistays.com) instead of the app's, a
+  confirmation email from V-01 (Stripe sends the receipt meanwhile), and discount codes.
+
 ## 2026-11-01
 
 - **Access by home (Alpha: "do we have where we streamline what privilege each user under each

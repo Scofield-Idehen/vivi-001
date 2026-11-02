@@ -127,6 +127,14 @@ export class ApiDatabase extends Database {
     return rows[0]?.d ?? null;
   }
 
+  /** The operator whose booking website is at this address, while it is switched on; else null. */
+  async bookingSiteOrg(slug: string): Promise<string | null> {
+    const { rows } = await this.pool.query<{ id: string | null }>('select app.booking_site_org($1) as id', [
+      slug,
+    ]);
+    return rows[0]?.id ?? null;
+  }
+
   /** Stores a raw webhook before anything else happens. The API may insert but never read these. */
   async recordWebhook(event: {
     provider: string;

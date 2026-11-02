@@ -127,6 +127,11 @@ export const properties = app.table(
     /** The door code and secrets on the guest's page wait until the deposit is held. */
     depositGatesCodes: boolean('deposit_gates_codes').notNull().default(false),
     depositOnAirbnb: boolean('deposit_on_airbnb').notNull().default(false),
+    /**
+     * Shown and bookable on the operator's booking website (2 Nov 2026). Only a home whose channels
+     * V-01 runs (or that has none) may be: a booking made here must close its nights everywhere.
+     */
+    onBookingSite: boolean('on_booking_site').notNull().default(false),
     ownerId: uuid('owner_id'),
     archivedAt: timestamp('archived_at', { withTimezone: true, mode: 'string' }),
     createdAt: createdAt(),

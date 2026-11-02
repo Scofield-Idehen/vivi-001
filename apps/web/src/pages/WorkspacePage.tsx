@@ -5,6 +5,7 @@ import { Button, Notice, PageHeader, SectionHeading, StatusDot } from '../compon
 import { ApiError, useMe, useSupportVisits, useUpdateBrand, useUpdateMe, useWorkspace } from '../lib/api.ts';
 import { dateTime, duration, useNow } from '../lib/format.ts';
 import { useCurrentWorkspace } from '../lib/workspace.tsx';
+import { BookingSiteSection } from './workspace/BookingSiteSection.tsx';
 import { LocksSection } from './workspace/LocksSection.tsx';
 import { TeamSection } from './workspace/TeamSection.tsx';
 
@@ -95,6 +96,7 @@ export function WorkspacePage() {
           </p>
           <TeamSection orgId={orgId} role={entry.role} selfId={me.data?.user.id ?? ''} />
           {can(entry.role, 'properties.read') ? <LocksSection orgId={orgId} role={entry.role} /> : null}
+          {can(entry.role, 'properties.read') ? <BookingSiteSection orgId={orgId} role={entry.role} /> : null}
         </div>
       ) : null}
       <SupportVisits orgId={orgId} />

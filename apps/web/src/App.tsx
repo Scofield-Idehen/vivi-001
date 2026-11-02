@@ -33,6 +33,9 @@ import { ReservationPage } from './pages/reservations/ReservationPage.tsx';
 import { Reservations } from './pages/reservations/Reservations.tsx';
 import { SignIn } from './pages/SignIn.tsx';
 import { StayPage } from './pages/StayPage.tsx';
+import { SiteDonePage } from './pages/site/SiteDonePage.tsx';
+import { SiteHomePage } from './pages/site/SiteHomePage.tsx';
+import { SitePage } from './pages/site/SitePage.tsx';
 import { Today, TodayList } from './pages/Today.tsx';
 import { TasksPage } from './pages/tasks/TasksPage.tsx';
 import { WorkspacePage } from './pages/WorkspacePage.tsx';
@@ -115,6 +118,10 @@ const routes = [
   { path: '/stay/:key', element: <StayPage /> },
   // Where Stripe sends a guest after paying: public.
   { path: '/paid', element: <PaidPage /> },
+  // The operator's booking website: public.
+  { path: '/book/:slug', element: <SitePage /> },
+  { path: '/book/:slug/done/:bookingId', element: <SiteDonePage /> },
+  { path: '/book/:slug/:homeId', element: <SiteHomePage /> },
   {
     path: '/',
     element: <Gate />,

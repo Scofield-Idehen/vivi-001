@@ -3,8 +3,12 @@ import {
   AmenitiesUpdateSchema,
   AmenityCodesSchema,
   addDays,
+  amenity,
+  type BookingSiteSettings,
+  BookingSiteUpdateSchema,
   BrandUpdateSchema,
   CALENDAR_DAYS_AHEAD,
+  CANCELLATION_POLICY_LABELS,
   type Calendar,
   type CalendarBlock,
   type CalendarChangeResult,
@@ -94,6 +98,7 @@ import {
   PhotoOrderSchema,
   type PhotoStage,
   PhotoUpdateSchema,
+  PROPERTY_TYPE_LABELS,
   type Property,
   PropertyCreateSchema,
   type PropertyDetail,
@@ -106,6 +111,7 @@ import {
   type PropertyType,
   PropertyUpdateSchema,
   previousMonth,
+  quoteStay,
   RESERVATION_LIST_LIMIT,
   type Reservation,
   ReservationCancelSchema,
@@ -118,6 +124,19 @@ import {
   type Revenue,
   RoomsUpdateSchema,
   renderTemplate,
+  SITE_FROM_PRICE_DAYS,
+  type Site,
+  type SiteBooking,
+  type SiteBookLink,
+  SiteBookRequestSchema,
+  type SiteHome,
+  type SiteHomeCard,
+  type SiteHomeRules,
+  type SiteNights,
+  type SiteQuote,
+  type SiteQuoteRequest,
+  SiteQuoteRequestSchema,
+  SiteSearchSchema,
   type Skill,
   type StatementList,
   SUPPORT_ROLE,
@@ -411,6 +430,7 @@ function listingDefaults(): Omit<PropertyDetail, keyof Property | 'updatedAt'> {
     depositAsk: false,
     depositGatesCodes: false,
     depositOnAirbnb: false,
+    onBookingSite: false,
     addressLine2: null,
     title: null,
     summary: null,
@@ -4725,6 +4745,415 @@ const ACCOUNT_PATH = /^\/v1\/channel-accounts(?:\/([0-9a-f-]{36})(\/connect|\/li
 const LINK_PATH = /^\/v1\/properties\/([0-9a-f-]{36})\/links(?:\/([0-9a-f-]{36})(\/pause|\/resume)?)?$/;
 const PHOTO_PATH = /^\/v1\/properties\/([0-9a-f-]{36})\/photos\/([0-9a-f-]{36})$/;
 
+// The booking website (2 Nov 2026) --------------------------------------------------------------
+
+interface DemoSiteBooking {
+  id: string;
+  propertyId: string;
+  checkIn: string;
+  checkOut: string;
+  adults: number;
+  children: number;
+  infants: number;
+  pets: number;
+  guestName: string;
+  email: string;
+  phone: string | null;
+  request: string | null;
+  totalMinor: number;
+  cleaningMinor: number;
+  status: 'open' | 'booked' | 'refused' | 'expired';
+  stayId: string | null;
+}
+
+interface DemoSite {
+  on: boolean;
+  serviceFeeBp: number | null;
+  terms: string | null;
+  bookings: DemoSiteBooking[];
+}
+
+/**
+ * The site's settings, made on first look. In the demo, Northwind's site is on with the homes
+ * V-01 runs, so the website can be tried straight away.
+ */
+function siteOf(operator: DemoOperator): DemoSite {
+  const o = operator as DemoOperator & { site?: DemoSite };
+  if (!o.site) {
+    const on = operator.workspace.organisation.name === 'Northwind Stays';
+    o.site = {
+      on,
+      serviceFeeBp: null,
+      terms: on
+        ? 'You pay the full price when you book. Check-in is from the time shown; please leave the home as you found it. Damage beyond normal use may be charged.'
+        : null,
+      bookings: [],
+    };
+    if (on) {
+      for (const p of operator.properties) if (p.managedBy !== 'guesty') p.onBookingSite = true;
+    }
+    save();
+  }
+  return o.site;
+}
+
+function siteOperator(slug: string): DemoOperator {
+  const operator = load().operators.find((o) => o.workspace.organisation.slug === slug);
+  if (!operator || !siteOf(operator).on)
+    throw new ApiError(404, 'site_not_found', 'There is no booking site at this address.');
+  return operator;
+}
+
+const siteHomes = (operator: DemoOperator) =>
+  operator.properties.filter((p) => p.onBookingSite && p.managedBy !== 'guesty');
+
+function siteRules(p: PropertyDetail): SiteHomeRules {
+  return {
+    usual: {
+      basePriceMinor: p.basePriceMinor,
+      weekendPriceMinor: p.weekendPriceMinor,
+      minPriceMinor: p.minPriceMinor,
+      maxPriceMinor: p.maxPriceMinor,
+      minNights: p.minNights,
+      maxNights: p.maxNights,
+    },
+    maxGuests: p.maxGuests,
+    maxNights: p.maxNights,
+    advanceNoticeHours: p.advanceNoticeHours,
+    checkInHour: Number(p.checkInTime.slice(0, 2)),
+    bookingWindowDays: p.bookingWindowDays,
+    preparationDays: p.preparationDays,
+    cleaningFeeMinor: p.cleaningFeeMinor,
+    extraGuestFeeMinor: p.extraGuestFeeMinor,
+    extraGuestFrom: p.extraGuestFrom,
+    petsAllowed: p.petsAllowed,
+    childrenAllowed: p.childrenAllowed,
+  };
+}
+
+function siteOwn(operator: DemoOperator, propertyId: string) {
+  return new Map(
+    operator.calendar.nights.filter((n) => n.propertyId === propertyId).map((n) => [n.night, n] as const),
+  );
+}
+
+function siteTaken(operator: DemoOperator, propertyId: string) {
+  return [
+    ...operator.calendar.stays
+      .filter((x) => x.propertyId === propertyId && x.status === 'confirmed')
+      .map((x) => ({ from: x.checkIn, to: x.checkOut })),
+    ...operator.calendar.blocks
+      .filter((b) => b.propertyId === propertyId)
+      .map((b) => ({ from: b.startsOn, to: b.endsOn })),
+  ];
+}
+
+function siteQuote(operator: DemoOperator, p: PropertyDetail, q: SiteQuoteRequest): SiteQuote {
+  const tz = operator.workspace.settings.timeZone;
+  const hour = Number(
+    new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hourCycle: 'h23' }).format(new Date()),
+  );
+  return quoteStay({
+    rules: siteRules(p),
+    own: siteOwn(operator, p.id),
+    taken: siteTaken(operator, p.id),
+    checkIn: q.checkIn,
+    checkOut: q.checkOut,
+    party: { adults: q.adults ?? 1, children: q.children ?? 0, infants: q.infants ?? 0, pets: q.pets ?? 0 },
+    today: todayIn(tz),
+    hourNow: hour,
+    serviceFeeBp: siteOf(operator).serviceFeeBp,
+  });
+}
+
+async function siteCard(operator: DemoOperator, p: PropertyDetail) {
+  const today = todayIn(operator.workspace.settings.timeZone);
+  const own = siteOwn(operator, p.id);
+  let low: number | null = null;
+  for (let d = today; d <= addDays(today, SITE_FROM_PRICE_DAYS); d = addDays(d, 1)) {
+    const price = nightRules(siteRules(p).usual, d, own.get(d)).priceMinor;
+    if (price && (low === null || price < low)) low = price;
+  }
+  return {
+    id: p.id,
+    name: p.title || p.name,
+    place: [...new Set([p.area, p.city].filter(Boolean))].join(', ') || null,
+    propertyType: p.propertyType ? PROPERTY_TYPE_LABELS[p.propertyType] : null,
+    maxGuests: p.maxGuests,
+    bedrooms: p.bedrooms,
+    beds: p.beds,
+    bathrooms: p.bathrooms,
+    petsAllowed: p.petsAllowed,
+    summary: p.summary,
+    coverUrl: p.photos[0] ? await demoUrl(p.photos[0].url) : null,
+    fromMinor: low,
+  };
+}
+
+function siteBrand(operator: DemoOperator) {
+  const b = operator.workspace.brand;
+  return {
+    name: b.displayName,
+    logoUrl: b.logoLightUrl,
+    accentHex: b.accentHex,
+    phone: b.guestPhone,
+    email: 'hello@example.com',
+  };
+}
+
+async function demoSiteFetch(path: string, method: string, body: unknown): Promise<unknown> {
+  const url = new URL(path, 'https://demo.v01');
+  const parts = url.pathname.split('/').filter(Boolean); // v1 site {slug} ...
+  const slug = parts[2] ?? '';
+  const operator = siteOperator(slug);
+  const site = siteOf(operator);
+  const currency = operator.workspace.settings.currency;
+  const common = {
+    slug,
+    brand: siteBrand(operator),
+    currency,
+    terms: site.terms,
+    testMode: true,
+    canPay: true,
+  };
+  const findHome = (id: string) => {
+    const p = siteHomes(operator).find((h) => h.id === id);
+    if (!p) throw new ApiError(404, 'home_not_found', 'That home isn’t on this site.');
+    return p;
+  };
+
+  if (method === 'GET' && parts.length === 3) {
+    const q = SiteSearchSchema.parse(Object.fromEntries(url.searchParams));
+    const homes: SiteHomeCard[] = [];
+    for (const p of siteHomes(operator)) {
+      let stay: SiteHomeCard['stay'] = null;
+      if (q.checkIn && q.checkOut) {
+        const quote = siteQuote(operator, p, {
+          homeId: p.id,
+          ...q,
+          checkIn: q.checkIn,
+          checkOut: q.checkOut,
+        });
+        stay = quote.ok
+          ? { totalMinor: quote.totalMinor, message: null }
+          : { totalMinor: null, message: quote.message };
+      } else if (q.adults + q.children > p.maxGuests) {
+        stay = { totalMinor: null, message: `Sleeps up to ${p.maxGuests}.` };
+      }
+      homes.push({ ...(await siteCard(operator, p)), stay });
+    }
+    return { ...common, homes } satisfies Site;
+  }
+
+  if (method === 'GET' && parts[3] === 'homes' && parts.length === 5) {
+    const p = findHome(parts[4] ?? '');
+    const sections = (
+      [
+        ['The space', p.theSpace],
+        ['Guest access', p.guestAccess],
+        ['The neighbourhood', p.neighbourhood],
+        ['Getting around', p.gettingAround],
+        ['Other things to note', p.otherNotes],
+      ] as [string, string | null][]
+    )
+      .filter((x): x is [string, string] => Boolean(x[1]))
+      .map(([title, text]) => ({ title, text }));
+    const photos = [];
+    for (const ph of p.photos) {
+      const u = await demoUrl(ph.url);
+      if (u) photos.push({ url: u, caption: ph.caption ?? null });
+    }
+    return {
+      ...(await siteCard(operator, p)),
+      ...common,
+      photos,
+      sections,
+      amenities: p.amenities
+        .map((c) => amenity(c)?.label)
+        .filter((l): l is string => Boolean(l))
+        .sort((a, b) => a.localeCompare(b)),
+      rules: [
+        p.petsAllowed ? 'Pets allowed' : 'No pets',
+        p.smokingAllowed ? 'Smoking allowed' : 'No smoking',
+        p.eventsAllowed ? 'Events allowed' : 'No parties or events',
+        p.childrenAllowed ? 'Suitable for children' : 'Not suitable for children',
+        ...(p.houseRules
+          ? p.houseRules
+              .split(/\n+/)
+              .map((l) => l.trim())
+              .filter(Boolean)
+          : []),
+      ],
+      checkInTime: p.checkInTime.slice(0, 5),
+      checkOutTime: p.checkOutTime.slice(0, 5),
+      minNights: p.minNights,
+      cancellation: CANCELLATION_POLICY_LABELS[p.cancellationPolicy],
+      cleaningFeeMinor: p.cleaningFeeMinor,
+      childrenAllowed: p.childrenAllowed,
+    } satisfies SiteHome;
+  }
+
+  if (method === 'GET' && parts[3] === 'homes' && parts[5] === 'nights') {
+    const p = findHome(parts[4] ?? '');
+    const from = url.searchParams.get('from') ?? '';
+    const to = url.searchParams.get('to') ?? '';
+    const own = siteOwn(operator, p.id);
+    const taken = siteTaken(operator, p.id);
+    const nights = [];
+    for (let d = from; d <= to; d = addDays(d, 1)) {
+      const r = nightRules(siteRules(p).usual, d, own.get(d));
+      nights.push({
+        night: d,
+        free: !taken.some((t) => t.from <= d && d < t.to),
+        priceMinor: r.priceMinor,
+        minNights: r.minNights,
+        closedToArrival: r.closedToArrival,
+        closedToDeparture: r.closedToDeparture,
+      });
+    }
+    return { today: todayIn(operator.workspace.settings.timeZone), nights } satisfies SiteNights;
+  }
+
+  if (method === 'POST' && parts[3] === 'quote') {
+    const q = SiteQuoteRequestSchema.parse(body);
+    return siteQuote(operator, findHome(q.homeId), q);
+  }
+
+  if (method === 'POST' && parts[3] === 'book') {
+    const parsed = SiteBookRequestSchema.safeParse(body);
+    if (!parsed.success) invalid(parsed.error.issues);
+    const b = parsed.data;
+    const p = findHome(b.homeId);
+    const quote = siteQuote(operator, p, b);
+    if (!quote.ok) throw new ApiError(409, quote.reason, quote.message);
+    const id = crypto.randomUUID();
+    site.bookings.push({
+      id,
+      propertyId: p.id,
+      checkIn: b.checkIn,
+      checkOut: b.checkOut,
+      adults: b.adults,
+      children: b.children,
+      infants: b.infants,
+      pets: b.pets,
+      guestName: `${b.firstName} ${b.lastName}`,
+      email: b.email.toLowerCase(),
+      phone: b.phone || null,
+      request: b.request || null,
+      totalMinor: quote.totalMinor,
+      cleaningMinor: quote.cleaningMinor,
+      status: 'open',
+      stayId: null,
+    });
+    save();
+    // The demo has no Stripe page: the guest goes straight to the page Stripe would send them back to.
+    return { bookingId: id, url: `/book/${slug}/done/${id}` } satisfies SiteBookLink;
+  }
+
+  if (method === 'GET' && parts[3] === 'bookings') {
+    const booking = site.bookings.find((x) => x.id === parts[4]);
+    if (!booking) throw new ApiError(404, 'booking_not_found', 'That booking isn’t on this site.');
+    const p = operator.properties.find((x) => x.id === booking.propertyId);
+    if (booking.status === 'open' && p) {
+      // In the demo the guest has paid: save the booking, as V-01 does when Stripe says so.
+      const free = !siteTaken(operator, p.id).some(
+        (t) => t.from < booking.checkOut && booking.checkIn < t.to,
+      );
+      if (!free) booking.status = 'refused';
+      else {
+        const now = new Date().toISOString();
+        const stay: DemoStay = {
+          id: crypto.randomUUID(),
+          propertyId: p.id,
+          checkIn: booking.checkIn,
+          checkOut: booking.checkOut,
+          status: 'confirmed',
+          channel: 'direct',
+          channelReference: null,
+          guestName: booking.guestName,
+          guests: booking.adults + booking.children,
+          adults: booking.adults,
+          children: booking.children,
+          infants: booking.infants,
+          guestEmail: booking.email,
+          guestPhone: booking.phone,
+          currency,
+          totalMinor: booking.totalMinor,
+          cleaningMinor: booking.cleaningMinor || null,
+          payoutMinor: null,
+          checkInTime: null,
+          checkOutTime: null,
+          notes: [
+            'Booked on the website (test payment).',
+            booking.request ? `Guest’s request: ${booking.request}` : '',
+          ]
+            .filter(Boolean)
+            .join('\n'),
+          createdAt: now,
+          updatedAt: now,
+          cancelledAt: null,
+          payments: [
+            {
+              id: crypto.randomUUID(),
+              amountMinor: booking.totalMinor,
+              method: 'card',
+              paidOn: todayIn(operator.workspace.settings.timeZone),
+              note: 'Stripe, booked on the website, test',
+              refundFor: null,
+              recordedBy: null,
+              createdAt: now,
+            } as unknown as Payment,
+          ],
+          guestKey: Array.from(crypto.getRandomValues(new Uint8Array(16)), (x) =>
+            x.toString(16).padStart(2, '0'),
+          ).join(''),
+        };
+        operator.calendar.stays.push(stay);
+        booking.status = 'booked';
+        booking.stayId = stay.id;
+      }
+      save();
+    }
+    const stay = booking.stayId ? operator.calendar.stays.find((x) => x.id === booking.stayId) : null;
+    return {
+      status: booking.status,
+      home: p ? p.title || p.name : '',
+      checkIn: booking.checkIn,
+      checkOut: booking.checkOut,
+      totalMinor: booking.totalMinor,
+      currency,
+      email: booking.email,
+      stayPath: stay?.guestKey ? `/stay/${stay.guestKey}` : null,
+      url: null,
+    } satisfies SiteBooking;
+  }
+  throw new ApiError(404, 'not_found', 'Not found.');
+}
+
+function demoBookingSite(
+  orgId: string | null | undefined,
+  method: string,
+  body: unknown,
+): BookingSiteSettings {
+  const { operator } = access(orgId, method === 'GET' ? 'workspace.read' : 'workspace.manage');
+  const site = siteOf(operator);
+  if (method === 'PATCH') {
+    const b = BookingSiteUpdateSchema.parse(body);
+    if (b.on !== undefined) site.on = b.on;
+    if (b.serviceFeeBp !== undefined) site.serviceFeeBp = b.serviceFeeBp;
+    if (b.terms !== undefined) site.terms = b.terms || null;
+    save();
+  }
+  return {
+    on: site.on,
+    slug: operator.workspace.organisation.slug,
+    serviceFeeBp: site.serviceFeeBp,
+    terms: site.terms,
+    homesOn: siteHomes(operator).length,
+    canPay: true,
+  };
+}
+
 export async function demoFetch<T>(
   path: string,
   options: { orgId?: string | null; method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'; body?: unknown },
@@ -4732,6 +5161,8 @@ export async function demoFetch<T>(
   await pause();
   const method = options.method ?? 'GET';
   const s = load();
+  if (path.startsWith('/v1/site/')) return (await demoSiteFetch(path, method, options.body)) as T;
+  if (path === '/v1/workspace/booking-site') return demoBookingSite(options.orgId, method, options.body) as T;
 
   const homeSetup = /^\/v1\/properties\/([0-9a-f-]{36})\/(terms|payee|payee\/bank|cleaning-cost)$/.exec(path);
   if (homeSetup)

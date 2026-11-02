@@ -309,3 +309,61 @@ export const cardRequests = app.table(
     ),
   ],
 );
+
+/**
+ * A booking made on the operator's booking website (2 Nov 2026), from the guest's quote to Stripe
+ * and back. The card is authorised, not charged, while the guest is on Stripe's page; when they come
+ * back V-01 saves the booking and only then takes the money. If the nights went to another booking
+ * in between, the hold is let go and nothing is charged.
+ *
+ * open      the guest is on Stripe's page
+ * booked    the booking is saved and paid (`reservation_id`)
+ * refused   the nights were taken meanwhile; the card was let go (or refunded)
+ * expired   the page ran out or the guest went back without paying
+ */
+export const siteBookings = app.table(
+  'site_bookings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'restrict' }),
+    propertyId: uuid('property_id')
+      .notNull()
+      .references(() => properties.id, { onDelete: 'restrict' }),
+    checkIn: date('check_in', { mode: 'string' }).notNull(),
+    checkOut: date('check_out', { mode: 'string' }).notNull(),
+    adults: integer('adults').notNull(),
+    children: integer('children').notNull().default(0),
+    infants: integer('infants').notNull().default(0),
+    pets: integer('pets').notNull().default(0),
+    guestName: text('guest_name').notNull(),
+    email: text('email').notNull(),
+    phone: text('phone'),
+    request: text('request'),
+    currency: char('currency', { length: 3 }).notNull(),
+    nightsMinor: bigint('nights_minor', { mode: 'number' }).notNull(),
+    cleaningMinor: bigint('cleaning_minor', { mode: 'number' }).notNull().default(0),
+    extraGuestsMinor: bigint('extra_guests_minor', { mode: 'number' }).notNull().default(0),
+    serviceMinor: bigint('service_minor', { mode: 'number' }).notNull().default(0),
+    totalMinor: bigint('total_minor', { mode: 'number' }).notNull(),
+    status: text('status').notNull().default('open'),
+    sessionId: text('session_id').notNull(),
+    paymentIntentId: text('payment_intent_id'),
+    url: text('url'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    reservationId: uuid('reservation_id').references(() => reservations.id, { onDelete: 'set null' }),
+    live: boolean('live').notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    settledAt: timestamp('settled_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('site_bookings_org_idx').on(t.organisationId, t.createdAt),
+    unique('site_bookings_session_key').on(t.sessionId),
+    check('site_bookings_status', sql`${t.status} in ('open', 'booked', 'refused', 'expired')`),
+    check('site_bookings_dates_order', sql`${t.checkOut} > ${t.checkIn}`),
+    check('site_bookings_total', sql`${t.totalMinor} > 0`),
+    check('site_bookings_request_length', sql`${t.request} is null or char_length(${t.request}) <= 1000`),
+  ],
+);

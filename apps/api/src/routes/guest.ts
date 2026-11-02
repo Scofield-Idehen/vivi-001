@@ -169,7 +169,7 @@ export function guestRoutes(
     async (req) => {
       if (!gateway) throw new HttpError(503, 'cards_off', 'Card payments aren’t switched on here.');
       const d = await depositOf(req.params.key);
-      if (!d || !d.amountMinor) throw new HttpError(404, 'no_deposit', 'This stay has no deposit to add.');
+      if (!d?.amountMinor) throw new HttpError(404, 'no_deposit', 'This stay has no deposit to add.');
       const raw = (await deps.db.guestStay(req.params.key)) as RawStay | null;
       const today = todayIn(raw?.timeZone ?? 'Europe/London', deps.now?.() ?? new Date());
       if (today < addDays(d.checkIn, -DEPOSIT_DAYS_BEFORE))

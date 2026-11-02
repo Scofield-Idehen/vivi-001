@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, char, check, index, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { boolean, char, check, index, integer, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { app, createdAt, memberRole, updatedAt } from './common.ts';
 
 /** One row per operator (Vivistays is the first). Created by V-01, not by sign-up. */
@@ -28,6 +28,12 @@ export const organisationSettings = app.table('organisation_settings', {
   locale: text('locale').notNull().default('en-GB'),
   countryCode: char('country_code', { length: 2 }).notNull().default('GB'),
   vatNumber: text('vat_number'),
+  /** The booking website (2 Nov 2026): guests book and pay for the homes put on it. */
+  bookingSite: boolean('booking_site').notNull().default(false),
+  /** A service fee on bookings made there, in hundredths of a percent (150 is 1.5%). Null: none. */
+  bookingServiceFeeBp: integer('booking_service_fee_bp'),
+  /** The terms guests accept before paying. */
+  bookingTerms: text('booking_terms'),
   updatedAt: updatedAt(),
 });
 

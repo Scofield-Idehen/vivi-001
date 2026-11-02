@@ -2,6 +2,8 @@ import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } f
 import type {
   AccountListingList,
   BankDetails,
+  BookingSiteSettings,
+  BookingSiteUpdate,
   BrandUpdate,
   Calendar,
   CalendarChange,
@@ -98,6 +100,14 @@ import type {
   ReservationView,
   Revenue,
   RoomInput,
+  Site,
+  SiteBooking,
+  SiteBookLink,
+  SiteBookRequest,
+  SiteHome,
+  SiteNights,
+  SiteQuote,
+  SiteQuoteRequest,
   StatementList,
   SupportAccessStart,
   SupportGrant,
@@ -929,6 +939,110 @@ export function useGuestStay(key: string | null) {
     queryFn: () => apiFetch<GuestStay>(`/v1/stay/${key}`, { token: null }),
     retry: false,
     refetchInterval: 5 * 60_000,
+  });
+}
+
+// The booking website: public, no sign-in --------------------------------------------------------
+
+const searchQuery = (q: Record<string, string | number | undefined>) => {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== '') params.set(k, String(v));
+  const text = params.toString();
+  return text ? `?${text}` : '';
+};
+
+export type SiteSearchParams = {
+  checkIn?: string;
+  checkOut?: string;
+  adults?: number;
+  children?: number;
+  infants?: number;
+  pets?: number;
+};
+
+export function useSite(slug: string, search: SiteSearchParams) {
+  return useQuery({
+    queryKey: ['site', slug, search],
+    queryFn: () => apiFetch<Site>(`/v1/site/${slug}${searchQuery(search)}`, { token: null }),
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
+
+export function useSiteHome(slug: string, homeId: string) {
+  return useQuery({
+    queryKey: ['site-home', slug, homeId],
+    queryFn: () => apiFetch<SiteHome>(`/v1/site/${slug}/homes/${homeId}`, { token: null }),
+    retry: false,
+  });
+}
+
+export function useSiteNights(slug: string, homeId: string, from: string, to: string) {
+  return useQuery({
+    queryKey: ['site-nights', slug, homeId, from, to],
+    queryFn: () =>
+      apiFetch<SiteNights>(`/v1/site/${slug}/homes/${homeId}/nights${searchQuery({ from, to })}`, {
+        token: null,
+      }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useSiteQuote(slug: string, request: SiteQuoteRequest | null) {
+  return useQuery({
+    queryKey: ['site-quote', slug, request],
+    enabled: Boolean(request),
+    queryFn: () =>
+      apiFetch<SiteQuote>(`/v1/site/${slug}/quote`, { token: null, method: 'POST', body: request }),
+  });
+}
+
+/** Book: V-01 checks the price again and sends the guest to Stripe's page to pay. */
+export function useSiteBook(slug: string, go: (path: string) => void) {
+  return useMutation({
+    mutationFn: (body: SiteBookRequest) =>
+      apiFetch<SiteBookLink>(`/v1/site/${slug}/book`, { token: null, method: 'POST', body }),
+    onSuccess: ({ url }) => {
+      // Stripe's page; in the demo, which has no Stripe, the page it would send the guest back to.
+      if (url.startsWith('/')) go(url);
+      else window.location.assign(url);
+    },
+  });
+}
+
+export function useSiteBooking(slug: string, bookingId: string) {
+  return useQuery({
+    queryKey: ['site-booking', slug, bookingId],
+    queryFn: () => apiFetch<SiteBooking>(`/v1/site/${slug}/bookings/${bookingId}`, { token: null }),
+    retry: false,
+    // While the guest is between Stripe and here, look again every few seconds.
+    refetchInterval: (q) => (q.state.data?.status === 'open' ? 3000 : false),
+  });
+}
+
+/** The team's settings for the booking website. */
+export function useBookingSite(orgId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['booking-site', orgId],
+    enabled: Boolean(token && orgId),
+    queryFn: () =>
+      apiFetch<BookingSiteSettings>('/v1/workspace/booking-site', { token: token as string, orgId }),
+  });
+}
+
+export function useUpdateBookingSite(orgId: string | null) {
+  const token = useToken();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: BookingSiteUpdate) =>
+      apiFetch<BookingSiteSettings>('/v1/workspace/booking-site', {
+        token: token as string,
+        orgId,
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: (data) => client.setQueryData(['booking-site', orgId], data),
   });
 }
 

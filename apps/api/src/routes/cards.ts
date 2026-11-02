@@ -25,6 +25,7 @@ import { z } from 'zod';
 import { type RequestScope, toIso } from '../context.ts';
 import { HttpError } from '../errors.ts';
 import { operatorToday } from './reservations.ts';
+import { settleSiteBooking } from './site.ts';
 
 /**
  * Card payments and deposits through Stripe (1 Nov 2026). The team makes a link on a booking; the
@@ -459,6 +460,12 @@ export async function handleStripeEvent(
   const orgId = meta.v01_org;
   const requestId = meta.v01_request;
   const uuid = z.uuid();
+  const siteBooking = meta.v01_site_booking;
+  if (orgId && siteBooking && uuid.safeParse(orgId).success && uuid.safeParse(siteBooking).success) {
+    await db.withOrg({ orgId }, (tx) => settleSiteBooking(tx, gateway, siteBooking, log));
+    log.info({ type: parsed.data.type, siteBooking }, 'Stripe event settled');
+    return;
+  }
   if (!orgId || !requestId || !uuid.safeParse(orgId).success || !uuid.safeParse(requestId).success) return;
   await db.withOrg({ orgId }, (tx) => settle(tx, gateway, requestId));
   log.info({ type: parsed.data.type, cardRequest: requestId }, 'Stripe event settled');

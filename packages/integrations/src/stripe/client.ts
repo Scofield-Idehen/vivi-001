@@ -11,7 +11,11 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
  * Behind an interface so tests and the demo use the stand-in and the real key swaps in.
  */
 
-export type CardKind = 'payment' | 'deposit';
+/**
+ * booking  a stay paid on the booking website (2 Nov 2026): authorised on Stripe's page, then
+ *          charged by V-01 once the booking is saved (or let go if the nights went meanwhile).
+ */
+export type CardKind = 'payment' | 'deposit' | 'booking';
 
 export interface CheckoutInput {
   kind: CardKind;
@@ -26,6 +30,8 @@ export interface CheckoutInput {
   metadata: Record<string, string>;
   /** A key so a retried request doesn't make two sessions. */
   idempotencyKey: string;
+  /** How long the page stays open; 24 hours unless said (Stripe's shortest is 30 minutes). */
+  expiresInMinutes?: number;
 }
 
 export interface CheckoutCreated {
@@ -57,6 +63,8 @@ export interface CardGateway {
   capture(paymentIntentId: string, amountMinor: number): Promise<void>;
   /** Lets a held deposit go. */
   release(paymentIntentId: string): Promise<void>;
+  /** Gives back everything charged on a payment. */
+  refund(paymentIntentId: string): Promise<void>;
 }
 
 export class CardError extends Error {
@@ -181,7 +189,7 @@ export class StripeGateway implements CardGateway {
         cancel_url: input.cancelUrl,
         customer_email: input.customerEmail || undefined,
         // The link lasts 24 hours, Stripe's longest.
-        expires_at: Math.floor(Date.now() / 1000) + 23.5 * 3600,
+        expires_at: Math.floor(Date.now() / 1000) + (input.expiresInMinutes ?? 23.5 * 60) * 60,
         line_items: [
           {
             quantity: 1,
@@ -197,7 +205,7 @@ export class StripeGateway implements CardGateway {
         ],
         metadata: input.metadata,
         payment_intent_data: {
-          capture_method: input.kind === 'deposit' ? 'manual' : 'automatic',
+          capture_method: input.kind === 'payment' ? 'automatic' : 'manual',
           description: input.description,
           metadata: input.metadata,
         },
@@ -242,6 +250,10 @@ export class StripeGateway implements CardGateway {
   async release(paymentIntentId: string): Promise<void> {
     await this.call('POST', `/v1/payment_intents/${encodeURIComponent(paymentIntentId)}/cancel`);
   }
+
+  async refund(paymentIntentId: string): Promise<void> {
+    await this.call('POST', '/v1/refunds', { payment_intent: paymentIntentId }, `refund-${paymentIntentId}`);
+  }
 }
 
 /**
@@ -264,7 +276,7 @@ export class MemoryCardGateway implements CardGateway {
     return {
       sessionId,
       url: `https://checkout.stripe.test/pay/${sessionId}`,
-      expiresAt: new Date(Date.now() + 23.5 * 3600_000),
+      expiresAt: new Date(Date.now() + (input.expiresInMinutes ?? 23.5 * 60) * 60_000),
     };
   }
 
@@ -297,12 +309,19 @@ export class MemoryCardGateway implements CardGateway {
     s.state = { ...s.state, intent: 'canceled', capturableMinor: 0 };
   }
 
+  readonly refunded = new Set<string>();
+  async refund(paymentIntentId: string): Promise<void> {
+    const s = [...this.sessions.values()].find((x) => x.state.paymentIntentId === paymentIntentId);
+    if (s?.state.intent !== 'succeeded') throw new CardError('Nothing was charged.', 400);
+    this.refunded.add(paymentIntentId);
+  }
+
   /** The guest pays (a payment) or lets the deposit be held. */
   complete(sessionId: string): void {
     const s = this.get(sessionId);
     const amount = s.input.amountMinor;
     s.state =
-      s.input.kind === 'deposit'
+      s.input.kind !== 'payment'
         ? {
             session: 'complete',
             paymentIntentId: `pi_${sessionId}`,

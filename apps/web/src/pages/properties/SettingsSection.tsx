@@ -157,6 +157,28 @@ export function SettingsSection({
           <p className="mt-2 text-[14px] text-ink">{d.depositAsk ? 'Asked of guests' : 'Not asked'}</p>
         )}
       </div>
+      <div className="mt-8 max-w-[560px]">
+        <h3 className="text-[15px] font-medium text-ink">Booking website</h3>
+        {d.managedBy === 'guesty' ? (
+          <p className="mt-1 text-[13.5px] leading-relaxed text-slate">
+            Guesty still runs this home’s channels, so a booking on the website wouldn’t close its nights on
+            Airbnb or Booking.com. It can go on the website once{` ${V01} `}runs its channels.
+          </p>
+        ) : canEdit ? (
+          <div className="mt-1">
+            <Toggle
+              label="Show and take bookings on the booking website"
+              description="Guests see its photos, description and prices, pick dates and pay by card. A booking there closes the nights on every channel. Switch the website itself on in Workspace."
+              checked={d.onBookingSite}
+              onChange={(v) => update.mutate({ onBookingSite: v })}
+            />
+          </div>
+        ) : (
+          <p className="mt-2 text-[14px] text-ink">
+            {d.onBookingSite ? 'On the booking website' : 'Not on the booking website'}
+          </p>
+        )}
+      </div>
       {canEdit ? (
         <div className="mt-8 rounded-xl border border-hairline p-4">
           <p className="text-[14.5px] font-medium text-ink">Archive this property</p>
