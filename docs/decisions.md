@@ -5,6 +5,12 @@ V-01 Build Playbook and Design Roadmap.
 
 ## 2026-11-02
 
+- **The Team list is one line per person (Alpha: "this scrolling takes too much space").** Name,
+  role, jobs and homes on one line; a line drops down to rename, change the role, homes and jobs, or
+  remove. With more than six people, a search and a "Show" choice (Everyone, Office, Cleaners,
+  Maintenance, Field team) sit above it. The Guesty list and the invitation form fold behind
+  "Review and add" and "Invite a colleague".
+
 - **The docs keep their first design (Alpha, after seeing a lighter, regrouped version: "just go back
   to what it was before").** The lighter look, the guides grouped by the day and the task-led front
   page were tried and taken out again.

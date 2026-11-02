@@ -34,7 +34,23 @@ export function GuestyPeople({ orgId, homes }: { orgId: string; homes: { id: str
   const waiting = people.filter((p) => !p.memberId);
   const [chosen, setChosen] = useState<Set<string> | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  // Folded to one line until someone wants it: the list is long (Alpha, 2 Nov 2026).
+  const [expanded, setExpanded] = useState(false);
   if (people.length === 0) return null;
+  if (!expanded)
+    return (
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-hairline bg-white px-4 py-3">
+        <p className="text-[14px] text-ink">
+          <span className="font-medium">From Guesty: </span>
+          {waiting.length
+            ? `${waiting.length} of ${people.length} people aren’t on the team here yet.`
+            : `everyone (${people.length}) is on the team here.`}
+        </p>
+        <button type="button" className="action" onClick={() => setExpanded(true)}>
+          {waiting.length ? 'Review and add' : 'Show them'}
+        </button>
+      </div>
+    );
   // Cleaners and maintenance are ticked to start with; the office is left to choose.
   const picked = chosen ?? new Set(waiting.filter((p) => p.skills.length && p.email).map((p) => p.id));
   const toggle = (id: string) => {
@@ -46,7 +62,12 @@ export function GuestyPeople({ orgId, homes }: { orgId: string; homes: { id: str
 
   return (
     <div className="mt-6 rounded-2xl border border-hairline bg-canvas p-4">
-      <h3 className="font-semibold tracking-[-0.015em] text-[18px] text-ink">From Guesty</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="font-semibold tracking-[-0.015em] text-[18px] text-ink">From Guesty</h3>
+        <button type="button" className="action" onClick={() => setExpanded(false)}>
+          Close
+        </button>
+      </div>
       <p className="mt-1 max-w-[62ch] text-[13.5px] text-slate">
         {waiting.length
           ? `${waiting.length} of ${people.length} people on your Guesty account aren’t on the team here yet. Adding them doesn’t email them: they join the field team with their skills and homes from Guesty, can be given jobs straight away, and sign in later with their email.`
