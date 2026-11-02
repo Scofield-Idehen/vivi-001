@@ -262,6 +262,17 @@ export function RailButton({
   );
 }
 
+/** A link that leaves the app, such as the docs: opens in a new tab, styled like the rest. */
+export function RailExternal({ href, label, icon: Icon }: { href: string; label: string; icon: TablerIcon }) {
+  const { tone } = useRail();
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className={cx(ROW, ITEM[tone].quiet)}>
+      <Icon size={19} stroke={1.6} aria-hidden className="shrink-0" />
+      <Words>{label}</Words>
+    </a>
+  );
+}
+
 /** A named group of links. In the closed rail its name gives way to a short rule, in the same space. */
 export function RailGroup({ label, children }: { label: string; children: ReactNode }) {
   const { collapsed, tone } = useRail();

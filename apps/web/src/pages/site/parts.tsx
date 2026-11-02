@@ -42,17 +42,26 @@ export function SiteFrame({
   slug,
   brand,
   testMode,
+  preview,
   children,
 }: {
   slug: string;
   brand: Brand | undefined;
   testMode?: boolean;
+  /** The team's preview: the workspace it is for. */
+  preview?: string | null;
   children: ReactNode;
 }) {
   const accent = brand?.accentHex ?? '#1e4d4f';
+  const home = `/book/${slug}${preview ? `?preview=${preview}` : ''}`;
   return (
     <div className="flex min-h-dvh flex-col bg-canvas" style={{ '--color-accent': accent } as CSSProperties}>
-      {testMode ? (
+      {preview ? (
+        <p className="bg-accent px-4 py-2 text-center text-[13px] leading-snug text-white">
+          Preview for your team: every home shows, even ones Guesty still runs, and nothing can be booked.
+          Guests see only the homes you put on the site, once it’s switched on.
+        </p>
+      ) : testMode ? (
         <p className="bg-ink px-4 py-1.5 text-center text-[12.5px] text-canvas">
           Test mode: payments use Stripe’s test cards and no real money moves.
         </p>
@@ -72,7 +81,7 @@ export function SiteFrame({
               </span>
             )}
           </Link>
-          <Link to={`/book/${slug}`} className="text-[14.5px] text-ink hover:text-accent">
+          <Link to={home} className="text-[14.5px] text-ink hover:text-accent">
             All homes
           </Link>
         </div>
@@ -136,7 +145,9 @@ export function StayCalendar({
   checkOut,
   onChange,
   months = 1,
+  preview = null,
 }: {
+  preview?: string | null;
   slug: string;
   homeId: string;
   currency: string;
@@ -148,8 +159,8 @@ export function StayCalendar({
   const [month, setMonth] = useState(() => monthOf(checkIn ?? new Date().toISOString().slice(0, 10)));
   const shown = months === 2 ? [month, shiftMonth(month, 1)] : [month];
   // One read per month: a month is at most 31 nights, within the API's window.
-  const first = useSiteNights(slug, homeId, `${shown[0]}-01`, lastOf(shown[0] as string));
-  const second = useSiteNights(slug, homeId, `${shown.at(-1)}-01`, lastOf(shown.at(-1) as string));
+  const first = useSiteNights(slug, homeId, `${shown[0]}-01`, lastOf(shown[0] as string), preview);
+  const second = useSiteNights(slug, homeId, `${shown.at(-1)}-01`, lastOf(shown.at(-1) as string), preview);
   const today = first.data?.today ?? new Date().toISOString().slice(0, 10);
   const nights = new Map(
     [...(first.data?.nights ?? []), ...(second.data?.nights ?? [])].map((n) => [n.night, n]),

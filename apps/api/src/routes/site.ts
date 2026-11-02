@@ -52,7 +52,7 @@ import {
   todayIn,
 } from '@v01/shared';
 import { and, asc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
-import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { pgConstraint, type RequestScope } from '../context.ts';
@@ -66,6 +66,8 @@ import { HttpError } from '../errors.ts';
 
 const HomeParams = SiteSlugParams.extend({ homeId: z.uuid() });
 const BookingParams = SiteSlugParams.extend({ bookingId: z.uuid() });
+/** The team's preview of their own site (signed in). */
+const PreviewQuery = z.object({ preview: z.literal('1').optional() });
 
 const notFound = () => new HttpError(404, 'site_not_found', 'There is no booking site at this address.');
 const homeNotFound = () => new HttpError(404, 'home_not_found', 'That home isn’t on this site.');
@@ -229,11 +231,13 @@ async function ownOf(tx: Tx, homeIds: string[], from: string, to: string) {
   return map;
 }
 
-async function homesOf(tx: Tx, id?: string): Promise<HomeRow[]> {
+/** The homes the site shows; a preview for the team shows every home, even those Guesty still runs. */
+async function homesOf(tx: Tx, id?: string, preview = false): Promise<HomeRow[]> {
+  const shown = preview ? isNull(properties.archivedAt) : onSite;
   return (await tx
     .select(homeColumns)
     .from(properties)
-    .where(id ? and(onSite, eq(properties.id, id)) : onSite)
+    .where(id ? and(shown, eq(properties.id, id)) : shown)
     .orderBy(asc(properties.name))) as HomeRow[];
 }
 
@@ -410,32 +414,63 @@ export async function settleStaleSiteBookings(tx: Tx, gateway: CardGateway): Pro
 
 export function siteRoutes(
   app: FastifyInstance,
-  deps: { db: ApiDatabase; cards: CardGateway | null; appUrl: string; now?: () => Date },
+  deps: {
+    db: ApiDatabase;
+    scope: RequestScope;
+    cards: CardGateway | null;
+    appUrl: string;
+    now?: () => Date;
+  },
 ): void {
   const typed = app.withTypeProvider<ZodTypeProvider>();
   const now = () => deps.now?.() ?? new Date();
 
-  async function inSite<T>(slug: string, fn: (tx: Tx, orgId: string) => Promise<T>): Promise<T> {
+  /**
+   * Runs in the operator's scope. With `?preview=1` the team, signed in, sees their own site as it
+   * would look with every home on it, even switched off; nothing can be booked in a preview.
+   */
+  async function inSite<T>(
+    req: FastifyRequest,
+    slug: string,
+    fn: (tx: Tx, orgId: string, preview: boolean) => Promise<T>,
+  ): Promise<T> {
+    if ((req.query as { preview?: string } | undefined)?.preview === '1') {
+      return deps.scope.inOrg(req, 'properties.read', async (tx, ctx) => {
+        const [org] = await tx
+          .select({ slug: organisations.slug })
+          .from(organisations)
+          .where(eq(organisations.id, ctx.orgId));
+        if (org?.slug !== slug) throw notFound();
+        return fn(tx, ctx.orgId, true);
+      });
+    }
     const orgId = await deps.db.bookingSiteOrg(slug);
     if (!orgId) throw notFound();
-    return deps.db.withOrg({ orgId }, (tx) => fn(tx, orgId));
+    return deps.db.withOrg({ orgId }, (tx) => fn(tx, orgId, false));
   }
 
-  const payment = () => ({
-    canPay: Boolean(deps.cards),
+  const payment = (preview: boolean) => ({
+    canPay: Boolean(deps.cards) && !preview,
     testMode: deps.cards ? !deps.cards.live : false,
+    preview,
   });
 
   /** The site: its homes, and with dates, whether each is free and what the stay costs. */
   typed.get(
     '/v1/site/:slug',
-    { schema: { params: SiteSlugParams, querystring: SiteSearchSchema, response: { 200: SiteSchema } } },
+    {
+      schema: {
+        params: SiteSlugParams,
+        querystring: SiteSearchSchema.extend(PreviewQuery.shape),
+        response: { 200: SiteSchema },
+      },
+    },
     async (req) =>
-      inSite(req.params.slug, async (tx) => {
+      inSite(req, req.params.slug, async (tx, _orgId, preview) => {
         const site = await siteOf(tx);
         // Bookings whose guest paid but never came back to the site are saved here too.
         if (deps.cards) await settleStaleSiteBookings(tx, deps.cards);
-        const homes = await homesOf(tx);
+        const homes = await homesOf(tx, undefined, preview);
         const ids = homes.map((h) => h.id);
         const { today } = nowIn(site.timeZone, now());
         const covers = await coversOf(tx, ids);
@@ -467,7 +502,7 @@ export function siteRoutes(
           brand: site.brand,
           currency: site.currency,
           terms: site.terms,
-          ...payment(),
+          ...payment(preview),
           homes: cards,
         } satisfies Site;
       }),
@@ -476,11 +511,11 @@ export function siteRoutes(
   /** A home's page: photos, what it's like, rules and the usual price. */
   typed.get(
     '/v1/site/:slug/homes/:homeId',
-    { schema: { params: HomeParams, response: { 200: SiteHomeSchema } } },
+    { schema: { params: HomeParams, querystring: PreviewQuery, response: { 200: SiteHomeSchema } } },
     async (req) =>
-      inSite(req.params.slug, async (tx) => {
+      inSite(req, req.params.slug, async (tx, _orgId, preview) => {
         const site = await siteOf(tx);
-        const [h] = await homesOf(tx, req.params.homeId);
+        const [h] = await homesOf(tx, req.params.homeId, preview);
         if (!h) throw homeNotFound();
         const { today } = nowIn(site.timeZone, now());
         const photos = await tx
@@ -525,7 +560,7 @@ export function siteRoutes(
           brand: site.brand,
           currency: site.currency,
           terms: site.terms,
-          ...payment(),
+          ...payment(preview),
           photos,
           sections,
           amenities: amenities
@@ -547,15 +582,19 @@ export function siteRoutes(
   typed.get(
     '/v1/site/:slug/homes/:homeId/nights',
     {
-      schema: { params: HomeParams, querystring: SiteNightsQuerySchema, response: { 200: SiteNightsSchema } },
+      schema: {
+        params: HomeParams,
+        querystring: SiteNightsQuerySchema.extend(PreviewQuery.shape),
+        response: { 200: SiteNightsSchema },
+      },
     },
     async (req) =>
-      inSite(req.params.slug, async (tx) => {
+      inSite(req, req.params.slug, async (tx, _orgId, preview) => {
         const { from, to } = req.query;
         if (to < from || eachNight(from, to).length > SITE_NIGHTS_WINDOW)
           throw new HttpError(400, 'window', `Ask for ${SITE_NIGHTS_WINDOW} nights at most.`);
         const site = await siteOf(tx);
-        const [h] = await homesOf(tx, req.params.homeId);
+        const [h] = await homesOf(tx, req.params.homeId, preview);
         if (!h) throw homeNotFound();
         const taken = await takenOf(tx, [h.id], from, addDays(to, 1));
         const own = await ownOf(tx, [h.id], from, to);
@@ -578,11 +617,18 @@ export function siteRoutes(
   /** The price for a stay, or why it can't be booked. */
   typed.post(
     '/v1/site/:slug/quote',
-    { schema: { params: SiteSlugParams, body: SiteQuoteRequestSchema, response: { 200: SiteQuoteSchema } } },
+    {
+      schema: {
+        params: SiteSlugParams,
+        querystring: PreviewQuery,
+        body: SiteQuoteRequestSchema,
+        response: { 200: SiteQuoteSchema },
+      },
+    },
     async (req) =>
-      inSite(req.params.slug, async (tx) => {
+      inSite(req, req.params.slug, async (tx, _orgId, preview) => {
         const site = await siteOf(tx);
-        const [h] = await homesOf(tx, req.body.homeId);
+        const [h] = await homesOf(tx, req.body.homeId, preview);
         if (!h) throw homeNotFound();
         return quoteFor(tx, h, req.body, req.body, site, now());
       }),
@@ -598,7 +644,8 @@ export function siteRoutes(
       const gateway = deps.cards;
       if (!gateway)
         throw new HttpError(503, 'cards_off', 'Online payment isn’t switched on yet. Contact us to book.');
-      return inSite(req.params.slug, async (tx, orgId) => {
+      return inSite(req, req.params.slug, async (tx, orgId, preview) => {
+        if (preview) throw new HttpError(409, 'preview', 'Nothing can be booked in a preview.');
         const b = req.body;
         const site = await siteOf(tx);
         const [h] = await homesOf(tx, b.homeId);
@@ -661,7 +708,7 @@ export function siteRoutes(
     '/v1/site/:slug/bookings/:bookingId',
     { schema: { params: BookingParams, response: { 200: SiteBookingSchema } } },
     async (req) =>
-      inSite(req.params.slug, async (tx) => {
+      inSite(req, req.params.slug, async (tx) => {
         if (deps.cards) await settleSiteBooking(tx, deps.cards, req.params.bookingId, req.log);
         const [row] = await tx
           .select({

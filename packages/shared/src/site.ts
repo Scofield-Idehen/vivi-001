@@ -226,8 +226,10 @@ export const SiteSchema = z.object({
   terms: z.string().nullable(),
   /** Test mode: Stripe's test key, no real money. */
   testMode: z.boolean(),
-  /** False until Stripe is set up; homes show but can't be paid for. */
+  /** False until Stripe is set up, and in a preview; homes show but can't be paid for. */
   canPay: z.boolean(),
+  /** The team's preview: every home shows, nothing can be booked. */
+  preview: z.boolean(),
   homes: z.array(SiteHomeCardSchema),
 });
 export type Site = z.infer<typeof SiteSchema>;
@@ -239,6 +241,7 @@ export const SiteHomeSchema = SiteHomeCardSchema.omit({ stay: true }).extend({
   terms: z.string().nullable(),
   testMode: z.boolean(),
   canPay: z.boolean(),
+  preview: z.boolean(),
   photos: z.array(z.object({ url: z.string(), caption: z.string().nullable() })),
   sections: z.array(z.object({ title: z.string(), text: z.string() })),
   amenities: z.array(z.string()),

@@ -230,3 +230,30 @@ describe('booking website', () => {
     expect(n!.n).toBe(1);
   });
 });
+
+describe('the team’s preview', () => {
+  it('shows every home, even Guesty’s and with the site off, and books nothing', async () => {
+    await call('PATCH', '/v1/workspace/booking-site', { signedIn: true, body: { on: false } });
+    expect((await call('GET', '/v1/site/a')).status).toBe(404);
+    // Signed out, a preview is refused.
+    expect((await call('GET', '/v1/site/a?preview=1')).status).toBe(401);
+    const preview = await call('GET', '/v1/site/a?preview=1', { signedIn: true });
+    expect(preview.status).toBe(200);
+    expect(preview.body).toMatchObject({ preview: true, canPay: false });
+    expect(preview.body.homes.map((h: { name: string }) => h.name).sort()).toEqual([
+      'Guesty Cottage',
+      'Harbour View Lodge',
+    ]);
+    expect((await call('GET', `/v1/site/a/homes/${guestyHome}?preview=1`, { signedIn: true })).status).toBe(
+      200,
+    );
+    // Another operator's address can't be previewed from this workspace.
+    expect((await call('GET', '/v1/site/b?preview=1', { signedIn: true })).status).toBe(404);
+    const book = await call('POST', '/v1/site/a/book?preview=1', {
+      signedIn: true,
+      body: { homeId: guestyHome, checkIn: monday, checkOut: addDays(monday, 2), adults: 1, ...guest },
+    });
+    expect(book.status).toBe(409);
+    await call('PATCH', '/v1/workspace/booking-site', { signedIn: true, body: { on: true } });
+  });
+});

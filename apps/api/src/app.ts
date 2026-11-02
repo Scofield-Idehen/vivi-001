@@ -237,7 +237,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   guestRoutes(app, { db: deps.db, scope, box, now: deps.now, cards, appUrl });
   consoleRoutes(app, { scope });
   cardRoutes(app, { scope, gateway: cards, appUrl });
-  siteRoutes(app, { db: deps.db, cards, appUrl, now: deps.now });
+  siteRoutes(app, { db: deps.db, scope, cards, appUrl, now: deps.now });
   bookingSiteSettingsRoutes(app, { scope, cards });
   await webhookRoutes(app, {
     db: deps.db,

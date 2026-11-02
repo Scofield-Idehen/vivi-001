@@ -1,24 +1,371 @@
-/* V-01's colours on Starlight: the app's deep teal accent on its soft white. */
-:root {
-  --sl-color-accent-low: #d9e6e5;
-  --sl-color-accent: #1e4d4f;
-  --sl-color-accent-high: #0f2a2b;
-  --sl-color-white: #14181a;
-  --sl-color-bg: #fcfbf8;
-  --sl-color-bg-nav: #ffffff;
-  --sl-color-bg-sidebar: #f6f4ef;
-}
+/*
+ * V-01's docs: open and quiet, like a well-kept guidebook rather than a dashboard. No boxes around
+ * content; space and type do the grouping. The app's deep teal marks where you are and what you
+ * can press, and nothing else.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+:root,
 :root[data-theme="light"] {
-  --sl-color-accent-low: #d9e6e5;
-  --sl-color-accent: #1e4d4f;
-  --sl-color-accent-high: #0f2a2b;
+  --v-ink: #172120;
+  --v-muted: #5d6967;
+  --v-faint: #8b9593;
+  --v-line: #ebe7df;
+  --v-canvas: #fbfaf7;
+  --v-wash: #f3f1ec;
+  --v-teal: #1e4d4f;
+  --v-teal-soft: #e3eeec;
+
+  --sl-color-accent-low: var(--v-teal-soft);
+  --sl-color-accent: var(--v-teal);
+  --sl-color-accent-high: #12302f;
+  --sl-color-white: var(--v-ink);
+  --sl-color-gray-1: #26302f;
+  --sl-color-gray-2: #3d4847;
+  --sl-color-gray-3: var(--v-muted);
+  --sl-color-gray-4: var(--v-faint);
+  --sl-color-gray-5: var(--v-line);
+  --sl-color-gray-6: var(--v-wash);
+  --sl-color-gray-7: var(--v-canvas);
+  --sl-color-black: var(--v-canvas);
+  --sl-color-bg: var(--v-canvas);
+  --sl-color-bg-nav: var(--v-canvas);
+  --sl-color-bg-sidebar: var(--v-canvas);
+  --sl-color-hairline: transparent;
+  --sl-color-hairline-light: var(--v-line);
+  --sl-color-hairline-shade: var(--v-line);
+  --sl-color-text: #2b3534;
+  --sl-color-text-accent: var(--v-teal);
+
+  --sl-font: "Inter", system-ui, sans-serif;
+  --sl-font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --sl-text-body: 1.0625rem;
+  --sl-line-height: 1.7;
+  --sl-content-width: 44rem;
+  --sl-sidebar-width: 17rem;
 }
+
 :root[data-theme="dark"] {
-  --sl-color-accent-low: #12302f;
-  --sl-color-accent: #7fb3b0;
-  --sl-color-accent-high: #d4e8e6;
-  --sl-color-bg: #121516;
-  --sl-color-bg-nav: #171b1c;
-  --sl-color-bg-sidebar: #151819;
-  --sl-color-white: #ffffff;
+  --v-ink: #eef3f2;
+  --v-muted: #a3b0ae;
+  --v-faint: #75817f;
+  --v-line: #263130;
+  --v-canvas: #111716;
+  --v-wash: #18201f;
+  --v-teal: #86c2bd;
+  --v-teal-soft: #17302e;
+  --sl-color-accent-low: var(--v-teal-soft);
+  --sl-color-accent: var(--v-teal);
+  --sl-color-accent-high: #d7ecea;
+  --sl-color-white: var(--v-ink);
+  --sl-color-gray-1: #dfe7e6;
+  --sl-color-gray-2: #c3cecc;
+  --sl-color-gray-3: var(--v-muted);
+  --sl-color-gray-4: var(--v-faint);
+  --sl-color-gray-5: var(--v-line);
+  --sl-color-gray-6: var(--v-wash);
+  --sl-color-black: var(--v-canvas);
+  --sl-color-bg: var(--v-canvas);
+  --sl-color-bg-nav: var(--v-canvas);
+  --sl-color-bg-sidebar: var(--v-canvas);
+  --sl-color-hairline: transparent;
+  --sl-color-hairline-light: var(--v-line);
+  --sl-color-hairline-shade: var(--v-line);
+  --sl-color-text: #d5dedd;
+  --sl-color-text-accent: var(--v-teal);
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The frame: no rules between header, sidebar and page. */
+header.header {
+  border-bottom: 0;
+  background: color-mix(in srgb, var(--v-canvas) 88%, transparent);
+  backdrop-filter: blur(8px);
+}
+.site-title {
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--v-ink);
+}
+.sidebar-pane {
+  border-inline-end: 0;
+}
+.right-sidebar {
+  border-inline-start: 0;
+}
+.right-sidebar-panel h2 {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--v-faint);
+}
+
+/* Search: a quiet field, not a box with a badge. */
+site-search button[data-open-modal] {
+  border: 0;
+  background: var(--v-wash);
+  border-radius: 999px;
+}
+site-search button[data-open-modal] kbd {
+  background: transparent;
+  color: var(--v-faint);
+}
+
+/* Sidebar: group names as small quiet labels; the page you're on is teal with a thin mark, not a filled block. */
+nav.sidebar .group-label .large,
+nav.sidebar summary .large {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--v-faint);
+  letter-spacing: 0;
+}
+nav.sidebar ul ul {
+  border-inline-start: 0;
+}
+nav.sidebar a {
+  font-size: 0.9375rem;
+  color: var(--v-muted);
+  border-radius: 0;
+  padding-block: 0.3rem;
+  border-inline-start: 2px solid transparent;
+}
+nav.sidebar a:hover {
+  color: var(--v-ink);
+}
+nav.sidebar a[aria-current="page"],
+nav.sidebar a[aria-current="page"]:hover,
+nav.sidebar a[aria-current="page"]:focus {
+  background: transparent;
+  color: var(--v-teal);
+  font-weight: 600;
+  border-inline-start-color: var(--v-teal);
+}
+
+/* The page title sits on the page, not above a divider. */
+.content-panel {
+  border-top: 0;
+}
+.content-panel + .content-panel {
+  border-top: 0;
+}
+h1#_top {
+  font-size: clamp(2rem, 1.6rem + 1.4vw, 2.6rem);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--v-ink);
+}
+
+/* Reading. */
+.sl-markdown-content h2 {
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  margin-top: 2.75rem;
+  color: var(--v-ink);
+}
+.sl-markdown-content h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-top: 2rem;
+  color: var(--v-ink);
+}
+.sl-markdown-content a:not(:where(.not-content *)) {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: color-mix(in srgb, var(--v-teal) 40%, transparent);
+}
+.sl-markdown-content strong {
+  font-weight: 600;
+  color: var(--v-ink);
+}
+.sl-markdown-content li + li {
+  margin-top: 0.35rem;
+}
+.sl-markdown-content :not(pre) > code {
+  background: var(--v-wash);
+  border: 0;
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.875em;
+}
+
+/* Tables: rows separated by a faint line, no grid of boxes. */
+.sl-markdown-content table {
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+.sl-markdown-content :is(th, td) {
+  border: 0;
+  border-bottom: 1px solid var(--v-line);
+  padding: 0.6rem 1rem 0.6rem 0;
+  background: transparent;
+}
+.sl-markdown-content th {
+  font-weight: 600;
+  color: var(--v-muted);
+  font-size: 0.8125rem;
+}
+.sl-markdown-content tr:nth-child(2n) {
+  background: transparent;
+}
+
+/* Notes: a teal line at the side instead of a coloured box. */
+.starlight-aside {
+  background: transparent;
+  border: 0;
+  border-inline-start: 3px solid var(--v-teal);
+  padding: 0.25rem 0 0.25rem 1rem;
+}
+
+/* Code: soft wash, no frame. */
+.expressive-code .frame {
+  box-shadow: none !important;
+}
+.expressive-code pre {
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: var(--v-wash) !important;
+}
+.expressive-code .frame .header {
+  border: 0 !important;
+  background: transparent !important;
+}
+
+/* Previous / next at the foot of a page: plain links. */
+.pagination-links a {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  padding-inline: 0;
+}
+
+/* API reference: the grey panels go; each field is a line with space around it. */
+.sl-openapi-section-panel {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+}
+.sl-openapi-key {
+  padding-block: 0.75rem;
+  border-bottom: 1px solid var(--v-line);
+}
+.sl-openapi-key + .sl-openapi-key {
+  margin-top: 0 !important;
+}
+.sl-openapi-key-name {
+  font-family: var(--sl-font-mono);
+  font-size: 0.875rem;
+}
+.sl-badge {
+  border: 0;
+  border-radius: 4px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* The front page. */
+.v-intro {
+  max-width: 40rem;
+  font-size: 1.1875rem;
+  color: var(--v-muted);
+  margin-top: 0.5rem !important;
+}
+.v-ways {
+  display: grid;
+  gap: 2.5rem 3rem;
+  margin-top: 3rem !important;
+}
+@media (min-width: 50rem) {
+  .v-ways {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.v-ways h2 {
+  margin-top: 0 !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  color: var(--v-faint) !important;
+  letter-spacing: 0 !important;
+}
+.v-ways ul {
+  list-style: none;
+  padding: 0 !important;
+  margin-top: 0.75rem !important;
+}
+.v-ways li {
+  margin: 0 !important;
+}
+.v-ways li a {
+  display: block;
+  padding: 0.6rem 0;
+  text-decoration: none !important;
+  border-bottom: 1px solid var(--v-line);
+}
+.v-ways li a span {
+  display: block;
+  color: var(--v-ink);
+  font-weight: 600;
+}
+.v-ways li a small {
+  display: block;
+  color: var(--v-muted);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+.v-ways li a:hover span {
+  color: var(--v-teal);
+}
+
+/* The request line: method and path on the page, the example under it in a soft wash. */
+.sl-openapi-operation-description {
+  border: 0 !important;
+}
+.sl-openapi-operation-description-header {
+  border-bottom: 0 !important;
+  padding-block: 0.25rem 0.75rem;
+}
+.sl-openapi-operation-description-button,
+.sl-openapi-snippet-picker select {
+  border: 0 !important;
+  background: var(--v-wash) !important;
+  border-radius: 8px !important;
+}
+.sl-openapi-operation-method-badge {
+  border: 0 !important;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  letter-spacing: 0.03em;
+}
+.sl-openapi-content-picker-select select,
+.sl-openapi-content-picker-select-value {
+  border: 0 !important;
+  background: transparent !important;
+  padding-inline-start: 0 !important;
+  color: var(--v-muted) !important;
+  font-size: 0.875rem;
+}
+.sl-openapi-tag {
+  border: 0 !important;
+  background: var(--v-wash);
+  border-radius: 4px;
+  color: var(--v-muted);
+}
+details.sl-openapi-schema-object-root,
+.sl-openapi-schema-object-root details {
+  border-inline-start: 0 !important;
+  padding-inline-start: 0 !important;
+}
+
+/* The sidebar's thin rules beside each group go too. */
+nav.sidebar ul.top-level ul,
+nav.sidebar details > ul {
+  border-inline-start: 0 !important;
+}
+nav.sidebar ul ul li {
+  border-inline-start: 0 !important;
+  margin-inline-start: 0.25rem !important;
 }

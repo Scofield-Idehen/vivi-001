@@ -4797,15 +4797,15 @@ function siteOf(operator: DemoOperator): DemoSite {
   return o.site;
 }
 
-function siteOperator(slug: string): DemoOperator {
+function siteOperator(slug: string, preview: boolean): DemoOperator {
   const operator = load().operators.find((o) => o.workspace.organisation.slug === slug);
-  if (!operator || !siteOf(operator).on)
+  if (!operator || (!preview && !siteOf(operator).on))
     throw new ApiError(404, 'site_not_found', 'There is no booking site at this address.');
   return operator;
 }
 
-const siteHomes = (operator: DemoOperator) =>
-  operator.properties.filter((p) => p.onBookingSite && p.managedBy !== 'guesty');
+const siteHomes = (operator: DemoOperator, preview = false) =>
+  operator.properties.filter((p) => preview || (p.onBookingSite && p.managedBy !== 'guesty'));
 
 function siteRules(p: PropertyDetail): SiteHomeRules {
   return {
@@ -4905,7 +4905,8 @@ async function demoSiteFetch(path: string, method: string, body: unknown): Promi
   const url = new URL(path, 'https://demo.v01');
   const parts = url.pathname.split('/').filter(Boolean); // v1 site {slug} ...
   const slug = parts[2] ?? '';
-  const operator = siteOperator(slug);
+  const preview = url.searchParams.get('preview') === '1';
+  const operator = siteOperator(slug, preview);
   const site = siteOf(operator);
   const currency = operator.workspace.settings.currency;
   const common = {
@@ -4914,18 +4915,20 @@ async function demoSiteFetch(path: string, method: string, body: unknown): Promi
     currency,
     terms: site.terms,
     testMode: true,
-    canPay: true,
+    canPay: !preview,
+    preview,
   };
   const findHome = (id: string) => {
-    const p = siteHomes(operator).find((h) => h.id === id);
+    const p = siteHomes(operator, preview).find((h) => h.id === id);
     if (!p) throw new ApiError(404, 'home_not_found', 'That home isn’t on this site.');
     return p;
   };
 
   if (method === 'GET' && parts.length === 3) {
-    const q = SiteSearchSchema.parse(Object.fromEntries(url.searchParams));
+    const { preview: _preview, ...search } = Object.fromEntries(url.searchParams);
+    const q = SiteSearchSchema.parse(search);
     const homes: SiteHomeCard[] = [];
-    for (const p of siteHomes(operator)) {
+    for (const p of siteHomes(operator, preview)) {
       let stay: SiteHomeCard['stay'] = null;
       if (q.checkIn && q.checkOut) {
         const quote = siteQuote(operator, p, {

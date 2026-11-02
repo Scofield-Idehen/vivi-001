@@ -1,4 +1,4 @@
-import { IconCopy, IconExternalLink } from '@tabler/icons-react';
+import { IconCopy, IconExternalLink, IconEye } from '@tabler/icons-react';
 import { can, type WorkspaceRole } from '@v01/shared';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
@@ -80,17 +80,22 @@ export function BookingSiteSection({ orgId, role }: { orgId: string; role: Works
           >
             <IconCopy size={15} stroke={1.75} /> {copied ? 'Copied' : 'Copy link'}
           </button>
-          {s.on ? (
-            config.demo ? (
-              <Link className="action" to={`/book/${s.slug}`}>
-                <IconExternalLink size={15} stroke={1.75} /> Open
-              </Link>
-            ) : (
-              <a className="action" href={url} target="_blank" rel="noreferrer">
-                <IconExternalLink size={15} stroke={1.75} /> Open
+          {config.demo ? (
+            <Link className="action" to={`/book/${s.slug}${s.on ? '' : `?preview=${orgId}`}`}>
+              <IconExternalLink size={15} stroke={1.75} /> {s.on ? 'Open' : 'Preview'}
+            </Link>
+          ) : (
+            <>
+              {s.on ? (
+                <a className="action" href={url} target="_blank" rel="noreferrer">
+                  <IconExternalLink size={15} stroke={1.75} /> Open
+                </a>
+              ) : null}
+              <a className="action" href={`${url}?preview=${orgId}`} target="_blank" rel="noreferrer">
+                <IconEye size={15} stroke={1.75} /> Preview with all homes
               </a>
-            )
-          ) : null}
+            </>
+          )}
         </div>
         {!s.canPay ? (
           <p className="border-t border-hairline py-3 text-[13px] text-slate">

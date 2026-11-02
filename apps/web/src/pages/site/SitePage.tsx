@@ -293,7 +293,8 @@ export function SitePage() {
     ...(checkIn && checkOut ? { checkIn, checkOut } : {}),
     ...party,
   };
-  const site = useSite(slug, search);
+  const preview = params.get('preview');
+  const site = useSite(slug, search, preview);
   const set = (next: Record<string, string | number | null>) => {
     const p = new URLSearchParams(params);
     for (const [k, v] of Object.entries(next)) {
@@ -328,7 +329,7 @@ export function SitePage() {
   const free = homes.filter((h) => !h.stay || h.stay.totalMinor !== null).length;
 
   return (
-    <SiteFrame slug={slug} brand={s.brand} testMode={s.testMode}>
+    <SiteFrame slug={slug} brand={s.brand} testMode={s.testMode} preview={preview}>
       <section className="pt-8 pb-6">
         <h1 className="font-semibold tracking-[-0.025em] text-[30px] leading-tight text-ink sm:text-[36px]">
           Find your stay
@@ -375,7 +376,7 @@ export function SitePage() {
               onClick={() => {
                 setBedrooms(0);
                 setPetsOnly(false);
-                setParams(new URLSearchParams(), { replace: true });
+                setParams(new URLSearchParams(preview ? { preview } : {}), { replace: true });
               }}
             >
               Clear search

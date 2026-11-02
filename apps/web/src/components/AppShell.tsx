@@ -1,4 +1,11 @@
-import { IconArrowLeft, IconInfoCircle, IconLock, IconLogout, IconRefresh } from '@tabler/icons-react';
+import {
+  IconArrowLeft,
+  IconHelp,
+  IconInfoCircle,
+  IconLock,
+  IconLogout,
+  IconRefresh,
+} from '@tabler/icons-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router';
@@ -14,6 +21,7 @@ import { OwnerPortal } from '../pages/portal/OwnerPortal.tsx';
 import { OperatorMark } from './BrandMark.tsx';
 import {
   RailButton,
+  RailExternal,
   RailFooter,
   RailFrame,
   RailGroup,
@@ -103,6 +111,7 @@ function AccountFooter({ onNavigate }: { onNavigate?: () => void }) {
   // Who is signed in, and signing out, live in the menu at the top right (TopBar.tsx).
   return (
     <RailFooter>
+      <RailExternal href={config.docsUrl} label="Help and docs" icon={IconHelp} />
       <RailLink to="/about" label="About" icon={IconInfoCircle} quiet onNavigate={onNavigate} />
       {reset ? <RailButton label="Reset sample data" icon={IconRefresh} quiet onClick={reset} /> : null}
     </RailFooter>

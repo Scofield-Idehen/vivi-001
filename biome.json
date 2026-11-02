@@ -58,6 +58,19 @@
           }
         }
       }
+    },
+    {
+      "includes": ["apps/docs/src/styles/**"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noImportantStyles": "off"
+          },
+          "style": {
+            "noDescendingSpecificity": "off"
+          }
+        }
+      }
     }
   ],
   "assist": {

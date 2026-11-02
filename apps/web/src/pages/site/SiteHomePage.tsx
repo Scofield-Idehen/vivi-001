@@ -176,7 +176,8 @@ function BookBox({ slug, h }: { slug: string; h: SiteHome }) {
     setParams(p, { replace: true });
   };
   const request = checkIn && checkOut ? { homeId: h.id, checkIn, checkOut, ...party } : null;
-  const quote = useSiteQuote(slug, request);
+  const preview = params.get('preview');
+  const quote = useSiteQuote(slug, request, preview);
   const navigate = useNavigate();
   const book = useSiteBook(slug, navigate);
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', request: '' });
@@ -328,6 +329,7 @@ function BookBox({ slug, h }: { slug: string; h: SiteHome }) {
         checkIn={checkIn}
         checkOut={checkOut}
         onChange={(s) => set({ checkIn: s.checkIn, checkOut: s.checkOut })}
+        preview={preview}
       />
       <div className="divide-y divide-hairline border-y border-hairline">
         <Stepper
@@ -371,7 +373,9 @@ function BookBox({ slug, h }: { slug: string; h: SiteHome }) {
       >
         {ok ? 'Book now' : 'Choose your dates'}
       </button>
-      {!h.canPay ? (
+      {h.preview ? (
+        <p className="text-[13px] text-slate">Preview: guests book here once the home is on the website.</p>
+      ) : !h.canPay ? (
         <p className="text-[13px] text-slate">Online booking opens soon. Contact us to book these dates.</p>
       ) : (
         <p className="text-center text-[13px] text-slate">
@@ -384,8 +388,8 @@ function BookBox({ slug, h }: { slug: string; h: SiteHome }) {
 
 export function SiteHomePage() {
   const { slug = '', homeId = '' } = useParams();
-  const home = useSiteHome(slug, homeId);
   const [params] = useSearchParams();
+  const home = useSiteHome(slug, homeId, params.get('preview'));
   const [showAll, setShowAll] = useState(false);
   if (home.isPending)
     return (
@@ -407,7 +411,7 @@ export function SiteHomePage() {
   const amenities = showAll ? h.amenities : h.amenities.slice(0, 12);
 
   return (
-    <SiteFrame slug={slug} brand={h.brand} testMode={h.testMode}>
+    <SiteFrame slug={slug} brand={h.brand} testMode={h.testMode} preview={params.get('preview')}>
       <div className="pt-4 pb-3">
         <Link to={back} className="inline-flex items-center gap-1.5 text-[14px] text-slate hover:text-ink">
           <IconArrowLeft size={16} stroke={1.75} /> All homes

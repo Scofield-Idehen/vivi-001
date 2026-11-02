@@ -960,40 +960,68 @@ export type SiteSearchParams = {
   pets?: number;
 };
 
-export function useSite(slug: string, search: SiteSearchParams) {
+/** A preview is the team's look at their own site: signed in, in that workspace (`orgId`). */
+function usePreview(preview: string | null) {
+  const token = useToken();
+  return {
+    auth: preview ? { token, orgId: preview } : { token: null },
+    flag: preview ? { preview: '1' } : {},
+    ready: !preview || Boolean(token),
+  };
+}
+
+export function useSite(slug: string, search: SiteSearchParams, preview: string | null = null) {
+  const p = usePreview(preview);
   return useQuery({
-    queryKey: ['site', slug, search],
-    queryFn: () => apiFetch<Site>(`/v1/site/${slug}${searchQuery(search)}`, { token: null }),
+    queryKey: ['site', slug, search, preview],
+    enabled: p.ready,
+    queryFn: () => apiFetch<Site>(`/v1/site/${slug}${searchQuery({ ...search, ...p.flag })}`, p.auth),
     placeholderData: keepPreviousData,
     retry: false,
   });
 }
 
-export function useSiteHome(slug: string, homeId: string) {
+export function useSiteHome(slug: string, homeId: string, preview: string | null = null) {
+  const p = usePreview(preview);
   return useQuery({
-    queryKey: ['site-home', slug, homeId],
-    queryFn: () => apiFetch<SiteHome>(`/v1/site/${slug}/homes/${homeId}`, { token: null }),
+    queryKey: ['site-home', slug, homeId, preview],
+    enabled: p.ready,
+    queryFn: () => apiFetch<SiteHome>(`/v1/site/${slug}/homes/${homeId}${searchQuery(p.flag)}`, p.auth),
     retry: false,
   });
 }
 
-export function useSiteNights(slug: string, homeId: string, from: string, to: string) {
+export function useSiteNights(
+  slug: string,
+  homeId: string,
+  from: string,
+  to: string,
+  preview: string | null = null,
+) {
+  const p = usePreview(preview);
   return useQuery({
-    queryKey: ['site-nights', slug, homeId, from, to],
+    queryKey: ['site-nights', slug, homeId, from, to, preview],
+    enabled: p.ready,
     queryFn: () =>
-      apiFetch<SiteNights>(`/v1/site/${slug}/homes/${homeId}/nights${searchQuery({ from, to })}`, {
-        token: null,
+      apiFetch<SiteNights>(
+        `/v1/site/${slug}/homes/${homeId}/nights${searchQuery({ from, to, ...p.flag })}`,
+        p.auth,
+      ),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useSiteQuote(slug: string, request: SiteQuoteRequest | null, preview: string | null = null) {
+  const p = usePreview(preview);
+  return useQuery({
+    queryKey: ['site-quote', slug, request, preview],
+    enabled: Boolean(request) && p.ready,
+    queryFn: () =>
+      apiFetch<SiteQuote>(`/v1/site/${slug}/quote${searchQuery(p.flag)}`, {
+        ...p.auth,
+        method: 'POST',
+        body: request,
       }),
-    placeholderData: keepPreviousData,
-  });
-}
-
-export function useSiteQuote(slug: string, request: SiteQuoteRequest | null) {
-  return useQuery({
-    queryKey: ['site-quote', slug, request],
-    enabled: Boolean(request),
-    queryFn: () =>
-      apiFetch<SiteQuote>(`/v1/site/${slug}/quote`, { token: null, method: 'POST', body: request }),
   });
 }
 

@@ -19,16 +19,52 @@ export default defineConfig({
           {
             base: 'api',
             schema: './src/openapi.json',
-            sidebar: { label: 'API endpoints', operations: { badges: true, labels: 'summary' } },
+            sidebar: {
+              label: 'API endpoints',
+              collapsed: true,
+              operations: { badges: true, labels: 'summary' },
+            },
           },
         ]),
       ],
+      // In the order a day runs, not A to Z: what you look at first comes first.
       sidebar: [
-        { label: 'Start here', items: [{ autogenerate: { directory: 'start' } }] },
-        { label: 'Guides', items: [{ autogenerate: { directory: 'guides' } }] },
-        { label: 'Reference', items: [{ autogenerate: { directory: 'reference' } }] },
-        ...openAPISidebarGroups,
-        { label: 'How V-01 works', items: [{ autogenerate: { directory: 'how-it-works' } }] },
+        { label: 'Start here', items: ['start/what-is-v01', 'start/set-up'] },
+        {
+          label: 'Every day',
+          items: [
+            'guides/today',
+            'guides/calendar',
+            'guides/reservations',
+            'guides/inbox',
+            'guides/tasks-and-field-team',
+          ],
+        },
+        {
+          label: 'Guests and money',
+          items: [
+            'guides/guest-stay-page',
+            'guides/booking-website',
+            'guides/payments-and-deposits',
+            'guides/claims',
+          ],
+        },
+        { label: 'Your homes', items: ['guides/properties', 'guides/channels', 'guides/door-locks'] },
+        {
+          label: 'Running the business',
+          items: [
+            'guides/owners-and-statements',
+            'guides/insights',
+            'guides/team-and-access',
+            'reference/roles',
+          ],
+        },
+        { label: 'For developers', items: ['reference/api', ...openAPISidebarGroups] },
+        {
+          label: 'How V-01 works',
+          collapsed: true,
+          items: [{ autogenerate: { directory: 'how-it-works' } }],
+        },
       ],
     }),
   ],
