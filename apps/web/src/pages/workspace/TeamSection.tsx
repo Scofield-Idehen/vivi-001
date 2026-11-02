@@ -10,6 +10,7 @@ import {
   type WorkspaceRole,
 } from '@v01/shared';
 import { type ReactNode, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import { useConfirm } from '../../components/Confirm.tsx';
 import { SelectField, TextField } from '../../components/fields.tsx';
 import { HomesPicker, homesText } from '../../components/HomesPicker.tsx';
@@ -107,7 +108,18 @@ const SHOW_TEST: Record<Show, (m: { role: string; skills: Skill[] }) => boolean>
 
 const ROLE_OPTIONS = STAFF_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }));
 
-export function TeamSection({ orgId, role, selfId }: { orgId: string; role: WorkspaceRole; selfId: string }) {
+export function TeamSection({
+  orgId,
+  role,
+  selfId,
+  short = false,
+}: {
+  orgId: string;
+  role: WorkspaceRole;
+  selfId: string;
+  /** On the Workspace page: the first few people and a link to the whole Team page. */
+  short?: boolean;
+}) {
   const manage = can(role, 'members.manage');
   const team = useTeam(orgId);
   const invitations = useInvitations(orgId, manage);
@@ -133,10 +145,12 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
   const [done, setDone] = useState<string | null>(null);
   const members = team.data?.members ?? [];
   const [openId, setOpenId] = useState<string | null>(null);
-  const [inviting, setInviting] = useState(false);
+  const [params] = useSearchParams();
+  const [inviting, setInviting] = useState(params.get('invite') === '1');
   const [search, setSearch] = useState('');
   const [show, setShow] = useState<Show>('all');
   const needle = search.trim().toLowerCase();
+  const SHORT = 4;
   const shown = members
     .filter(SHOW_TEST[show])
     .filter(
@@ -176,16 +190,18 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
 
   return (
     <section aria-labelledby="team" className="lg:col-span-2">
-      <h2 id="team" className="mb-1 text-[15px] font-medium">
+      <h2 id="team" className={short ? 'mb-1 text-[15px] font-medium' : 'sr-only'}>
         Team
       </h2>
-      <p className="mb-3 text-[13px] text-slate">
-        {manage
-          ? 'Who can sign in, and as what. Invite a colleague by email; they sign in with it and they’re in.'
-          : 'Who can sign in, and as what.'}
-      </p>
+      {short ? (
+        <p className="mb-3 text-[13px] text-slate">
+          {manage
+            ? 'Who can sign in, and as what. Invite a colleague by email; they sign in with it and they’re in.'
+            : 'Who can sign in, and as what.'}
+        </p>
+      ) : null}
       {team.error ? <Notice tone="urgent">{explain(team.error)}</Notice> : null}
-      {members.length > 6 ? (
+      {!short && members.length > 6 ? (
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <label className="flex h-9 min-w-[220px] flex-1 items-center gap-2 rounded-lg border border-hairline bg-white px-3 sm:max-w-[320px]">
             <IconSearch size={16} stroke={1.75} className="shrink-0 text-mist" aria-hidden />
@@ -212,7 +228,7 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
         </div>
       ) : null}
       <ul className="divide-y divide-hairline border-y border-hairline">
-        {shown.map((m) => {
+        {(short ? shown.slice(0, SHORT) : shown).map((m) => {
           const isOpen = openId === m.id;
           const jobs = m.skills.map((s) => SKILL_LABELS[s]).join(', ');
           const where = m.role === 'admin' ? 'Every home' : homesText(m.propertyIds, homes);
@@ -374,6 +390,18 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
           </li>
         ) : null}
       </ul>
+      {short ? (
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Link to="/workspace/team" className="action -ml-2.5">
+            {members.length > SHORT ? `See all ${members.length} people` : 'Open the team'}
+          </Link>
+          {manage ? (
+            <Link to="/workspace/team?invite=1" className="action">
+              Invite a colleague
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
       {picking ? (
         <HomesPicker
           person={picking.name}
@@ -411,7 +439,7 @@ export function TeamSection({ orgId, role, selfId }: { orgId: string; role: Work
         </div>
       ) : null}
 
-      {manage ? (
+      {manage && !short ? (
         <>
           {open.length ? (
             <>

@@ -10,6 +10,9 @@ V-01 Build Playbook and Design Roadmap.
   remove. With more than six people, a search and a "Show" choice (Everyone, Office, Cleaners,
   Maintenance, Field team) sit above it. The Guesty list and the invitation form fold behind
   "Review and add" and "Invite a colleague".
+- **The whole team is a page of its own, Workspace → Team (Alpha: "show 4 and use show more to open
+  another page … dont want everywhere crowded").** The Workspace page shows the first four and "See all
+  N people"; the search, the Guesty list and inviting live on the Team page.
 
 - **The docs keep their first design (Alpha, after seeing a lighter, regrouped version: "just go back
   to what it was before").** The lighter look, the guides grouped by the day and the task-led front

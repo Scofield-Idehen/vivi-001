@@ -38,7 +38,7 @@ import { SiteHomePage } from './pages/site/SiteHomePage.tsx';
 import { SitePage } from './pages/site/SitePage.tsx';
 import { Today, TodayList } from './pages/Today.tsx';
 import { TasksPage } from './pages/tasks/TasksPage.tsx';
-import { WorkspacePage } from './pages/WorkspacePage.tsx';
+import { TeamPage, WorkspacePage } from './pages/WorkspacePage.tsx';
 
 /**
  * The app's start stays on screen at least this long, so the mark and the turning ring settle
@@ -164,6 +164,7 @@ const routes = [
           { path: 'insights', element: <InsightsPage /> },
           { path: 'channels', element: <ChannelsPage /> },
           { path: 'workspace', element: <WorkspacePage /> },
+          { path: 'workspace/team', element: <TeamPage /> },
           { path: 'profile', element: <ProfilePage /> },
           { path: 'about', element: <About /> },
           ...PENDING_MODULES.map((module) => ({

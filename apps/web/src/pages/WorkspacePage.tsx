@@ -1,6 +1,6 @@
 import { can, ROLE_LABELS } from '@v01/shared';
 import { type ReactNode, useEffect, useState } from 'react';
-import { useLocation } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { Button, Notice, PageHeader, SectionHeading, StatusDot } from '../components/ui.tsx';
 import { ApiError, useMe, useSupportVisits, useUpdateBrand, useUpdateMe, useWorkspace } from '../lib/api.ts';
 import { dateTime, duration, useNow } from '../lib/format.ts';
@@ -94,7 +94,7 @@ export function WorkspacePage() {
             Editing these arrives with the workspace settings screens (design phase D2). Until then, contact
             support to change them.
           </p>
-          <TeamSection orgId={orgId} role={entry.role} selfId={me.data?.user.id ?? ''} />
+          <TeamSection orgId={orgId} role={entry.role} selfId={me.data?.user.id ?? ''} short />
           {can(entry.role, 'properties.read') ? <LocksSection orgId={orgId} role={entry.role} /> : null}
           {can(entry.role, 'properties.read') ? <BookingSiteSection orgId={orgId} role={entry.role} /> : null}
         </div>
@@ -257,5 +257,23 @@ function SupportVisits({ orgId }: { orgId: string }) {
         </ul>
       ) : null}
     </section>
+  );
+}
+
+/** The whole team on a page of its own (Alpha, 2 Nov 2026: the Workspace page shows only the first few). */
+export function TeamPage() {
+  const { orgId, entry } = useCurrentWorkspace();
+  const me = useMe();
+  return (
+    <>
+      <Link to="/workspace" className="action -ml-2.5 mb-2">
+        Back to Workspace
+      </Link>
+      <PageHeader
+        title="Team"
+        description="Who can sign in, and as what. Open someone to change their role, homes or jobs."
+      />
+      <TeamSection orgId={orgId} role={entry.role} selfId={me.data?.user.id ?? ''} />
+    </>
   );
 }
