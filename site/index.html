@@ -1,222 +1,231 @@
 <title>The Grange Estate</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="The Grange Estate, a private countryside estate in the Scottish Borders, managed by ViVi Stays. Book your stay directly.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="The Grange Estate, a private retreat in the Scottish Borders, managed by ViVi Stays.">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Manrope:wght@300;400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Manrope:wght@400;500;600&display=swap">
 <style>
-/* Brand, from the logo and the strategy brief: forest green, warm ivory,
-   champagne gold and stone. Serif display, clean sans body. */
 :root {
   --forest: #1D3327;
   --forest-2: #13231B;
   --ivory: #F5F0E4;
-  --ivory-2: #EAE3D3;
   --gold: #C9A96A;
   --gold-hi: #DBBE85;
   --gold-deep: #8E6F3A;
-  --stone: #8C8677;
-  --muted: #AEB8AC;
+  --muted: #B7C1B4;
   --serif: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
   --sans: "Manrope", "Helvetica Neue", Arial, sans-serif;
   --ease: cubic-bezier(.2,.7,.1,1);
+  --gut: max(22px, env(safe-area-inset-left, 0px));
   color-scheme: dark;
 }
-
 * { box-sizing: border-box; }
-html { background: var(--forest-2); }
+html { background: var(--forest-2); scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--forest-2); color: var(--ivory);
-  font-family: var(--sans); font-size: 15px; line-height: 1.7; font-weight: 300;
-  padding-left: max(0px, env(safe-area-inset-left, 0px));
-  padding-right: max(0px, env(safe-area-inset-right, 0px));
-  -webkit-font-smoothing: antialiased; overflow-x: clip;
+  font-family: var(--sans); font-size: 18px; line-height: 1.5; font-weight: 400;
+  overflow-x: clip; -webkit-font-smoothing: antialiased;
 }
 img { display: block; max-width: 100%; }
-a:focus-visible, button:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 4px; }
-.pad { padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: max(24px, env(safe-area-inset-right, 0px)); }
-.eyebrow { font-size: 11px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; color: var(--gold-hi); margin: 0 0 22px; }
+a { color: inherit; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 3px; }
+.pad { padding-left: var(--gut); padding-right: max(22px, env(safe-area-inset-right, 0px)); }
+.big { font-family: var(--serif); font-weight: 300; line-height: .95; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.big em { color: var(--gold-hi); font-style: italic; }
 
-/* Buttons */
+/* Buttons: big tap targets */
 .btn {
-  display: inline-flex; align-items: center; gap: 14px; padding: 18px 34px;
-  border: 1px solid var(--gold); color: var(--ivory); text-decoration: none;
-  font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase;
+  display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 60px; padding: 0 34px;
+  border: 1px solid var(--gold); color: var(--ivory); text-decoration: none; cursor: pointer; background: transparent;
+  font: inherit; font-size: 16px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
   transition: background .5s var(--ease), color .5s var(--ease);
+  -webkit-tap-highlight-color: transparent;
 }
-.btn.solid { background: var(--gold); color: var(--forest-2); border-color: var(--gold); }
-.btn span { transition: transform .5s var(--ease); }
-.btn:hover { background: var(--gold); color: var(--forest-2); }
-.btn:hover span { transform: translateX(6px); }
+.btn.solid, .btn:hover { background: var(--gold); color: var(--forest-2); }
 .btn-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 40px; }
-.ghost { font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: var(--ivory); text-decoration: none; border-bottom: 1px solid rgba(245,240,228,.4); padding-bottom: 4px; }
 
 /* Header */
 .bar {
   position: fixed; top: env(safe-area-inset-top, 0px); left: 0; right: 0; z-index: 50;
   display: flex; justify-content: space-between; align-items: center; gap: 16px;
-  padding-block: 22px;
-  padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: max(24px, env(safe-area-inset-right, 0px));
-  color: var(--ivory); transition: padding .6s var(--ease), background .6s var(--ease);
+  padding: 18px max(22px, env(safe-area-inset-right, 0px)) 18px var(--gut);
+  transition: background .5s var(--ease), padding .5s var(--ease);
 }
-.bar.solid { background: rgba(19,35,27,.9); padding-block: 14px; backdrop-filter: blur(12px); }
-.brand { font-family: var(--serif); font-size: 22px; letter-spacing: .03em; color: inherit; text-decoration: none; }
-.brand i { color: var(--gold-hi); font-style: italic; }
-.bar nav { display: flex; align-items: center; gap: 26px; }
-.bar nav a.nav { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: inherit; text-decoration: none; opacity: .85; }
-.bar nav a.nav:hover { color: var(--gold-hi); }
-.bar .book { font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--forest-2); background: var(--gold); padding: 11px 18px; text-decoration: none; }
+.bar.solid { background: rgba(19,35,27,.94); padding-block: 12px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.brand { font-family: var(--serif); font-size: 26px; text-decoration: none; letter-spacing: .02em; }
+.brand i { color: var(--gold-hi); }
+.bar nav { display: flex; align-items: center; gap: 30px; }
+.bar nav a { font-size: 15px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; text-decoration: none; }
+.bar nav a:hover { color: var(--gold-hi); }
+.bar .book { background: var(--gold); color: var(--forest-2) !important; padding: 13px 20px; }
 
-/* Mobile sticky booking bar */
-.cta-bar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: none; gap: 12px; align-items: center; justify-content: space-between;
-  padding-top: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  padding-left: max(18px, env(safe-area-inset-left, 0px)); padding-right: max(18px, env(safe-area-inset-right, 0px));
-  background: var(--forest-2); border-top: 1px solid rgba(201,169,106,.35);
+/* Phone bottom navigation: three big targets */
+.dock {
+  position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 60;
+  display: none; grid-template-columns: 1fr 1fr 1.25fr; gap: 6px; padding: 6px;
+  background: rgba(19,35,27,.92); border: 1px solid rgba(201,169,106,.35); border-radius: 18px;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  transform: translate3d(0,0,0); transition: transform .5s var(--ease), opacity .5s var(--ease);
 }
-.cta-bar span { font-family: var(--serif); font-size: 18px; color: var(--ivory); }
-.cta-bar a { font-size: 11px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; color: var(--forest-2); background: var(--gold); padding: 13px 18px; text-decoration: none; white-space: nowrap; }
+.dock.hide { transform: translate3d(0,140%,0); opacity: 0; }
+.dock a { display: flex; align-items: center; justify-content: center; min-height: 56px; border-radius: 12px; font-size: 16px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; text-decoration: none; color: var(--ivory); }
+.dock a.gold { background: var(--gold); color: var(--forest-2); }
+.dock a:active { background: rgba(245,240,228,.12); }
 
 /* HERO */
-.hero { position: relative; height: 100vh; height: 100svh; min-height: 640px; overflow: hidden; background: var(--forest); }
-.hero .ph { position: absolute; inset: 0; clip-path: inset(38% 38% 38% 38%); animation: open 2.2s var(--ease) .2s forwards; }
-.hero .ph img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.14); animation: settle 3.4s var(--ease) .2s forwards; }
-.hero .ph::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(13,26,19,.96) 0%, rgba(13,26,19,.35) 48%, rgba(13,26,19,.2) 100%); }
-.hero .copy { position: absolute; z-index: 2; left: 0; right: 0; bottom: clamp(60px, 11vh, 120px); }
+.hero { position: relative; height: 100vh; height: 100svh; min-height: 620px; overflow: hidden; background: var(--forest); }
+.hero .ph { position: absolute; inset: 0; clip-path: inset(38% 38% 38% 38%); animation: open 2s var(--ease) .15s forwards; }
+.hero .ph img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.12); animation: settle 3.2s var(--ease) .15s forwards; }
+.hero .ph::after {
+  content: ""; position: absolute; inset: 0;
+  background:
+    linear-gradient(to right, rgba(13,26,19,.85) 0%, rgba(13,26,19,.4) 55%, rgba(13,26,19,.1) 100%),
+    linear-gradient(to top, rgba(13,26,19,.96) 0%, rgba(13,26,19,0) 55%);
+}
+.hero .copy { position: absolute; z-index: 2; left: var(--gut); right: 22px; bottom: clamp(70px, 12vh, 130px); }
 .hero h1 {
-  font-family: var(--serif); font-weight: 300; font-size: clamp(56px, 10vw, 150px);
-  line-height: .92; letter-spacing: -.01em; margin: 0; max-width: 14ch; text-wrap: balance;
-  opacity: 0; animation: rise 1.6s var(--ease) 1.3s forwards;
+  font-family: var(--serif); font-weight: 300; font-size: clamp(64px, min(9vw, 14vh), 150px);
+  line-height: .9; margin: 0; max-width: 11ch; text-wrap: balance; letter-spacing: -.015em;
+  opacity: 0; animation: rise 1.4s var(--ease) 1.1s forwards;
 }
 .hero h1 em { color: var(--gold-hi); font-style: italic; }
-.hero .lede { max-width: 46ch; margin: 22px 0 0; color: rgba(245,240,228,.88); font-size: 16px; opacity: 0; animation: rise 1.6s var(--ease) 1.5s forwards; }
-.hero .sub {
-  display: flex; flex-wrap: wrap; gap: 10px 28px; margin-top: 26px; font-size: 11px;
-  letter-spacing: .2em; text-transform: uppercase; color: rgba(245,240,228,.8);
-  opacity: 0; animation: rise 1.6s var(--ease) 1.7s forwards;
-}
-.hero .sub span + span::before { content: "\2014"; margin-right: 28px; color: var(--gold-hi); }
-.hero .btn-row { opacity: 0; animation: rise 1.6s var(--ease) 1.9s forwards; }
-.hero .scrollcue { position: absolute; z-index: 2; left: 50%; bottom: 22px; transform: translateX(-50%); width: 1px; height: 46px; background: rgba(245,240,228,.3); overflow: hidden; }
-.hero .scrollcue::after { content: ""; position: absolute; left: 0; top: -40%; width: 1px; height: 40%; background: var(--gold-hi); animation: drop 2.4s var(--ease) infinite; }
+.hero .btn-row { opacity: 0; animation: rise 1.4s var(--ease) 1.4s forwards; }
+.hero .scrollcue { position: absolute; z-index: 2; left: 50%; bottom: 18px; transform: translateX(-50%); width: 1px; height: 48px; background: rgba(245,240,228,.3); overflow: hidden; }
+.hero .scrollcue::after { content: ""; position: absolute; left: 0; top: -40%; width: 1px; height: 40%; background: var(--gold-hi); animation: drop 2.2s var(--ease) infinite; }
 
-/* Intro on ivory, with the logo */
-.intro { background: var(--ivory); color: var(--forest); padding-block: clamp(90px, 14vw, 180px); text-align: center; }
-.intro .logo { width: min(640px, 100%); margin: 0 auto 90px; }
-.intro p.big {
-  max-width: 1120px; margin: 0 auto; font-family: var(--serif); font-weight: 300;
-  font-size: clamp(40px, 5.8vw, 84px); line-height: 1.04; text-wrap: balance;
-}
-.intro p.big em { color: var(--gold-deep); }
-.intro .lead { max-width: 56ch; margin: 30px auto 0; color: #3F4D43; font-size: 16px; }
-.intro .btn { color: var(--forest); border-color: var(--gold-deep); margin-top: 44px; }
+/* Intro on ivory */
+.intro { background: var(--ivory); color: var(--forest); padding-block: clamp(90px, 13vw, 170px); text-align: center; }
+.intro .logo { width: min(520px, 84%); height: auto; margin: 0 auto 70px; }
+.intro h2 { max-width: 14ch; margin: 0 auto; font-family: var(--serif); font-weight: 300; font-size: clamp(54px, 8vw, 110px); line-height: .96; text-wrap: balance; }
+.intro h2 em { color: var(--gold-deep); }
+.intro .btn { color: var(--forest); border-color: var(--gold-deep); margin-top: 48px; }
 .intro .btn:hover { background: var(--forest); color: var(--ivory); border-color: var(--forest); }
 
-/* THE OPENING: pinned stage; each room opens over the last */
-.opening { position: relative; height: 900vh; background: var(--forest-2); }
+/* OPENING: pinned stage, panels open over each other */
+.opening { position: relative; height: 700vh; background: var(--forest-2); }
 .stage { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; background: var(--forest-2); }
-.op { position: absolute; inset: 0; overflow: hidden; background: var(--forest); }
+.op { position: absolute; inset: 0; overflow: hidden; background: var(--forest); will-change: clip-path, transform; }
 .js .op { clip-path: inset(50% 50% 50% 50%); }
-.op img {
-  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
-  transform: scale(1.22); transform-origin: 50% 50%; will-change: transform;
-}
-.op::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(13,26,19,.92) 0%, rgba(13,26,19,.12) 55%, rgba(13,26,19,.1) 100%); }
-.op .lbl {
-  position: absolute; z-index: 3; left: max(24px, env(safe-area-inset-left,0px)); right: max(24px, env(safe-area-inset-right,0px));
-  bottom: clamp(56px, 11vh, 110px); max-width: 1100px; margin: 0 auto; opacity: 0; will-change: transform, opacity;
-}
-.op .lbl h2 { font-family: var(--serif); font-weight: 300; font-size: clamp(46px, 7vw, 112px); line-height: .95; margin: 0; text-wrap: balance; }
-.op .lbl h2 em { color: var(--gold-hi); font-style: italic; }
-.op .lbl p { max-width: 46ch; margin: 18px 0 0; color: rgba(245,240,228,.88); }
-.op .lbl .eyebrow { margin-bottom: 16px; }
-.frame-line { position: absolute; z-index: 6; pointer-events: none; opacity: 0; border: 1px solid rgba(215,185,126,.85); box-shadow: 0 0 40px rgba(201,169,106,.25); }
-.top-line {
-  position: absolute; z-index: 10; top: clamp(92px, 15vh, 140px); left: max(24px, env(safe-area-inset-left,0px)); right: max(24px, env(safe-area-inset-right,0px));
-  display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
-  font-size: 11px; letter-spacing: .24em; text-transform: uppercase; color: var(--gold-hi);
-}
-.counter { font-variant-numeric: tabular-nums; color: rgba(245,240,228,.75); }
-.counter b { color: var(--gold-hi); font-weight: 500; }
+.op img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scale(1.2); will-change: transform; }
+.op::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(13,26,19,.9) 0%, rgba(13,26,19,.05) 55%); }
+.op .lbl { position: absolute; z-index: 3; left: var(--gut); right: 22px; bottom: clamp(90px, 16vh, 150px); opacity: 0; will-change: transform, opacity; }
+.op .lbl h3 { font-family: var(--serif); font-weight: 300; font-size: clamp(60px, 9vw, 140px); line-height: .9; margin: 0; text-wrap: balance; }
+.op .lbl h3 em { color: var(--gold-hi); font-style: italic; }
+.frame-line { position: absolute; z-index: 6; pointer-events: none; opacity: 0; border: 1px solid rgba(215,185,126,.85); }
+.counter { position: absolute; z-index: 10; top: clamp(96px, 16vh, 140px); right: var(--gut); font-family: var(--serif); font-size: 26px; color: var(--gold-hi); font-variant-numeric: tabular-nums; }
+.counter small { color: rgba(245,240,228,.6); font-size: 18px; }
 
-/* Booking strip: the direct-booking path */
-.book-strip { background: var(--forest); padding-block: clamp(80px, 11vw, 140px); }
-.book-strip .inner { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 40px; align-items: center; }
-.book-strip h2 { font-family: var(--serif); font-weight: 300; font-size: clamp(44px, 6vw, 88px); line-height: .98; margin: 0; text-wrap: balance; }
-.book-strip h2 em { color: var(--gold-hi); }
-.book-strip p { color: var(--muted); max-width: 50ch; margin: 22px 0 0; }
-.book-strip .btn-row { margin-top: 0; }
-.fine { margin-top: 28px; font-size: 12px; color: var(--muted); max-width: 70ch; }
+/* The estate */
+.estate { background: var(--forest); padding-block: clamp(90px, 12vw, 160px); }
+.estate .big { font-size: clamp(56px, 7vw, 116px); max-width: 12ch; margin: 0 auto; text-align: center; }
+.estate .stats { max-width: 1000px; margin: 80px auto 0; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); text-align: center; }
+.estate .stats div + div { border-left: 1px solid rgba(201,169,106,.3); }
+.estate .stats b { display: block; font-family: var(--serif); font-weight: 300; font-size: clamp(60px, 7vw, 100px); line-height: 1; color: var(--gold-hi); }
+.estate .stats span { display: block; margin-top: 10px; font-size: 18px; color: var(--muted); }
 
-/* Room-by-room mosaic */
-.mosaic-wrap { background: var(--ivory); color: var(--forest); padding-block: clamp(90px, 14vw, 170px); }
-.mosaic-head { max-width: 1280px; margin: 0 auto 60px; }
-.mosaic-head h2 { font-family: var(--serif); font-weight: 300; font-size: clamp(52px, 7vw, 108px); line-height: .92; margin: 0; text-wrap: balance; }
-.mosaic-head h2 em { color: var(--gold-deep); }
-.mosaic-head .eyebrow { color: var(--gold-deep); }
-.mosaic { max-width: 1280px; margin: 0 auto; columns: 3 280px; column-gap: 18px; }
-.mosaic figure { margin: 0 0 18px; break-inside: avoid; }
-.mosaic .m { overflow: hidden; background: var(--forest); }
+/* Availability */
+.avail { background: var(--forest-2); padding-block: clamp(90px, 10vw, 140px); }
+.avail .big { font-size: clamp(56px, 7vw, 110px); margin: 0 auto 56px; max-width: 1000px; }
+.form { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 0; border: 1px solid rgba(201,169,106,.5); max-width: 1000px; margin: 0 auto; }
+.form label { display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; border-bottom: 1px solid rgba(201,169,106,.25); min-width: 0; }
+.form label:nth-child(odd) { border-right: 1px solid rgba(201,169,106,.25); }
+.form label span { font-size: 15px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-hi); }
+.form input, .form select { background: transparent; border: 0; color: var(--ivory); font: inherit; font-size: 20px; padding: 4px 0; width: 100%; min-width: 0; color-scheme: dark; appearance: none; -webkit-appearance: none; border-radius: 0; }
+.form .btn { grid-column: 1 / -1; border: 0; min-height: 72px; font-size: 17px; }
+
+/* Rooms: big names only */
+.accom { background: var(--ivory); color: var(--forest); padding-block: clamp(90px, 12vw, 160px); }
+.accom .big { font-size: clamp(56px, 7vw, 110px); margin: 0 auto 64px; max-width: 1200px; }
+.accom .big em { color: var(--gold-deep); }
+.rooms { max-width: 1200px; margin: 0 auto; list-style: none; padding: 0; }
+.rooms li { display: flex; justify-content: space-between; align-items: baseline; gap: 20px; padding: 26px 0; border-top: 1px solid rgba(29,51,39,.2); }
+.rooms li:last-child { border-bottom: 1px solid rgba(29,51,39,.2); }
+.rooms .name { font-family: var(--serif); font-size: clamp(38px, 4.6vw, 64px); font-weight: 300; line-height: 1; }
+.rooms .no { font-family: var(--serif); font-size: clamp(26px, 3vw, 40px); color: var(--gold-deep); }
+
+/* Gallery */
+.gallery-wrap { background: var(--forest-2); padding-block: clamp(90px, 12vw, 160px); }
+.gallery-wrap .big { font-size: clamp(56px, 7vw, 110px); max-width: 1200px; margin: 0 auto 60px; }
+.mosaic { max-width: 1280px; margin: 0 auto; columns: 3 280px; column-gap: 16px; }
+.mosaic figure { margin: 0 0 16px; break-inside: avoid; overflow: hidden; background: var(--forest); }
 .mosaic img { width: 100%; height: auto; transition: transform 1.4s var(--ease); }
 .mosaic figure:hover img { transform: scale(1.05); }
-.mosaic figcaption { margin-top: 10px; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: #5B6A5F; }
 
-/* Quote over the rear lawn */
-.quote { position: relative; min-height: 90vh; display: flex; align-items: flex-end; overflow: hidden; background: var(--forest); }
+/* Experience */
+.exp { background: var(--forest); padding-block: clamp(90px, 12vw, 160px); }
+.exp .big { font-size: clamp(56px, 7vw, 110px); max-width: 1200px; margin: 0 auto 60px; }
+.exp-list { max-width: 1200px; margin: 0 auto; list-style: none; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 0 40px; }
+.exp-list li { font-family: var(--serif); font-weight: 300; font-size: clamp(42px, 5vw, 76px); line-height: 1.05; padding: 22px 0; border-top: 1px solid rgba(201,169,106,.3); }
+
+/* Quote */
+.quote { position: relative; min-height: 80vh; display: flex; align-items: flex-end; overflow: hidden; background: var(--forest); }
 .quote img { position: absolute; left: 0; top: -8%; width: 100%; height: 116%; object-fit: cover; will-change: transform; }
-.quote::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(13,26,19,.95), rgba(13,26,19,.2) 62%); }
-.quote .cap { position: relative; z-index: 2; width: 100%; max-width: 1200px; margin: 0 auto; padding-block: clamp(70px, 10vw, 130px); }
-.quote blockquote { margin: 0; font-family: var(--serif); font-style: italic; font-weight: 300; font-size: clamp(40px, 5.8vw, 84px); line-height: 1.06; max-width: 18ch; text-wrap: balance; }
-.quote cite { display: block; margin-top: 30px; font-style: normal; font-size: 11px; letter-spacing: .24em; text-transform: uppercase; color: var(--gold-hi); }
+.quote::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(13,26,19,.95), rgba(13,26,19,.15) 65%); }
+.quote .cap { position: relative; z-index: 2; width: 100%; max-width: 1200px; margin: 0 auto; padding-block: clamp(70px, 10vw, 120px); }
+.quote blockquote { margin: 0; font-family: var(--serif); font-style: italic; font-weight: 300; font-size: clamp(50px, 6.4vw, 96px); line-height: 1; max-width: 14ch; text-wrap: balance; }
 
-/* Stay details and policies */
-.details { background: var(--forest-2); padding-block: clamp(90px, 12vw, 150px); }
-.details .inner { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: clamp(40px, 6vw, 90px); }
-.details h2 { font-family: var(--serif); font-weight: 300; font-size: clamp(44px, 5.4vw, 80px); line-height: 1; margin: 0; text-wrap: balance; }
-.details h2 em { color: var(--gold-hi); }
-.facts { list-style: none; margin: 0; padding: 0; }
-.facts li { display: flex; justify-content: space-between; gap: 20px; padding: 18px 0; border-top: 1px solid rgba(245,240,228,.14); }
-.facts li:last-child { border-bottom: 1px solid rgba(245,240,228,.14); }
-.facts b { font-weight: 400; color: var(--muted); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
-.facts span { font-family: var(--serif); font-size: 22px; text-align: right; }
-.rules { margin: 28px 0 0; color: var(--muted); font-size: 14px; }
-.rules li { margin: 0 0 8px; }
+/* Surroundings */
+.around { background: var(--ivory); color: var(--forest); padding-block: clamp(90px, 12vw, 160px); text-align: center; }
+.around .big { font-size: clamp(56px, 7vw, 116px); max-width: 12ch; margin: 0 auto; }
+.around .big em { color: var(--gold-deep); }
+.score { display: flex; justify-content: center; align-items: baseline; gap: 14px; margin-top: 64px; }
+.score b { font-family: var(--serif); font-weight: 300; font-size: clamp(110px, 16vw, 220px); line-height: .85; color: var(--forest); }
+.score span { font-size: 18px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--gold-deep); }
+
+/* Rules */
+.terms { background: var(--forest-2); padding-block: clamp(90px, 12vw, 150px); text-align: center; }
+.terms .big { font-size: clamp(60px, 8vw, 128px); max-width: 12ch; margin: 0 auto; }
+.terms .big em { color: var(--gold-hi); }
 
 /* Reserve */
 .reserve { background: var(--forest); text-align: center; padding-block: clamp(120px, 18vw, 220px); }
-.reserve h2 { font-family: var(--serif); font-weight: 300; font-size: clamp(60px, 9vw, 130px); line-height: .92; margin: 0 auto; max-width: 13ch; text-wrap: balance; }
-.reserve h2 em { color: var(--gold-hi); }
-.reserve p { color: var(--muted); max-width: 46ch; margin: 28px auto 0; }
+.reserve .big { font-size: clamp(64px, 9vw, 150px); max-width: 11ch; margin: 0 auto; }
 .reserve .btn-row { justify-content: center; }
 
-footer { background: var(--forest-2); color: rgba(245,240,228,.6); }
-footer .row { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 14px; padding-block: 38px 110px; font-size: 13px; }
+footer { background: #0E1B14; color: var(--muted); }
+footer .row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; padding-block: 40px 130px; font-size: 16px; }
 footer a { color: var(--ivory); }
 
-/* Text reveal: visible at rest; motion only enhances */
-.js .rv { opacity: 0; transform: translateY(36px); transition: opacity 1.2s var(--ease), transform 1.2s var(--ease); }
+/* Reveal: visible at rest */
+.js .rv { opacity: 0; transform: translate3d(0,30px,0); transition: opacity 1.1s var(--ease), transform 1.1s var(--ease); }
 .js .rv.in { opacity: 1; transform: none; }
 
 @keyframes open { to { clip-path: inset(0% 0% 0% 0%); } }
 @keyframes settle { to { transform: scale(1); } }
-@keyframes rise { to { opacity: 1; transform: translateY(0); } }
+@keyframes rise { to { opacity: 1; transform: translate3d(0,0,0); } }
 @keyframes drop { 0% { top: -40%; } 100% { top: 110%; } }
 
 @media (max-width: 860px) {
-  .bar nav a.nav { display: none; }
-  .cta-bar { display: flex; }
-  .book-strip .inner, .details .inner { grid-template-columns: 1fr; }
-  .mosaic { columns: 2 180px; }
-  .intro .logo { margin-bottom: 60px; }
-}
-@media (max-width: 520px) {
-  .mosaic { columns: 1; }
-  .bar .book { display: none; }
+  body { font-size: 17px; }
+  .bar nav a:not(.book) { display: none; }
+  .bar nav .book { display: inline-flex; }
+  .dock { display: grid; }
+  .hero .ph::after { background: linear-gradient(to top, rgba(13,26,19,.98) 0%, rgba(13,26,19,.7) 45%, rgba(13,26,19,.35) 100%); }
+  .hero .copy { bottom: 110px; right: 22px; }
+  .hero h1 { font-size: clamp(64px, 19vw, 96px); max-width: 9ch; }
+  .hero .btn-row { margin-top: 30px; }
+  .hero .btn-row .btn { width: 100%; }
+  .hero .scrollcue { display: none; }
+  .intro .logo { margin-bottom: 52px; }
+  .intro h2 { font-size: clamp(54px, 15vw, 80px); }
+  .intro .btn { width: 100%; max-width: 360px; }
+  .estate .stats { grid-template-columns: 1fr; margin-top: 56px; }
+  .estate .stats div + div { border-left: 0; border-top: 1px solid rgba(201,169,106,.3); padding-top: 36px; margin-top: 36px; }
+  .form { grid-template-columns: 1fr; }
+  .form label:nth-child(odd) { border-right: 0; }
+  .rooms li { padding: 22px 0; }
+  .exp-list { grid-template-columns: 1fr; }
+  .mosaic { columns: 2 150px; column-gap: 10px; }
+  .mosaic figure { margin-bottom: 10px; }
+  .score { margin-top: 48px; }
+  footer .row { padding-bottom: 150px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+  html { scroll-behavior: auto; }
   .hero .ph { clip-path: none; }
   .hero .ph img { transform: none; }
-  .hero h1, .hero .lede, .hero .sub, .hero .btn-row { opacity: 1; transform: none; }
+  .hero h1, .hero .btn-row { opacity: 1; transform: none; }
   .js .rv { opacity: 1; transform: none; }
 }
 </style>
@@ -224,8 +233,11 @@ footer a { color: var(--ivory); }
 <script>
 document.documentElement.classList.add('js');
 document.addEventListener('DOMContentLoaded', function () {
-  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var BOOK = 'https://vivistays.com';
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var phone = window.matchMedia('(max-width: 860px)');
   var bar = document.querySelector('.bar');
+  var dock = document.querySelector('.dock');
   var opening = document.querySelector('.opening');
   var ops = Array.prototype.slice.call(document.querySelectorAll('.op'));
   var line = document.querySelector('.frame-line');
@@ -233,7 +245,8 @@ document.addEventListener('DOMContentLoaded', function () {
   var quote = document.querySelector('.quote');
   var quoteImg = quote && quote.querySelector('img');
   var n = ops.length;
-  var ticking = false;
+  var ticking = false, lastY = 0;
+  var cache = ops.map(function () { return { t: -1 }; });
 
   function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
   function ease(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
@@ -241,46 +254,66 @@ document.addEventListener('DOMContentLoaded', function () {
   function render() {
     ticking = false;
     var vh = window.innerHeight;
-    bar.classList.toggle('solid', window.scrollY > vh * 0.75);
+    var y = window.scrollY;
+    bar.classList.toggle('solid', y > vh * 0.6);
+
+    // phone dock hides while scrolling down, returns when scrolling up
+    if (dock) {
+      if (y > lastY + 4 && y > vh * 0.5) dock.classList.add('hide');
+      else if (y < lastY - 4) dock.classList.remove('hide');
+    }
+    lastY = y;
 
     var r = opening.getBoundingClientRect();
     var total = opening.offsetHeight - vh;
     var p = reduce ? 1 : clamp(-r.top / total, 0, 1);
+    var isPhone = phone.matches;
 
-    var T = ops.map(function (o, i) { return (i === 0) ? 1 : ease(clamp(p * n - i, 0, 1)); });
-    var active = 0, opening_i = -1, opening_t = 0;
+    var T = ops.map(function (o, i) { return i === 0 ? 1 : ease(clamp(p * n - i, 0, 1)); });
+    var active = 0, openI = -1, openT = 0;
+
     ops.forEach(function (op, i) {
       var t = T[i];
-      var inset = (1 - t) * 50;
-      op.style.clipPath = 'inset(' + inset + '% ' + inset + '% ' + inset + '% ' + inset + '% round ' + ((1 - t) * 14).toFixed(1) + 'px)';
+      var c = cache[i];
+      var img = op.firstElementChild;
+      var lbl = op.lastElementChild;
       op.style.zIndex = i + 1;
-      op.querySelector('img').style.transform = 'scale(' + (1.22 - 0.22 * t).toFixed(4) + ')';
-      var lbl = op.querySelector('.lbl');
-      lbl.style.opacity = (t * (1 - (T[i + 1] || 0))).toFixed(3);
-      lbl.style.transform = 'translate3d(0,' + ((1 - t) * 36).toFixed(1) + 'px,0)';
-      if (i > 0 && t > 0 && t < 1) { opening_i = i; opening_t = t; }
+
+      if (Math.abs(c.t - t) > 0.0005) {
+        c.t = t;
+        if (isPhone) {
+          // phones: transform only (compositor), no clip-path repaint
+          op.style.clipPath = 'none';
+          op.style.transform = 'translate3d(0,' + ((1 - t) * 100).toFixed(2) + '%,0)';
+        } else {
+          var k = (1 - t) * 50;
+          op.style.clipPath = 'inset(' + k + '% ' + k + '% ' + k + '% ' + k + '% round ' + ((1 - t) * 14).toFixed(1) + 'px)';
+          op.style.transform = 'none';
+        }
+        img.style.transform = 'scale(' + (1.2 - 0.2 * t).toFixed(4) + ')';
+        lbl.style.opacity = (t * (1 - (T[i + 1] || 0))).toFixed(3);
+        lbl.style.transform = 'translate3d(0,' + ((1 - t) * 40).toFixed(1) + 'px,0)';
+      }
+
+      if (i > 0 && t > 0 && t < 1) { openI = i; openT = t; }
       if (t > 0.5) active = i;
     });
 
-    ops.forEach(function (op, i) {
-      if (i < active) {
-        var d = Math.min(active - i, 4);
-        op.style.transform = 'translate3d(0,' + (-3 * d).toFixed(1) + 'vh,0) scale(' + (1 - 0.035 * d).toFixed(3) + ')';
-        op.style.filter = 'brightness(' + (0.62 - 0.05 * d).toFixed(2) + ')';
-      } else {
-        op.style.transform = 'none';
-        op.style.filter = 'none';
-      }
-    });
+    // passed panels recede slightly (desktop only, for depth)
+    if (!isPhone) {
+      ops.forEach(function (op, i) {
+        if (i < active) {
+          var d = Math.min(active - i, 3);
+          op.style.transform = 'translate3d(0,' + (-3 * d).toFixed(1) + 'vh,0) scale(' + (1 - 0.03 * d).toFixed(3) + ')';
+        }
+      });
+    }
 
     if (line) {
-      if (opening_i > -1) {
-        var k = (1 - opening_t) * 50;
-        line.style.top = k + '%';
-        line.style.bottom = k + '%';
-        line.style.left = k + '%';
-        line.style.right = k + '%';
-        line.style.borderRadius = ((1 - opening_t) * 14).toFixed(1) + 'px';
+      if (openI > -1 && !isPhone) {
+        var q = (1 - openT) * 50;
+        line.style.inset = q + '% ' + q + '% ' + q + '% ' + q + '%';
+        line.style.borderRadius = ((1 - openT) * 14).toFixed(1) + 'px';
         line.style.opacity = '1';
       } else {
         line.style.opacity = '0';
@@ -303,10 +336,14 @@ document.addEventListener('DOMContentLoaded', function () {
   window.addEventListener('resize', onScroll);
   render();
 
+  // Availability form hands the guest to the booking site
+  var form = document.querySelector('#avail form');
+  if (form) form.addEventListener('submit', function (e) { e.preventDefault(); window.open(BOOK, '_blank', 'noopener'); });
+
   if ('IntersectionObserver' in window) {
     var io = new IntersectionObserver(function (es) {
       es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
-    }, { threshold: 0.12 });
+    }, { threshold: 0.1 });
     document.querySelectorAll('.rv').forEach(function (el) { io.observe(el); });
   } else {
     document.querySelectorAll('.rv').forEach(function (el) { el.classList.add('in'); });
@@ -317,10 +354,10 @@ document.addEventListener('DOMContentLoaded', function () {
 <header class="bar">
   <a class="brand" href="#top">The Grange <i>Estate</i></a>
   <nav>
-    <a class="nav" href="#opening">The estate</a>
-    <a class="nav" href="#gallery">Rooms</a>
-    <a class="nav" href="#stay">The stay</a>
-    <a class="book" href="https://vivistays.com" target="_blank" rel="noopener">Book your stay</a>
+    <a href="#estate">The estate</a>
+    <a href="#accommodation">Rooms</a>
+    <a href="#experience">Experience</a>
+    <a class="book" href="https://vivistays.com" target="_blank" rel="noopener">Book</a>
   </nav>
 </header>
 
@@ -328,171 +365,148 @@ document.addEventListener('DOMContentLoaded', function () {
 
   <section class="hero">
     <div class="ph"><img src="img/hero.jpg" alt="The Grange Estate, stone and glass in the Scottish Borders"></div>
-    <div class="copy pad">
-      <p class="eyebrow">Managed by ViVi Stays &middot; Scottish Borders</p>
+    <div class="copy">
       <h1>An exceptional escape. <em>An estate entirely yours.</em></h1>
-      <p class="lede">Discover the art of refined country living, where complete privacy and unforgettable moments come together.</p>
-      <div class="sub"><span>Sleeps 12</span><span>Seven bedrooms</span><span>Pool, sauna &amp; gym</span></div>
       <div class="btn-row">
-        <a class="btn solid" href="https://vivistays.com" target="_blank" rel="noopener">Book your stay <span>&rarr;</span></a>
-        <a class="ghost" href="#opening">Explore the estate</a>
+        <a class="btn solid" href="https://vivistays.com" target="_blank" rel="noopener">Book your stay</a>
       </div>
     </div>
     <div class="scrollcue" aria-hidden="true"></div>
   </section>
 
   <section class="intro pad">
-    <img class="logo" src="img/logo.jpg" alt="The Grange Estate, managed by ViVi Stays. Illustration of the house in forest green and stone">
-    <p class="big rv">Some houses ask you to hurry. <em>This one was built so you don&rsquo;t have to.</em></p>
-    <p class="lead rv">A single private estate in the Scottish Borders, with its own grounds, pool, sauna and gym, and a quiet house for family, friends and considered stays.</p>
-    <a class="btn rv" href="https://vivistays.com" target="_blank" rel="noopener">Check availability <span>&rarr;</span></a>
+    <img class="logo" src="img/logo.png" alt="The Grange Estate, managed by ViVi Stays">
+    <h2 class="rv">Escape <em>the ordinary</em></h2>
+    <a class="btn rv" href="#avail">Check availability</a>
   </section>
 
-  <section class="opening" id="opening" aria-label="The estate, opened room by room">
+  <section class="estate pad" id="estate">
+    <h2 class="big rv">Set in the <em>rolling hills</em></h2>
+    <div class="stats rv">
+      <div><b>12</b><span>Guests</span></div>
+      <div><b>6</b><span>Bedrooms</span></div>
+      <div><b>1</b><span>Private gate</span></div>
+    </div>
+  </section>
+
+  <section class="avail pad" id="avail">
+    <div class="wrap">
+      <h2 class="big rv">Check <em>availability</em></h2>
+      <form class="form rv" action="https://vivistays.com" method="get">
+        <label><span>Check in</span><input type="date" name="checkin" required></label>
+        <label><span>Check out</span><input type="date" name="checkout" required></label>
+        <label><span>Guests</span>
+          <select name="guests">
+            <option>1</option><option>2</option><option selected>4</option><option>6</option><option>8</option><option>10</option><option>12</option>
+          </select>
+        </label>
+        <label><span>Stay</span><select name="type"><option>Whole estate</option></select></label>
+        <button class="btn solid" type="submit">Check availability</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="opening" aria-label="The estate, opened room by room">
     <div class="stage">
-      <div class="top-line"><span>The estate, opened</span><span class="counter"><b>01</b> / 11</span></div>
+      <div class="counter"><b>01</b> <small>/ 11</small></div>
       <div class="frame-line" aria-hidden="true"></div>
 
-      <div class="op">
-        <img src="img/drone.jpg" alt="Aerial view of The Grange, stone buildings on open lawn with the drive below">
-        <div class="lbl"><p class="eyebrow">Arrive</p><h2>Behind private <em>gates</em></h2><p>One private entrance into a single estate, with the hills behind it.</p></div>
-      </div>
-      <div class="op">
-        <img src="img/side-glass.jpg" alt="Stone and glass gable over a sweep of lawn">
-        <div class="lbl"><p class="eyebrow">Approach</p><h2>Stone, glass and <em>open ground</em></h2><p>The house sits on its own grounds, with the Borders rising behind.</p></div>
-      </div>
-      <div class="op">
-        <img src="img/living-navy.jpg" alt="Reception room with navy sofas, a grand piano and a glass wall">
-        <div class="lbl"><p class="eyebrow">Gather</p><h2>A room for <em>long evenings</em></h2><p>Deep sofas, a grand piano and a wall of glass that carries the landscape in.</p></div>
-      </div>
-      <div class="op">
-        <img src="img/piano-fire.jpg" alt="Grand piano beside the fireplace in the reception room">
-        <div class="lbl"><p class="eyebrow">Music</p><h2>A piano by the <em>fire</em></h2><p>The grand piano sits at the end of the room, beside the fireplace.</p></div>
-      </div>
-      <div class="op">
-        <img src="img/kitchen-island.jpg" alt="Navy kitchen with an island and blue bar stools">
-        <div class="lbl"><p class="eyebrow">Cook</p><h2>A kitchen for <em>the table</em></h2><p>Cabinetry in deep blue, brass handles and an island with bar seating.</p></div>
-      </div>
-      <div class="op">
-        <img src="img/aga.jpg" alt="Black range with a slate plaque reading THE GRANGE">
-        <div class="lbl"><p class="eyebrow">The name</p><h2>Written on the <em>range</em></h2><p>A slate plaque reading THE GRANGE, above the stove.</p></div>
-      </div>
-      <div class="op">
-        <img src="img/dining-table.jpg" alt="Long timber dining table with tufted chairs and a mirror">
-        <div class="lbl"><p class="eyebrow">Dine</p><h2>A table that <em>takes its time</em></h2><p>A long timber table with tufted chairs, between the kitchen and the reception rooms.</p></div>
-      </div>
-      <div class="op">
-        <img src="img/terrace.jpg" alt="Stone terrace with a fire pit, daybed and glass balustrade over the hills">
-        <div class="lbl"><p class="eyebrow">Outdoors</p><h2>Out to the <em>terrace</em></h2><p>A fire pit, a daybed and a glass balustrade over the hills.</p></div>
-      </div>
-      <div class="op">
-        <img src="img/tea.jpg" alt="Tea served on a wooden board on the terrace with the lawn behind">
-        <div class="lbl"><p class="eyebrow">Afternoons</p><h2>Tea on the <em>lawn side</em></h2><p>Long afternoons on the terrace, with the grounds in view.</p></div>
-      </div>
-      <div class="op">
-        <img src="img/principal-skylight.jpg" alt="Principal bedroom under skylights with a tufted bed and views of the hills">
-        <div class="lbl"><p class="eyebrow">Rest</p><h2>Sleep under <em>the sky</em></h2><p>The principal bedroom, with skylights and views over the grounds.</p></div>
-      </div>
-      <div class="op">
-        <img src="img/bath-freestanding.jpg" alt="Bathroom with a corner bath under a skylight">
-        <div class="lbl"><p class="eyebrow">Unwind</p><h2>A bath for <em>slow mornings</em></h2><p>A deep bath under the roofline, with the grounds beyond.</p></div>
-      </div>
+      <div class="op"><img src="img/drone.jpg" alt="Aerial view of The Grange"><div class="lbl"><h3>Behind <em>private gates</em></h3></div></div>
+      <div class="op"><img src="img/side-glass.jpg" alt="Stone and glass gable over lawn"><div class="lbl"><h3>Stone and <em>glass</em></h3></div></div>
+      <div class="op"><img src="img/living-navy.jpg" alt="Reception room with navy sofas and a grand piano"><div class="lbl"><h3>A room for <em>evenings</em></h3></div></div>
+      <div class="op"><img src="img/piano-fire.jpg" alt="Grand piano beside the fireplace"><div class="lbl"><h3>A piano by the <em>fire</em></h3></div></div>
+      <div class="op"><img src="img/kitchen-island.jpg" alt="Navy kitchen with an island"><div class="lbl"><h3>A kitchen for <em>the table</em></h3></div></div>
+      <div class="op"><img src="img/aga.jpg" alt="Black range with a slate plaque reading THE GRANGE"><div class="lbl"><h3>Written on the <em>range</em></h3></div></div>
+      <div class="op"><img src="img/dining-table.jpg" alt="Long timber dining table"><div class="lbl"><h3>A table that <em>takes its time</em></h3></div></div>
+      <div class="op"><img src="img/terrace.jpg" alt="Stone terrace with a fire pit over the hills"><div class="lbl"><h3>Out to the <em>terrace</em></h3></div></div>
+      <div class="op"><img src="img/tea.jpg" alt="Tea on the terrace with the lawn behind"><div class="lbl"><h3>Afternoons, <em>unhurried</em></h3></div></div>
+      <div class="op"><img src="img/principal-skylight.jpg" alt="Principal bedroom under skylights"><div class="lbl"><h3>Sleep under <em>the sky</em></h3></div></div>
+      <div class="op"><img src="img/bath-freestanding.jpg" alt="Bathroom with a corner bath under a skylight"><div class="lbl"><h3>A bath for <em>slow mornings</em></h3></div></div>
     </div>
   </section>
 
-  <section class="book-strip pad">
-    <div class="inner">
-      <div>
-        <h2 class="rv">Book direct. <em>Stay longer.</em></h2>
-        <p class="rv">Check live availability, guest numbers and prices, then book securely. Cancellation terms, minimum stays and taxes are shown before you pay.</p>
-      </div>
-      <div class="btn-row rv">
-        <a class="btn solid" href="https://vivistays.com" target="_blank" rel="noopener">Book your stay <span>&rarr;</span></a>
-      </div>
-    </div>
-    <p class="fine pad" style="padding:0">Bookings are made through vivistays.com. Check the booking terms there before you pay.</p>
+  <section class="accom pad" id="accommodation">
+    <h2 class="big rv">Six bedrooms, <em>all considered</em></h2>
+    <ul class="rooms rv">
+      <li><span class="name">King bedroom</span><span class="no">01</span></li>
+      <li><span class="name">Twin bedroom</span><span class="no">02</span></li>
+      <li><span class="name">Double bedroom</span><span class="no">03</span></li>
+      <li><span class="name">Double bedroom</span><span class="no">04</span></li>
+      <li><span class="name">Double bedroom</span><span class="no">05</span></li>
+      <li><span class="name">Ground floor bedroom</span><span class="no">06</span></li>
+    </ul>
   </section>
 
-  <section class="mosaic-wrap pad" id="gallery">
-    <div class="mosaic-head rv">
-      <p class="eyebrow">The rest of the house</p>
-      <h2>Every room, <em>in its light</em></h2>
-    </div>
+  <section class="exp pad" id="experience">
+    <h2 class="big rv">Time together, <em>beautifully spent</em></h2>
+    <ul class="exp-list rv">
+      <li>Pool &amp; sauna</li>
+      <li>Gym</li>
+      <li>Cinema room</li>
+      <li>Fire pit</li>
+    </ul>
+  </section>
+
+  <section class="gallery-wrap pad" id="gallery">
+    <h2 class="big rv">Every room, <em>in its light</em></h2>
     <div class="mosaic">
-      <figure class="rv"><div class="m"><img src="img/yellow-chair.jpg" alt="Yellow armchair with a floral cushion beside a tripod lamp" loading="lazy"></div><figcaption>Reception chair</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/navy-sofa.jpg" alt="Navy sofa in the reception room with a lamp and framed art" loading="lazy"></div><figcaption>Reception</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/reception.jpg" alt="Reception room with navy sofas and yellow armchair" loading="lazy"></div><figcaption>Reception, wide</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/piano-door.jpg" alt="Oak doors opening onto the grand piano" loading="lazy"></div><figcaption>Through the oak doors</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/garden-doors.jpg" alt="Reception room with garden doors and navy sofas" loading="lazy"></div><figcaption>Garden doors</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/sitting-room.jpg" alt="Sitting room with a green wall and navy sofa" loading="lazy"></div><figcaption>Sitting room</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/snug.jpg" alt="Snug with a navy sofa and a wooden trunk table" loading="lazy"></div><figcaption>Snug</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/playroom.jpg" alt="Playroom with a world map and soft seating" loading="lazy"></div><figcaption>Playroom</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/playroom-2.jpg" alt="Playroom lounge with a world map and a sectional sofa" loading="lazy"></div><figcaption>Playroom lounge</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/kitchen-plaque.jpg" alt="Kitchen island with navy cabinets and blue bar stools" loading="lazy"></div><figcaption>Kitchen island</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/oak-doors.jpg" alt="Oak doors open onto the dining room" loading="lazy"></div><figcaption>Oak doors</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/kitchen-dining.jpg" alt="Kitchen and dining area with a long timber table" loading="lazy"></div><figcaption>Kitchen and dining</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/kitchen-wide.jpg" alt="Dining table with the navy kitchen beyond" loading="lazy"></div><figcaption>Dining, wide</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/dining-long.jpg" alt="Bedroom corner with a tufted bed and a teal cushion" loading="lazy"></div><figcaption>Bedroom corner</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/dressing.jpg" alt="Bedroom with a tufted bed and skylights" loading="lazy"></div><figcaption>Bedroom under skylights</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/principal-wide.jpg" alt="Dressing area with a white dressing table and a plaid wall" loading="lazy"></div><figcaption>Dressing area</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/guest-bed.jpg" alt="Guest bedroom with a white bed and a wooden wardrobe" loading="lazy"></div><figcaption>Guest bedroom</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/prada-bed.jpg" alt="Bedroom with a white bed and framed prints" loading="lazy"></div><figcaption>Bedroom</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/prada-wide.jpg" alt="Bedroom with framed prints, a mirror and a white bed" loading="lazy"></div><figcaption>Bedroom, wide</figcaption></figure>
-      <figure class="rv"><div class="m"><img src="img/bath-twin.jpg" alt="Bathroom with a bath, a basin and a heated towel rail" loading="lazy"></div><figcaption>Bathroom</figcaption></figure>
+      <figure class="rv"><img src="img/yellow-chair.jpg" alt="Yellow armchair beside a tripod lamp" loading="lazy"></figure>
+      <figure class="rv"><img src="img/navy-sofa.jpg" alt="Navy sofa in the reception room" loading="lazy"></figure>
+      <figure class="rv"><img src="img/reception.jpg" alt="Reception room with navy sofas" loading="lazy"></figure>
+      <figure class="rv"><img src="img/piano-door.jpg" alt="Oak doors opening onto the grand piano" loading="lazy"></figure>
+      <figure class="rv"><img src="img/garden-doors.jpg" alt="Garden doors in the reception room" loading="lazy"></figure>
+      <figure class="rv"><img src="img/sitting-room.jpg" alt="Sitting room with a green wall" loading="lazy"></figure>
+      <figure class="rv"><img src="img/snug.jpg" alt="Snug with a navy sofa" loading="lazy"></figure>
+      <figure class="rv"><img src="img/playroom.jpg" alt="Playroom with a world map" loading="lazy"></figure>
+      <figure class="rv"><img src="img/playroom-2.jpg" alt="Playroom lounge" loading="lazy"></figure>
+      <figure class="rv"><img src="img/kitchen-plaque.jpg" alt="Kitchen island with navy cabinets" loading="lazy"></figure>
+      <figure class="rv"><img src="img/oak-doors.jpg" alt="Oak doors open onto the dining room" loading="lazy"></figure>
+      <figure class="rv"><img src="img/kitchen-dining.jpg" alt="Kitchen and dining area" loading="lazy"></figure>
+      <figure class="rv"><img src="img/kitchen-wide.jpg" alt="Dining table with the kitchen beyond" loading="lazy"></figure>
+      <figure class="rv"><img src="img/dining-long.jpg" alt="Bedroom corner with a tufted bed" loading="lazy"></figure>
+      <figure class="rv"><img src="img/dressing.jpg" alt="Bedroom under skylights" loading="lazy"></figure>
+      <figure class="rv"><img src="img/principal-wide.jpg" alt="Dressing area" loading="lazy"></figure>
+      <figure class="rv"><img src="img/guest-bed.jpg" alt="Guest bedroom" loading="lazy"></figure>
+      <figure class="rv"><img src="img/prada-bed.jpg" alt="Bedroom with a white bed" loading="lazy"></figure>
+      <figure class="rv"><img src="img/prada-wide.jpg" alt="Bedroom with framed prints" loading="lazy"></figure>
+      <figure class="rv"><img src="img/bath-twin.jpg" alt="Bathroom with a bath and basin" loading="lazy"></figure>
     </div>
   </section>
 
   <section class="quote">
     <img src="img/rear.jpg" alt="Rear lawn and stone terrace under blue sky">
     <div class="cap pad">
-      <blockquote class="rv">Built for rest, connection and the kind of days you remember.</blockquote>
-      <cite>The Grange Estate</cite>
+      <blockquote class="rv">Built for rest and the days you remember.</blockquote>
     </div>
   </section>
 
-  <section class="details pad" id="stay">
-    <div class="inner">
-      <div class="rv">
-        <p class="eyebrow">The stay</p>
-        <h2>Quiet by design. <em>Yours for the stay.</em></h2>
-      </div>
-      <div class="rv">
-        <ul class="facts">
-          <li><b>Guests</b><span>Up to 12</span></li>
-          <li><b>Bedrooms</b><span>Seven</span></li>
-          <li><b>Entrance</b><span>One private gate</span></li>
-          <li><b>Parking</b><span>On site, free</span></li>
-          <li><b>Leisure</b><span>Pool, sauna, gym</span></li>
-        </ul>
-        <ul class="rules">
-          <li>No parties, events or large celebrations</li>
-          <li>No stag or hen gatherings</li>
-          <li>No additional or unregistered guests</li>
-          <li>Quiet outdoors and in the evening, for neighbours and guests</li>
-        </ul>
-      </div>
-    </div>
+  <section class="around pad" id="surroundings">
+    <h2 class="big rv">Rolling hills, <em>abbeys and market towns</em></h2>
+    <div class="score rv"><b>5.0</b><span>Guest rating</span></div>
+  </section>
+
+  <section class="terms pad">
+    <h2 class="big rv">Quiet by <em>design</em></h2>
   </section>
 
   <section class="reserve pad">
-    <p class="eyebrow rv">Reservations</p>
-    <h2 class="rv">Your stay at <em>The Grange</em> begins here</h2>
-    <p class="rv">A quiet estate for families, friends, wellness retreats and considered corporate stays.</p>
+    <h2 class="big rv">Your stay begins <em>here</em></h2>
     <div class="btn-row rv">
-      <a class="btn solid" href="https://vivistays.com" target="_blank" rel="noopener">Book your stay <span>&rarr;</span></a>
+      <a class="btn solid" href="https://vivistays.com" target="_blank" rel="noopener">Book your stay</a>
     </div>
   </section>
 
 </main>
 
-<div class="cta-bar" role="region" aria-label="Book your stay">
-  <span>The Grange</span>
-  <a href="https://vivistays.com" target="_blank" rel="noopener">Book your stay</a>
-</div>
+<nav class="dock" aria-label="Quick navigation">
+  <a href="#avail">Dates</a>
+  <a href="#accommodation">Rooms</a>
+  <a class="gold" href="https://vivistays.com" target="_blank" rel="noopener">Book</a>
+</nav>
 
 <footer>
   <div class="row pad">
-    <span>The Grange Estate, managed by ViVi Stays.</span>
+    <span>The Grange Estate</span>
     <a href="https://vivistays.com" target="_blank" rel="noopener">vivistays.com</a>
   </div>
 </footer>
