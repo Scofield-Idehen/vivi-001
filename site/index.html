@@ -197,7 +197,7 @@ footer a { color: var(--ivory); }
 @media (max-width: 860px) {
   body { font-size: 17px; }
   .bar nav a:not(.book) { display: none; }
-  .bar nav .book { display: inline-flex; }
+  .bar nav .book { display: none; }
   .dock { display: grid; }
   .hero .ph::after { background: linear-gradient(to top, rgba(13,26,19,.98) 0%, rgba(13,26,19,.7) 45%, rgba(13,26,19,.35) 100%); }
   .hero .copy { bottom: 110px; right: 22px; }
@@ -262,12 +262,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var y = window.scrollY;
     bar.classList.toggle('solid', y > vh * 0.6);
 
-    // phone dock hides while scrolling down, returns when scrolling up
-    if (dock) {
-      if (y > lastY + 4 && y > vh * 0.5) dock.classList.add('hide');
-      else if (y < lastY - 4) dock.classList.remove('hide');
-    }
-    lastY = y;
+    // phone bottom bar stays pinned so one Book button is always on screen
 
     var r = opening.getBoundingClientRect();
     var total = opening.offsetHeight - vh;
