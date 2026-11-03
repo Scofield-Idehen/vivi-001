@@ -1,0 +1,36 @@
+name: Grange Estate site
+
+# A side project, not part of V-01: publishes site/ from this branch to its own Firebase Hosting site.
+on:
+  push:
+    branches: [side/grange-estate]
+
+concurrency:
+  group: grange-site
+  cancel-in-progress: true
+
+env:
+  PROJECT: ${{ secrets.GCP_PROJECT_ID || vars.GCP_PROJECT_ID }}
+  SITE: grange-estate
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - name: Make the hosting site, once
+        run: |
+          if npx --yes firebase-tools@14 hosting:sites:get "$SITE" --project "$PROJECT" >/dev/null 2>&1; then
+            echo "Hosting site $SITE is there."
+          else
+            npx --yes firebase-tools@14 hosting:sites:create "$SITE" --project "$PROJECT" --non-interactive
+          fi
+      - name: Publish
+        run: |
+          npx --yes firebase-tools@14 deploy --only hosting --project "$PROJECT" --non-interactive
+          echo "Published: https://$SITE.web.app"

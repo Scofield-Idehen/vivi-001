@@ -1,0 +1,11 @@
+{
+  "hosting": {
+    "site": "grange-estate",
+    "public": "site",
+    "ignore": ["**/.*"],
+    "headers": [
+      { "source": "**", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] },
+      { "source": "**/*.html", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+    ]
+  }
+}
