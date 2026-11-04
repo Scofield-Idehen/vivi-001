@@ -81,6 +81,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     linear-gradient(to right, rgba(13,26,19,.85) 0%, rgba(13,26,19,.4) 55%, rgba(13,26,19,.1) 100%),
     linear-gradient(to top, rgba(13,26,19,.96) 0%, rgba(13,26,19,0) 55%);
 }
+.hero .ph video { width: 100%; height: 100%; object-fit: cover; object-position: 60% 50%; transform: scale(1.12); animation: settle 3.2s var(--ease) .15s forwards; }
 .hero .copy { position: absolute; z-index: 2; left: var(--gut); right: 22px; bottom: clamp(70px, 12vh, 130px); }
 .hero h1 {
   font-family: var(--serif); font-weight: 300; font-size: clamp(64px, min(9vw, 14vh), 150px);
@@ -117,7 +118,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .op .lbl h3 { font-family: var(--serif); font-weight: 300; font-size: clamp(60px, 9vw, 140px); line-height: .9; margin: 0; text-wrap: balance; }
 .op .lbl h3 em { color: var(--gold-hi); font-style: italic; }
 .frame-line { position: absolute; z-index: 6; pointer-events: none; opacity: 0; border: 1px solid rgba(215,185,126,.85); }
-.full { display: block; width: min(300px, 70%); height: auto; margin-bottom: 28px; }
+.full { display: block; width: min(360px, 88%); height: auto; margin: 0 0 36px; }
 .counter { position: absolute; z-index: 10; top: clamp(96px, 16vh, 140px); right: var(--gut); font-family: var(--serif); font-size: 26px; color: var(--gold-hi); font-variant-numeric: tabular-nums; }
 .counter small { color: rgba(245,240,228,.6); font-size: 18px; }
 
@@ -332,7 +333,7 @@ document.addEventListener('DOMContentLoaded', function () {
 <main id="top">
 
   <section class="hero">
-    <div class="ph"><img src="img/p04.jpg" alt="The Grange Estate, stone and glass in the Scottish Borders"></div>
+    <div class="ph"><video autoplay muted loop playsinline preload="auto" poster="img/p04.jpg" aria-hidden="true"><source src="img/reel.mp4" type="video/mp4"></video></div>
     <div class="copy">
       <h1>Where Extraordinary <em>Moments Unfold.</em></h1>
       <div class="btn-row">
@@ -375,19 +376,7 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>
   </section>
 
-  <section class="reel" aria-label="The Grange Estate film">
-    <video class="reel-v" autoplay muted loop playsinline preload="auto" poster="img/reel-poster.jpg" aria-hidden="true"><source src="img/reel.mp4" type="video/mp4"></video>
-    <div class="reel-shade"></div>
-    <div class="reel-cap">
-      <h3 class="on">A World Apart. <em>Entirely Yours.</em></h3>
-      <h3>Stone. Glass. <em>Open Horizon.</em></h3>
-      <h3>Where the Hills <em>Begin.</em></h3>
-      <h3>Come In. <em>Stay Awhile.</em></h3>
-      <h3>Nowhere to Be. <em>Nothing Required.</em></h3>
-    </div>
-    <div class="counter"><b>01</b> <small>/ 05</small></div>
-  </section>
-
+  
   <section class="accom pad" id="accommodation">
     <h2 class="big rv">Six bedrooms, <em>all considered</em></h2>
     <ul class="rooms rv">
