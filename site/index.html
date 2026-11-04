@@ -99,7 +99,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .lockup .sep { width: 1px; align-self: stretch; background: var(--gold-deep); opacity: .55; }
 .lockup .m { width: 26%; height: auto; }
 .mk { width: 46px; height: auto; margin-bottom: 26px; }
-.mk-h { display: none; width: 34px; height: auto; margin-right: 22px; }
+.mk-h { display: block; width: 34px; height: auto; margin-right: 6px; }
 .vf { width: 150px; height: auto; display: block; }
 .intro h2 { max-width: 14ch; margin: 0 auto; font-family: var(--serif); font-weight: 300; font-size: clamp(54px, 8vw, 110px); line-height: .96; text-wrap: balance; }
 .intro h2 em { color: var(--gold-deep); }
@@ -117,6 +117,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .op .lbl h3 { font-family: var(--serif); font-weight: 300; font-size: clamp(60px, 9vw, 140px); line-height: .9; margin: 0; text-wrap: balance; }
 .op .lbl h3 em { color: var(--gold-hi); font-style: italic; }
 .frame-line { position: absolute; z-index: 6; pointer-events: none; opacity: 0; border: 1px solid rgba(215,185,126,.85); }
+.full { display: block; width: min(300px, 70%); height: auto; margin-bottom: 28px; }
 .counter { position: absolute; z-index: 10; top: clamp(96px, 16vh, 140px); right: var(--gut); font-family: var(--serif); font-size: 26px; color: var(--gold-hi); font-variant-numeric: tabular-nums; }
 .counter small { color: rgba(245,240,228,.6); font-size: 18px; }
 
@@ -218,7 +219,7 @@ footer a { color: var(--ivory); }
   .hero .btn-row .btn { width: 100%; }
   .hero .scrollcue { display: none; }
   .lockup { margin-bottom: 52px; }
-  .mk-h { display: none !important; }
+  .mk-h { width: 30px; margin-right: 4px; }
   .reserve .mk { width: 40px; }
   .intro h2 { font-size: clamp(54px, 15vw, 80px); }
   .intro .btn { width: 100%; max-width: 360px; }
@@ -400,7 +401,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   <section class="avail pad" id="avail">
     <div class="wrap">
-      <img class="mk rv" src="img/vivi-mark.png" alt="ViVi Stays">
+      <img class="full rv" src="img/vivi-logo.png" alt="ViVi Stays">
       <h2 class="big rv">Check <em>availability</em></h2>
       <form class="form rv" action="https://vivistays.com" method="get">
         <label><span>Check in</span><input type="date" name="checkin" required></label>
