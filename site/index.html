@@ -192,6 +192,17 @@ footer { background: #0E1B14; color: var(--muted); }
 footer .row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; padding-block: 40px 130px; font-size: 16px; }
 footer a { color: var(--ivory); }
 
+/* FILM: one video plays full-bleed, captions follow its timeline */
+.reel { position: relative; height: 100vh; height: 100svh; min-height: 560px; overflow: hidden; background: var(--forest-2); }
+.reel-v { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 60% 50%; }
+.reel-shade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(13,26,19,.92) 0%, rgba(13,26,19,.1) 50%, rgba(13,26,19,.2) 100%); }
+.reel-cap { position: absolute; z-index: 3; left: var(--gut); right: 22px; bottom: clamp(90px, 16vh, 150px); height: 1.9em; }
+.reel-cap h3 { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; font-family: var(--serif); font-weight: 300; font-size: clamp(50px, 9vw, 130px); line-height: .92; text-wrap: balance; opacity: 0; transform: translate3d(0,24px,0); transition: opacity .9s var(--ease), transform .9s var(--ease); }
+.reel-cap h3.on { opacity: 1; transform: none; }
+.reel-cap h3 em { color: var(--gold-hi); font-style: italic; }
+.reel .counter { position: absolute; z-index: 4; top: clamp(96px, 16vh, 140px); right: var(--gut); font-family: var(--serif); font-size: 26px; color: var(--gold-hi); font-variant-numeric: tabular-nums; }
+.reel .counter small { color: rgba(245,240,228,.6); font-size: 18px; }
+
 /* Reveal: visible at rest */
 .js .rv { opacity: 0; transform: translate3d(0,30px,0); transition: opacity 1.1s var(--ease), transform 1.1s var(--ease); }
 .js .rv.in { opacity: 1; transform: none; }
@@ -249,88 +260,37 @@ document.documentElement.classList.add('js');
 document.addEventListener('DOMContentLoaded', function () {
   var BOOK = 'https://vivistays.com';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var phone = window.matchMedia('(max-width: 860px)');
   var bar = document.querySelector('.bar');
-  var dock = document.querySelector('.dock');
-  var opening = document.querySelector('.opening');
-  var ops = Array.prototype.slice.call(document.querySelectorAll('.op'));
-  var line = document.querySelector('.frame-line');
-  var counter = document.querySelector('.counter b');
+  var v = document.querySelector('.reel-v');
+  var caps = Array.prototype.slice.call(document.querySelectorAll('.reel-cap h3'));
+  var counter = document.querySelector('.reel .counter b');
   var quote = document.querySelector('.quote');
   var quoteImg = quote && quote.querySelector('img');
-  var n = ops.length;
-  var ticking = false, lastY = 0;
-  var cache = ops.map(function () { return { t: -1 }; });
+  var cur = -1, ticking = false;
 
-  function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
-  function ease(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+  function setCap(i) {
+    if (i === cur) return;
+    cur = i;
+    caps.forEach(function (c, k) { c.classList.toggle('on', k === i); });
+    if (counter) counter.textContent = String(i + 1).padStart(2, '0');
+  }
+  function syncCap() {
+    if (!v || !v.duration || isNaN(v.duration)) return;
+    var i = Math.floor(v.currentTime / (v.duration / caps.length));
+    setCap(Math.min(caps.length - 1, Math.max(0, i)));
+  }
+  setCap(0);
+  if (v) {
+    v.addEventListener('timeupdate', syncCap);
+    v.addEventListener('loadedmetadata', syncCap);
+    if (reduce) { v.pause(); }
+    else { var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); }
+  }
 
   function render() {
     ticking = false;
     var vh = window.innerHeight;
-    var y = window.scrollY;
-    bar.classList.toggle('solid', y > vh * 0.6);
-
-    // phone bottom bar stays pinned so one Book button is always on screen
-
-    var r = opening.getBoundingClientRect();
-    var total = opening.offsetHeight - vh;
-    var p = reduce ? 1 : clamp(-r.top / total, 0, 1);
-    var isPhone = phone.matches;
-
-    var T = ops.map(function (o, i) { return i === 0 ? 1 : ease(clamp(p * n - i, 0, 1)); });
-    var active = 0, openI = -1, openT = 0;
-
-    ops.forEach(function (op, i) {
-      var t = T[i];
-      var c = cache[i];
-      var img = op.firstElementChild;
-      var lbl = op.lastElementChild;
-      op.style.zIndex = i + 1;
-
-      if (Math.abs(c.t - t) > 0.0005) {
-        c.t = t;
-        if (isPhone) {
-          // phones: transform only (compositor), no clip-path repaint
-          op.style.clipPath = 'none';
-          op.style.transform = 'translate3d(0,' + ((1 - t) * 100).toFixed(2) + '%,0)';
-        } else {
-          var k = (1 - t) * 50;
-          op.style.clipPath = 'inset(' + k + '% ' + k + '% ' + k + '% ' + k + '% round ' + ((1 - t) * 14).toFixed(1) + 'px)';
-          op.style.transform = 'none';
-        }
-        img.style.transform = 'scale(' + (1.2 - 0.2 * t).toFixed(4) + ')';
-        lbl.style.opacity = (t * (1 - (T[i + 1] || 0))).toFixed(3);
-        lbl.style.transform = 'translate3d(0,' + ((1 - t) * 40).toFixed(1) + 'px,0)';
-      }
-
-      if (i > 0 && t > 0 && t < 1) { openI = i; openT = t; }
-      if (t > 0.5) active = i;
-    });
-
-    // passed panels recede slightly (desktop only, for depth)
-    if (!isPhone) {
-      ops.forEach(function (op, i) {
-        if (i < active) {
-          var d = Math.min(active - i, 3);
-          op.style.transform = 'translate3d(0,' + (-3 * d).toFixed(1) + 'vh,0) scale(' + (1 - 0.03 * d).toFixed(3) + ')';
-        }
-      });
-    }
-
-    if (line) {
-      if (openI > -1 && !isPhone) {
-        var q = (1 - openT) * 50;
-        line.style.inset = q + '% ' + q + '% ' + q + '% ' + q + '%';
-        line.style.borderRadius = ((1 - openT) * 14).toFixed(1) + 'px';
-        line.style.opacity = '1';
-      } else {
-        line.style.opacity = '0';
-      }
-    }
-
-    if (counter) counter.textContent = String(active + 1).padStart(2, '0');
-
+    bar.classList.toggle('solid', window.scrollY > vh * 0.6);
     if (quote && quoteImg && !reduce) {
       var qr = quote.getBoundingClientRect();
       if (qr.bottom > 0 && qr.top < vh) {
@@ -339,13 +299,11 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
   }
-
   function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(render); } }
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', onScroll);
   render();
 
-  // Availability form hands the guest to the booking site
   var form = document.querySelector('#avail form');
   if (form) form.addEventListener('submit', function (e) { e.preventDefault(); window.open(BOOK, '_blank', 'noopener'); });
 
@@ -374,7 +332,7 @@ document.addEventListener('DOMContentLoaded', function () {
 <main id="top">
 
   <section class="hero">
-    <div class="ph"><img src="img/hero.jpg" alt="The Grange Estate, stone and glass in the Scottish Borders"></div>
+    <div class="ph"><img src="img/p04.jpg" alt="The Grange Estate, stone and glass in the Scottish Borders"></div>
     <div class="copy">
       <h1>Where Extraordinary <em>Moments Unfold.</em></h1>
       <div class="btn-row">
@@ -417,23 +375,17 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>
   </section>
 
-  <section class="opening" aria-label="The estate, opened room by room">
-    <div class="stage">
-      <div class="counter"><b>01</b> <small>/ 11</small></div>
-      <div class="frame-line" aria-hidden="true"></div>
-
-      <div class="op"><img src="img/drone.jpg" alt="Aerial view of The Grange"><div class="lbl"><h3>A World Apart. <em>Entirely Yours.</em></h3></div></div>
-      <div class="op"><img src="img/side-glass.jpg" alt="Stone and glass gable over lawn"><div class="lbl"><h3>Stone. Glass. <em>Open Horizon.</em></h3></div></div>
-      <div class="op"><img src="img/living-navy.jpg" alt="Reception room with navy sofas and a grand piano"><div class="lbl"><h3>Come In. <em>Stay Awhile.</em></h3></div></div>
-      <div class="op"><img src="img/piano-fire.jpg" alt="Grand piano beside the fireplace"><div class="lbl"><h3>Music <em>by Firelight.</em></h3></div></div>
-      <div class="op"><img src="img/kitchen-island.jpg" alt="Navy kitchen with an island"><div class="lbl"><h3>Cook Together. <em>Linger Longer.</em></h3></div></div>
-      <div class="op"><img src="img/aga.jpg" alt="Black range with a slate plaque reading THE GRANGE"><div class="lbl"><h3>Built to <em>Gather.</em></h3></div></div>
-      <div class="op"><img src="img/dining-table.jpg" alt="Long timber dining table"><div class="lbl"><h3>Dinner, <em>Unhurried.</em></h3></div></div>
-      <div class="op"><img src="img/terrace.jpg" alt="Stone terrace with a fire pit over the hills"><div class="lbl"><h3>Where the Hills <em>Begin.</em></h3></div></div>
-      <div class="op"><img src="img/tea.jpg" alt="Tea on the terrace with the lawn behind"><div class="lbl"><h3>Time <em>Well Spent.</em></h3></div></div>
-      <div class="op"><img src="img/principal-skylight.jpg" alt="Principal bedroom under skylights"><div class="lbl"><h3>Wake to <em>Open Sky.</em></h3></div></div>
-      <div class="op"><img src="img/bath-freestanding.jpg" alt="Bathroom with a corner bath under a skylight"><div class="lbl"><h3>Nowhere to Be. <em>Nothing Required.</em></h3></div></div>
+  <section class="reel" aria-label="The Grange Estate film">
+    <video class="reel-v" autoplay muted loop playsinline preload="auto" poster="img/reel-poster.jpg" aria-hidden="true"><source src="img/reel.mp4" type="video/mp4"></video>
+    <div class="reel-shade"></div>
+    <div class="reel-cap">
+      <h3 class="on">A World Apart. <em>Entirely Yours.</em></h3>
+      <h3>Stone. Glass. <em>Open Horizon.</em></h3>
+      <h3>Where the Hills <em>Begin.</em></h3>
+      <h3>Come In. <em>Stay Awhile.</em></h3>
+      <h3>Nowhere to Be. <em>Nothing Required.</em></h3>
     </div>
+    <div class="counter"><b>01</b> <small>/ 05</small></div>
   </section>
 
   <section class="accom pad" id="accommodation">
@@ -461,31 +413,31 @@ document.addEventListener('DOMContentLoaded', function () {
   <section class="gallery-wrap pad" id="gallery">
     <h2 class="big rv">Every room, <em>in its light</em></h2>
     <div class="mosaic">
-      <figure class="rv"><img src="img/yellow-chair.jpg" alt="Yellow armchair beside a tripod lamp" loading="lazy"></figure>
-      <figure class="rv"><img src="img/navy-sofa.jpg" alt="Navy sofa in the reception room" loading="lazy"></figure>
-      <figure class="rv"><img src="img/reception.jpg" alt="Reception room with navy sofas" loading="lazy"></figure>
-      <figure class="rv"><img src="img/piano-door.jpg" alt="Oak doors opening onto the grand piano" loading="lazy"></figure>
-      <figure class="rv"><img src="img/garden-doors.jpg" alt="Garden doors in the reception room" loading="lazy"></figure>
-      <figure class="rv"><img src="img/sitting-room.jpg" alt="Sitting room with a green wall" loading="lazy"></figure>
-      <figure class="rv"><img src="img/snug.jpg" alt="Snug with a navy sofa" loading="lazy"></figure>
-      <figure class="rv"><img src="img/playroom.jpg" alt="Playroom with a world map" loading="lazy"></figure>
-      <figure class="rv"><img src="img/playroom-2.jpg" alt="Playroom lounge" loading="lazy"></figure>
-      <figure class="rv"><img src="img/kitchen-plaque.jpg" alt="Kitchen island with navy cabinets" loading="lazy"></figure>
-      <figure class="rv"><img src="img/oak-doors.jpg" alt="Oak doors open onto the dining room" loading="lazy"></figure>
-      <figure class="rv"><img src="img/kitchen-dining.jpg" alt="Kitchen and dining area" loading="lazy"></figure>
-      <figure class="rv"><img src="img/kitchen-wide.jpg" alt="Dining table with the kitchen beyond" loading="lazy"></figure>
-      <figure class="rv"><img src="img/dining-long.jpg" alt="Bedroom corner with a tufted bed" loading="lazy"></figure>
-      <figure class="rv"><img src="img/dressing.jpg" alt="Bedroom under skylights" loading="lazy"></figure>
-      <figure class="rv"><img src="img/principal-wide.jpg" alt="Dressing area" loading="lazy"></figure>
-      <figure class="rv"><img src="img/guest-bed.jpg" alt="Guest bedroom" loading="lazy"></figure>
-      <figure class="rv"><img src="img/prada-bed.jpg" alt="Bedroom with a white bed" loading="lazy"></figure>
-      <figure class="rv"><img src="img/prada-wide.jpg" alt="Bedroom with framed prints" loading="lazy"></figure>
-      <figure class="rv"><img src="img/bath-twin.jpg" alt="Bathroom with a bath and basin" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p01.jpg" alt="The Grange Estate, view 1" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p02.jpg" alt="The Grange Estate, view 2" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p03.jpg" alt="The Grange Estate, view 3" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p04.jpg" alt="The Grange Estate, view 4" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p05.jpg" alt="The Grange Estate, view 5" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p06.jpg" alt="The Grange Estate, view 6" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p07.jpg" alt="The Grange Estate, view 7" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p08.jpg" alt="The Grange Estate, view 8" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p09.jpg" alt="The Grange Estate, view 9" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p10.jpg" alt="The Grange Estate, view 10" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p11.jpg" alt="The Grange Estate, view 11" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p12.jpg" alt="The Grange Estate, view 12" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p13.jpg" alt="The Grange Estate, view 13" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p14.jpg" alt="The Grange Estate, view 14" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p15.jpg" alt="The Grange Estate, view 15" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p16.jpg" alt="The Grange Estate, view 16" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p17.jpg" alt="The Grange Estate, view 17" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p18.jpg" alt="The Grange Estate, view 18" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p19.jpg" alt="The Grange Estate, view 19" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p20.jpg" alt="The Grange Estate, view 20" loading="lazy"></figure>
     </div>
   </section>
 
   <section class="quote">
-    <img src="img/rear.jpg" alt="Rear lawn and stone terrace under blue sky">
+    <img src="img/p16.jpg" alt="Outdoor lounge on the terrace">
     <div class="cap pad">
       <blockquote class="rv">Built for rest and the days you remember.</blockquote>
     </div>
