@@ -132,7 +132,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 /* Availability */
 .avail { background: var(--forest-2); padding-block: clamp(90px, 10vw, 140px); }
-.avail .big { font-size: clamp(56px, 7vw, 110px); margin: 0 auto 56px; max-width: 1000px; }
+.avail .wrap { max-width: 1000px; margin: 0 auto; }
+@media (min-width: 861px) { .avail .full { display: none; } }
+.avail .big { font-size: clamp(56px, 7vw, 110px); margin: 0 0 40px; max-width: none; }
 .form { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 0; border: 1px solid rgba(201,169,106,.5); max-width: 1000px; margin: 0 auto; }
 .form label { display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; border-bottom: 1px solid rgba(201,169,106,.25); min-width: 0; }
 .form label:nth-child(odd) { border-right: 1px solid rgba(201,169,106,.25); }
