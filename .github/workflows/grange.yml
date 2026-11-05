@@ -35,9 +35,13 @@ jobs:
           TOKEN=$(gcloud auth print-access-token)
           API="https://firebasehosting.googleapis.com/v1beta1/projects/$PROJECT/sites/$SITE/customDomains"
           for D in thegrangebyvivi.com www.thegrangebyvivi.com; do
-            if [ "$D" = www.thegrangebyvivi.com ]; then BODY='{"redirectTarget":"thegrangebyvivi.com"}'; else BODY='{}'; fi
-            CODE=$(curl -s -o /tmp/out.json -w '%{http_code}' -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' "$API?customDomainId=$D" -d "$BODY")
+            # Both addresses show the site directly, with no redirect (Alpha, 5 Nov 2026).
+            CODE=$(curl -s -o /tmp/out.json -w '%{http_code}' -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' "$API?customDomainId=$D" -d '{}')
             echo "$D: add returned $CODE"
+            if [ "$CODE" = 409 ]; then
+              CODE=$(curl -s -o /tmp/out.json -w '%{http_code}' -X PATCH -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' "$API/$D?updateMask=redirectTarget" -d '{}')
+              echo "$D: no redirect, returned $CODE"
+            fi
             sleep 5
             curl -s -H "Authorization: Bearer $TOKEN" "$API/$D" | jq '{name, hostState, ownershipState, certState: .cert.state, required: [.requiredDnsUpdates.desired[]?.records[]? | {domainName, type, rdata}], cert: [.cert.verification.dns.desired[]?.records[]? | {domainName, type, rdata}]}'
           done
