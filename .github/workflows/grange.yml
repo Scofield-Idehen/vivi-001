@@ -30,6 +30,17 @@ jobs:
           else
             npx --yes firebase-tools@14 hosting:sites:create "$SITE" --project "$PROJECT" --non-interactive
           fi
+      - name: Connect thegrangebyvivi.com, once, and print the DNS records it needs
+        run: |
+          TOKEN=$(gcloud auth print-access-token)
+          API="https://firebasehosting.googleapis.com/v1beta1/projects/$PROJECT/sites/$SITE/customDomains"
+          for D in thegrangebyvivi.com www.thegrangebyvivi.com; do
+            if [ "$D" = www.thegrangebyvivi.com ]; then BODY='{"redirectTarget":"thegrangebyvivi.com"}'; else BODY='{}'; fi
+            CODE=$(curl -s -o /tmp/out.json -w '%{http_code}' -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' "$API?customDomainId=$D" -d "$BODY")
+            echo "$D: add returned $CODE"
+            sleep 5
+            curl -s -H "Authorization: Bearer $TOKEN" "$API/$D" | jq '{name, hostState, ownershipState, certState: .cert.state, required: [.requiredDnsUpdates.desired[]?.records[]? | {domainName, type, rdata}], cert: [.cert.verification.dns.desired[]?.records[]? | {domainName, type, rdata}]}'
+          done
       - name: Publish
         run: |
           npx --yes firebase-tools@14 deploy --only hosting --project "$PROJECT" --non-interactive
