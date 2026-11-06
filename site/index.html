@@ -190,6 +190,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .reserve { background: var(--forest); text-align: center; padding-block: clamp(120px, 18vw, 220px); }
 .reserve .big { font-size: clamp(64px, 9vw, 150px); max-width: 11ch; margin: 0 auto; }
 .reserve .btn-row { justify-content: center; }
+.reserve .reserve-logo { display: block; width: min(440px, 86%); height: auto; margin: 0 auto 56px; }
 
 footer { background: #0E1B14; color: var(--muted); }
 footer .row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; padding-block: 40px 130px; font-size: 16px; }
@@ -234,7 +235,7 @@ footer a { color: var(--ivory); }
   .hero .scrollcue { display: none; }
   .lockup { margin-bottom: 52px; }
   .mk-h { width: 30px; margin-right: 4px; }
-  .reserve .mk { width: 40px; }
+  .reserve .reserve-logo { width: min(300px, 84%); }
   .intro h2 { font-size: clamp(54px, 15vw, 80px); }
   .intro .btn { width: 100%; max-width: 360px; }
   .estate .stats { grid-template-columns: 1fr; margin-top: 56px; }
@@ -271,7 +272,7 @@ footer a { color: var(--ivory); }
 <script>
 document.documentElement.classList.add('js');
 document.addEventListener('DOMContentLoaded', function () {
-  var BOOK = 'https://vivistays.com';
+  var BOOK = 'https://vivistays.guestybookings.com/en/properties/6ae1221d160b99005a8e021c?minOccupancy=1&adults=1&pets=0';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var bar = document.querySelector('.bar');
   var v = document.querySelector('.reel-v');
@@ -318,7 +319,14 @@ document.addEventListener('DOMContentLoaded', function () {
   render();
 
   var form = document.querySelector('#avail form');
-  if (form) form.addEventListener('submit', function (e) { e.preventDefault(); window.open(BOOK, '_blank', 'noopener'); });
+  if (form) form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var d = new FormData(form), u = new URL(BOOK);
+    if (d.get('checkin')) u.searchParams.set('checkIn', d.get('checkin'));
+    if (d.get('checkout')) u.searchParams.set('checkOut', d.get('checkout'));
+    if (d.get('guests')) u.searchParams.set('adults', d.get('guests'));
+    window.open(u.toString(), '_blank', 'noopener');
+  });
 
   if ('IntersectionObserver' in window) {
     var io = new IntersectionObserver(function (es) {
@@ -338,7 +346,7 @@ document.addEventListener('DOMContentLoaded', function () {
     <a href="#estate">The estate</a>
     <a href="#accommodation">Rooms</a>
     <a href="#experience">Experience</a>
-    <a class="book" href="https://vivistays.com" target="_blank" rel="noopener">Book</a>
+    <a class="book" href="https://vivistays.guestybookings.com/en/properties/6ae1221d160b99005a8e021c?minOccupancy=1&amp;adults=1&amp;pets=0" target="_blank" rel="noopener">Book</a>
   </nav>
 </header>
 
@@ -349,7 +357,7 @@ document.addEventListener('DOMContentLoaded', function () {
     <div class="copy">
       <h1>Where Extraordinary <em>Moments Unfold.</em></h1>
       <div class="btn-row">
-        <a class="btn solid" href="https://vivistays.com" target="_blank" rel="noopener">Book your stay</a>
+        <a class="btn solid" href="https://vivistays.guestybookings.com/en/properties/6ae1221d160b99005a8e021c?minOccupancy=1&amp;adults=1&amp;pets=0" target="_blank" rel="noopener">Book your stay</a>
       </div>
     </div>
     <div class="scrollcue" aria-hidden="true"></div>
@@ -374,7 +382,7 @@ document.addEventListener('DOMContentLoaded', function () {
     <div class="wrap">
       <img class="full rv" src="img/vivi-logo.png" alt="ViVi Stays">
       <h2 class="big rv">Check <em>availability</em></h2>
-      <form class="form rv" action="https://vivistays.com" method="get">
+      <form class="form rv" action="https://vivistays.guestybookings.com/en/properties/6ae1221d160b99005a8e021c?minOccupancy=1&amp;adults=1&amp;pets=0" method="get">
         <label><span>Check in</span><input type="date" name="checkin" required></label>
         <label><span>Check out</span><input type="date" name="checkout" required></label>
         <label><span>Guests</span>
@@ -448,10 +456,10 @@ document.addEventListener('DOMContentLoaded', function () {
   </section>
 
   <section class="reserve pad">
-    <img class="mk rv" src="img/vivi-mark.png" alt="ViVi Stays">
+    <img class="reserve-logo rv" src="img/vivi-logo.png" alt="ViVi Stays">
     <h2 class="big rv">Your stay begins <em>here</em></h2>
     <div class="btn-row rv">
-      <a class="btn solid" href="https://vivistays.com" target="_blank" rel="noopener">Book your stay</a>
+      <a class="btn solid" href="https://vivistays.guestybookings.com/en/properties/6ae1221d160b99005a8e021c?minOccupancy=1&amp;adults=1&amp;pets=0" target="_blank" rel="noopener">Book your stay</a>
     </div>
   </section>
 
@@ -460,7 +468,7 @@ document.addEventListener('DOMContentLoaded', function () {
 <nav class="dock" aria-label="Quick navigation">
   <a href="#avail">Dates</a>
   <a href="#accommodation">Rooms</a>
-  <a class="gold" href="https://vivistays.com" target="_blank" rel="noopener">Book</a>
+  <a class="gold" href="https://vivistays.guestybookings.com/en/properties/6ae1221d160b99005a8e021c?minOccupancy=1&amp;adults=1&amp;pets=0" target="_blank" rel="noopener">Book</a>
 </nav>
 
 <footer>
