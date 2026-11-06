@@ -256,6 +256,15 @@ footer a { color: var(--ivory); }
   .hero h1, .hero .btn-row { opacity: 1; transform: none; }
   .js .rv { opacity: 1; transform: none; }
 }
+.mosaic img { cursor: zoom-in; }
+.lb { position: fixed; inset: 0; background: rgba(8,18,13,.95); display: none; align-items: center; justify-content: center; z-index: 200; padding: 56px 16px; }
+.lb.on { display: flex; }
+.lb img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+.lb button { position: absolute; background: rgba(8,18,13,.6); border: 1px solid rgba(255,255,255,.35); color: #fff; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 24px; line-height: 1; display: flex; align-items: center; justify-content: center; }
+.lb .x { top: 14px; right: 14px; }
+.lb .pv { left: 12px; top: 50%; transform: translateY(-50%); }
+.lb .nx { right: 12px; top: 50%; transform: translateY(-50%); }
+@media (max-width: 640px) { .lb .pv, .lb .nx { top: auto; bottom: 14px; transform: none; } .lb .pv { left: 14px; } .lb .nx { right: 14px; } }
 </style>
 
 <script>
@@ -424,6 +433,8 @@ document.addEventListener('DOMContentLoaded', function () {
       <figure class="rv"><img src="img/p18.jpg" alt="The Grange Estate, view 18" loading="lazy"></figure>
       <figure class="rv"><img src="img/p19.jpg" alt="The Grange Estate, view 19" loading="lazy"></figure>
       <figure class="rv"><img src="img/p20.jpg" alt="The Grange Estate, view 20" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p21.jpg" alt="The Grange Estate, indoor pool with gym" loading="lazy"></figure>
+      <figure class="rv"><img src="img/p22.jpg" alt="The Grange Estate, indoor swimming pool" loading="lazy"></figure>
     </div>
   </section>
 
@@ -465,3 +476,39 @@ document.addEventListener('DOMContentLoaded', function () {
     <a href="https://vivistays.com" target="_blank" rel="noopener" aria-label="ViVi Stays, vivistays.com"><img class="vf" src="img/vivi-logo.png" alt="ViVi Stays"></a>
   </div>
 </footer>
+
+<script>
+(function(){
+  var imgs=[].slice.call(document.querySelectorAll('.mosaic img'));
+  if(!imgs.length) return;
+  var lb=document.createElement('div');
+  lb.className='lb';
+  lb.setAttribute('role','dialog');
+  lb.setAttribute('aria-modal','true');
+  lb.innerHTML='<button class="x" aria-label="Close">&times;</button><button class="pv" aria-label="Previous">&#8249;</button><img alt=""><button class="nx" aria-label="Next">&#8250;</button>';
+  document.body.appendChild(lb);
+  var big=lb.querySelector('img'), cur=0;
+  function show(n){ cur=(n+imgs.length)%imgs.length; big.src=imgs[cur].getAttribute('src'); big.alt=imgs[cur].alt; }
+  function open(n){ show(n); lb.classList.add('on'); document.body.style.overflow='hidden'; }
+  function close(){ lb.classList.remove('on'); document.body.style.overflow=''; }
+  imgs.forEach(function(im,n){ im.addEventListener('click',function(){ open(n); }); });
+  lb.querySelector('.x').addEventListener('click',close);
+  lb.querySelector('.pv').addEventListener('click',function(e){ e.stopPropagation(); show(cur-1); });
+  lb.querySelector('.nx').addEventListener('click',function(e){ e.stopPropagation(); show(cur+1); });
+  lb.addEventListener('click',function(e){ if(e.target===lb) close(); });
+  document.addEventListener('keydown',function(e){
+    if(!lb.classList.contains('on')) return;
+    if(e.key==='Escape') close();
+    if(e.key==='ArrowLeft') show(cur-1);
+    if(e.key==='ArrowRight') show(cur+1);
+  });
+  var sx=null;
+  lb.addEventListener('touchstart',function(e){ sx=e.touches[0].clientX; },{passive:true});
+  lb.addEventListener('touchend',function(e){
+    if(sx===null) return;
+    var d=e.changedTouches[0].clientX-sx;
+    if(Math.abs(d)>40) show(d<0?cur+1:cur-1);
+    sx=null;
+  });
+})();
+</script>
