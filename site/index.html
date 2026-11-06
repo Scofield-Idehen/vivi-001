@@ -319,13 +319,39 @@ document.addEventListener('DOMContentLoaded', function () {
   render();
 
   var form = document.querySelector('#avail form');
-  if (form) form.addEventListener('submit', function (e) {
-    e.preventDefault();
-    var d = new FormData(form), u = new URL(BOOK);
-    if (d.get('checkin')) u.searchParams.set('checkIn', d.get('checkin'));
-    if (d.get('checkout')) u.searchParams.set('checkOut', d.get('checkout'));
-    if (d.get('guests')) u.searchParams.set('adults', d.get('guests'));
-    window.open(u.toString(), '_blank', 'noopener');
+  var KEY = 'grange-stay';
+  function saved() { try { return JSON.parse(sessionStorage.getItem(KEY)) || {}; } catch (err) { return {}; } }
+  function store(s) { try { sessionStorage.setItem(KEY, JSON.stringify(s)); } catch (err) {} }
+  function bookUrl() {
+    var u = new URL(BOOK), s = saved();
+    if (s.checkin && s.checkout) {
+      u.searchParams.set('checkIn', s.checkin);
+      u.searchParams.set('checkOut', s.checkout);
+      u.searchParams.set('adults', s.guests || '2');
+    }
+    return u.toString();
+  }
+  function syncBook() {
+    var url = bookUrl();
+    document.querySelectorAll('a[href^="https://vivistays.guestybookings.com"]').forEach(function (a) { a.href = url; });
+  }
+  if (form) {
+    var s0 = saved();
+    if (s0.checkin) form.elements.checkin.value = s0.checkin;
+    if (s0.checkout) form.elements.checkout.value = s0.checkout;
+    if (s0.guests) form.elements.guests.value = s0.guests;
+    var readForm = function () {
+      store({ checkin: form.elements.checkin.value, checkout: form.elements.checkout.value, guests: form.elements.guests.value });
+      syncBook();
+    };
+    form.addEventListener('change', readForm);
+    form.addEventListener('input', readForm);
+    form.addEventListener('submit', function (e) { e.preventDefault(); readForm(); window.open(bookUrl(), '_blank', 'noopener'); });
+  }
+  syncBook();
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[href^="https://vivistays.guestybookings.com"]');
+    if (a) a.href = bookUrl();
   });
 
   if ('IntersectionObserver' in window) {
