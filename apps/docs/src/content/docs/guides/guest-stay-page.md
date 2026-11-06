@@ -5,7 +5,7 @@ description: The private page each guest gets for their stay, what it shows, and
 
 Every confirmed booking has its own private page for the guest. The guest opens it from a link and doesn't sign in. It is one column with large type, in your name and colours.
 
-Guesty sent this information in messages. In V-01 it lives on one page that stays up to date: if you change the Wi-Fi password, the page shows the new one.
+In ViVi OS this information lives on one page that stays up to date: if you change the Wi-Fi password, the page shows the new one.
 
 ## What the guest sees
 
@@ -24,7 +24,7 @@ The phone number is set by an admin on the Workspace page, under **Phone guests 
 
 Each [custom field](/guides/properties/#custom-fields) has a **Guests see it** setting. In the standard set it is on for Top lock code, Wi-Fi name, Wi-Fi password and Check-in instructions, and off for Bottom lock code.
 
-Secret details, such as lock codes and the Wi-Fi password, show only from the day of arrival to the day of departure. A link passed around never gives out codes for months. If V-01 makes the door codes on a smart lock, the stay's own code shows once the lock holds it. See [Door locks](/guides/door-locks/).
+Secret details, such as lock codes and the Wi-Fi password, show only from the day of arrival to the day of departure. A link passed around never gives out codes for months. If ViVi OS makes the door codes on a smart lock, the stay's own code shows once the lock holds it. See [Door locks](/guides/door-locks/).
 
 A cancelled booking's page shows nothing.
 

@@ -1,6 +1,6 @@
-# V-01 staff
+# ViVi OS staff
 
-V-01 staff use the console. They are separate from every operator's team, and adding someone here
+ViVi OS staff use the console. They are separate from every operator's team, and adding someone here
 gives them no access to any operator's data on its own.
 
 | Role | Console totals and statuses | Operators' team names and emails | Open support access |
@@ -32,4 +32,4 @@ hours). The workspace opens read-only, with a banner showing when access ends.
 - Access closes by itself at its end time, when you choose **End access**, or at once if you are
   removed from staff.
 - Support access never lets anyone change an operator's data. Changes are made by the operator's own
-  team, or by V-01 through a migration or script that is reviewed like any other code.
+  team, or by ViVi OS through a migration or script that is reviewed like any other code.

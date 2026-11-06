@@ -45,9 +45,9 @@ export const MeSchema = z.object({
   memberships: z.array(
     z.object({ organisationId: Uuid, organisationName: z.string(), role: MemberRoleSchema }),
   ),
-  /** The person's role at V-01 itself, if they are V-01 staff. Opens the console. */
+  /** The person's role at ViVi OS itself, if they are ViVi OS staff. Opens the console. */
   platformRole: PlatformRoleSchema.nullable(),
-  /** Operator workspaces this V-01 staff member has open on a support grant right now. */
+  /** Operator workspaces this ViVi OS staff member has open on a support grant right now. */
   supportAccess: z.array(
     z.object({ grantId: Uuid, organisationId: Uuid, organisationName: z.string(), expiresAt: z.string() }),
   ),

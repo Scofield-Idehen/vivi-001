@@ -6,7 +6,7 @@ import { importedHomes } from './owners.ts';
 
 /**
  * The people on the Guesty account (1 Nov 2026), staged for the team to choose from on the Team
- * page; nobody joins V-01 or gets an email from this. Guesty's tags give the skills: a tag with
+ * page; nobody joins ViVi OS or gets an email from this. Guesty's tags give the skills: a tag with
  * "clean" in it is cleaning, one with "maint" is maintenance (Guesty's spelling varies). A user's
  * roles list the listings they work on; no listings means every home.
  */
@@ -43,7 +43,7 @@ export function staffName(u: GuestyUser): string | null {
   );
 }
 
-/** The V-01 homes for a user's roles; null for every home. Listings not imported are left out. */
+/** The ViVi OS homes for a user's roles; null for every home. Listings not imported are left out. */
 export function homesOf(
   u: GuestyUser,
   propertyOf: Map<string, string>,

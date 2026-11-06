@@ -1,6 +1,6 @@
 ---
 title: Team and access
-description: Inviting your team, roles, limiting people to certain homes, and support access by V-01 staff.
+description: Inviting your team, roles, limiting people to certain homes, and support access by ViVi OS staff.
 ---
 
 Your team is managed on **Workspace → Team**. Only admins can invite people, change roles and limit access.
@@ -13,7 +13,7 @@ They get an email with a link and sign in with it; there are no passwords. An in
 
 A sign-in lasts 48 hours. After that, people sign in again.
 
-To add cleaners and maintenance staff from Guesty without sending them an email, see [Tasks and the field team](/guides/tasks-and-field-team/#adding-the-field-team-from-guesty).
+To add cleaners and maintenance staff from your previous system without sending them an email, see [Tasks and the field team](/guides/tasks-and-field-team/#adding-the-field-team-from-your-previous-system).
 
 ## Roles
 
@@ -27,7 +27,7 @@ To add cleaners and maintenance staff from Guesty without sending them an email,
 
 Some details are limited further:
 
-- **Lock codes, the Wi-Fi password and other secrets** are seen by admins, operations and guest comms only. Never by accounts or V-01 support. The field team sees only what is marked "Field team sees it", inside a job, on its day.
+- **Lock codes, the Wi-Fi password and other secrets** are seen by admins, operations and guest comms only. Never by accounts or ViVi OS support. The field team sees only what is marked "Field team sees it", inside a job, on its day.
 - **Who is paid for each home**, with bank details, is seen by admins and accounts only.
 - The field team doesn't see bookings, guests' contact details, money or claims.
 
@@ -45,13 +45,13 @@ An admin can limit anyone except another admin to chosen homes: **Change homes**
 
 Your name in the top bar opens **My profile**: your name, email, when you signed in, and your companies. Set your name so the team sees it instead of your email, on tasks, in the Inbox and on photos.
 
-## Support access by V-01 staff
+## Support access by ViVi OS staff
 
-V-01 staff can't see inside your workspace on their own. To help you, they open **support access**:
+ViVi OS staff can't see inside your workspace on their own. To help you, they open **support access**:
 
 - They must give a reason you can read.
 - It is read-only: they can't change anything.
 - It lasts from 5 minutes to 4 hours, then closes by itself.
 - They never see lock codes or other secrets.
 
-Every visit (who, why, when and for how long) is listed under **V-01 support visits** at the bottom of the Workspace page.
+Every visit (who, why, when and for how long) is listed under **ViVi OS support visits** at the bottom of the Workspace page.

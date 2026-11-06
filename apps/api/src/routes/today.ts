@@ -185,7 +185,7 @@ export function todayRoutes(app: FastifyInstance, deps: { scope: RequestScope; n
               severity: 'urgent',
               title: `Nothing has reached the channels for ${minutes} minutes`,
               detail:
-                'V-01’s sync worker has not reported in. Channex keeps closing booked nights itself meanwhile, so nothing is sold twice; prices and new blocks wait until it is back.',
+                'ViVi OS’s sync worker has not reported in. Channex keeps closing booked nights itself meanwhile, so nothing is sold twice; prices and new blocks wait until it is back.',
               to: '/channels',
             });
           }
@@ -259,7 +259,7 @@ export function todayRoutes(app: FastifyInstance, deps: { scope: RequestScope; n
               severity: 'urgent',
               title: `Channex had stopped closing booked nights for ${p.propertyName}`,
               detail:
-                'The worker is turning the setting back on. Until it is, a night could be sold twice while V-01 is down.',
+                'The worker is turning the setting back on. Until it is, a night could be sold twice while ViVi OS is down.',
               to: `/properties/${p.propertyId}`,
             });
           }

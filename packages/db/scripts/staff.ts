@@ -1,7 +1,7 @@
 import pg from 'pg';
 
 /**
- * V-01's own staff: the people who can open the console.
+ * ViVi OS's own staff: the people who can open the console.
  *
  *   pnpm db:staff list
  *   pnpm db:staff add <email> <owner|support|viewer>
@@ -37,7 +37,7 @@ try {
     const { rows } = await client.query<{ email: string; role: string; signed_in: boolean }>(
       `select email, role, user_id is not null as signed_in from app.platform_staff order by role, email`,
     );
-    if (rows.length === 0) console.log('No V-01 staff yet.');
+    if (rows.length === 0) console.log('No ViVi OS staff yet.');
     for (const r of rows)
       console.log(`${r.role.padEnd(8)} ${r.email}${r.signed_in ? '' : '  (not signed in yet)'}`);
   } else if (command === 'add') {
@@ -53,7 +53,7 @@ try {
         where s.email = $1 and s.user_id is null and lower(u.email) = $1`,
       [email],
     );
-    console.log(`${email} is V-01 ${role}.`);
+    console.log(`${email} is ViVi OS ${role}.`);
   } else if (command === 'remove') {
     await client.query('begin');
     await client.query(
@@ -64,7 +64,7 @@ try {
     );
     const { rowCount } = await client.query('delete from app.platform_staff where email = $1', [email]);
     await client.query('commit');
-    console.log(rowCount ? `${email} is no longer V-01 staff.` : `${email} was not V-01 staff.`);
+    console.log(rowCount ? `${email} is no longer ViVi OS staff.` : `${email} was not ViVi OS staff.`);
   } else {
     usage();
   }

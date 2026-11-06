@@ -34,19 +34,19 @@ export function NotFound({ home = '/today' }: { home?: string }) {
   );
 }
 
-/** Operators' workspaces wear the operator's look; V-01 is named here, in the console and in the terms. */
+/** Operators' workspaces wear the operator's look; ViVi OS is named here, in the console and in the terms. */
 export function About() {
   return (
     <>
       <PageHeader title="About" />
       <div className="max-w-[60ch] space-y-4 text-[14px] leading-relaxed text-slate">
-        <p>V-01 is a property management platform for short-stay operators.</p>
+        <p>ViVi OS is a property management platform for short-stay operators.</p>
         <p>
           Each company's data is kept separate from every other company on the platform, and stays in the UK.
-          V-01 staff can open a company's workspace only with a reason, read-only and for a limited time, and
-          the company sees every visit.
+          ViVi OS staff can open a company's workspace only with a reason, read-only and for a limited time,
+          and the company sees every visit.
         </p>
-        <p className="text-mist">Version 0.2: the base build and the first V-01 console.</p>
+        <p className="text-mist">Version 0.2: the base build and the first ViVi OS console.</p>
       </div>
     </>
   );

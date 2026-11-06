@@ -4,7 +4,7 @@ export interface RestrictionRange {
   /** Inclusive at both ends, as channel managers expect. */
   dateFrom: string;
   dateTo: string;
-  /** Left out when V-01 doesn't set the property's prices, or it has none yet. */
+  /** Left out when ViVi OS doesn't set the property's prices, or it has none yet. */
   rateMinor?: number;
   minStayArrival: number;
   /** Null: no longest stay. */
@@ -35,7 +35,7 @@ function same(a: Values, b: Values): boolean {
  * Prices and stay rules for one property across [dateFrom, dateTo], night by night from its usual
  * rules and the nights that have their own, merged into runs of equal values so a 500-night sync
  * is one call. The same nightRules() draws the calendar screen, so what the channels get is what
- * the team sees. Prices never leave the property's limits, and go only when V-01 sets them: a
+ * the team sees. Prices never leave the property's limits, and go only when ViVi OS sets them: a
  * property priced by PriceLabs keeps PriceLabs' prices.
  */
 export function restrictionRanges(

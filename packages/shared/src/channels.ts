@@ -5,13 +5,13 @@ import { CHANNEL_ACCOUNT_STATUSES, CHANNELS, LISTING_STATUSES } from './enums.ts
  * Channel accounts and listing links: how a property reaches Airbnb, Booking.com and Vrbo. An
  * account (Airbnb A, Booking.com B, Vrbo) is connected to Channex once; each property's listing on
  * that account is then linked to the property's Channex rate plan, and from then on prices,
- * availability and bookings flow through V-01. Guesty's List on channels page is the measure.
+ * availability and bookings flow through ViVi OS. Guesty's List on channels page is the measure.
  */
 
 const Uuid = z.uuid();
 const Timestamp = z.string();
 
-/** The channels V-01 can link today. Expedia and the rest come later, through Channex. */
+/** The channels ViVi OS can link today. Expedia and the rest come later, through Channex. */
 export const LINKABLE_CHANNELS = ['airbnb', 'booking_com', 'vrbo'] as const;
 export type LinkableChannel = (typeof LINKABLE_CHANNELS)[number];
 
@@ -121,7 +121,7 @@ export const WorkspaceSyncSchema = z.object({
   oldestWaitingAt: Timestamp.nullable(),
   lastSentAt: Timestamp.nullable(),
   lastBookingAt: Timestamp.nullable(),
-  /** The nightly cross-check across the workspace's properties V-01 runs. */
+  /** The nightly cross-check across the workspace's properties ViVi OS runs. */
   crossCheck: z.object({
     /** The most recent check of any property. */
     lastCheckedAt: Timestamp.nullable(),

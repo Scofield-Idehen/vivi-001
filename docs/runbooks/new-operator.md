@@ -1,9 +1,9 @@
 # Adding an operator by hand
 
-The V-01 console lists every operator and tracks their onboarding, but adding one from the console
-comes later (design phase D8). Until then, V-01 sets up each operator from a trusted machine with the
+The ViVi OS console lists every operator and tracks their onboarding, but adding one from the console
+comes later (design phase D8). Until then, ViVi OS sets up each operator from a trusted machine with the
 owner connection. `packages/db/scripts/seed.ts` shows the same steps in code. The new operator appears
-in the console at once, as Onboarding, and turns Live when its first property moves to V-01.
+in the console at once, as Onboarding, and turns Live when its first property moves to ViVi OS.
 
 ```sql
 begin;
@@ -27,6 +27,6 @@ commit;
 
 Before go-live for a new operator:
 
-- A data processing agreement is signed (V-01 is the processor; the operator is the controller).
+- A data processing agreement is signed (ViVi OS is the processor; the operator is the controller).
 - Their own Channex group is created, and their channel accounts connect to it.
 - Their sender domain has SPF, DKIM and DMARC records.

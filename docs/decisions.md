@@ -3,6 +3,19 @@
 Newest first. Each entry says what was decided and why. Product decisions also live in the
 V-01 Build Playbook and Design Roadmap.
 
+## 2026-11-06
+
+- **V-01 is now called ViVi OS (Alpha: "let's also rename all V-01 to be ViVi OS").** Every name
+  people see, in the app, emails, Slack messages, docs and code comments, says ViVi OS. Package names
+  (`@v01/...`), database names and this log's older entries keep the old name.
+- **Guesty and Channex stay internal (Alpha: "remove any mentions of Guesty or Channex in the docs
+  and keep that all internal to us").** The public docs say "your previous system" and "channel sync"
+  instead. The decision log is no longer published, the security page drops its internal
+  housekeeping section, and the API reference loses the Guesty and Channex endpoints and fields. The
+  docs build fails if either name reaches a public page. In the staff app, the channel screens say
+  "channel sync" instead of Channex; the "From Guesty" import screens still name Guesty, since that's
+  what the team is moving from.
+
 ## 2026-11-02
 
 - **Slack messages about jobs (Alpha: "all our cleaners are on slack so slack works for nudging them

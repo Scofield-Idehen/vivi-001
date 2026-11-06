@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * Smart locks (TTLock first). An operator connects the TTLock account that owns its locks once;
- * V-01 keeps a token, never the password. Each lock is put on a property, and where "makes codes"
+ * ViVi OS keeps a token, never the password. Each lock is put on a property, and where "makes codes"
  * is on, the worker gives every stay its own code from check-in to check-out and every job on the
  * field team a code for its day only. Codes are secret: sealed in the database, shown only to
  * people who may read secrets, the guest on their own page, and the crew inside their job.
@@ -57,7 +57,7 @@ export const LockAccountSchema = z.object({
 export type LockAccount = z.infer<typeof LockAccountSchema>;
 
 export const LocksViewSchema = z.object({
-  /** Whether V-01 itself has TTLock developer credentials; without them nothing can be connected. */
+  /** Whether ViVi OS itself has TTLock developer credentials; without them nothing can be connected. */
   available: z.boolean(),
   account: LockAccountSchema.nullable(),
   locks: z.array(LockSchema),

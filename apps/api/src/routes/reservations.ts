@@ -409,8 +409,8 @@ export function reservationRoutes(app: FastifyInstance, deps: { scope: RequestSc
 
   /**
    * Cancelling a booking made here, with a reason. The nights come free at once (and go to the
-   * channels for a property V-01 runs). A channel's booking is cancelled on the channel, which
-   * then tells V-01; cancelling it here would leave the two disagreeing.
+   * channels for a property ViVi OS runs). A channel's booking is cancelled on the channel, which
+   * then tells ViVi OS; cancelling it here would leave the two disagreeing.
    */
   typed.post(
     '/v1/reservations/:id/cancel',

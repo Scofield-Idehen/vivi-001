@@ -254,7 +254,7 @@ export function useConnectAllChannex(orgId: string | null) {
   });
 }
 
-/** V-01 support visits to this workspace: who opened it, why, and for how long. */
+/** ViVi OS support visits to this workspace: who opened it, why, and for how long. */
 export function useSupportVisits(orgId: string | null) {
   const token = useToken();
   return useQuery({
@@ -276,7 +276,7 @@ export function useAddProperty(orgId: string | null) {
         method: 'POST',
         body: input,
       }),
-    // The console counts properties too, so V-01 staff see the new one at once.
+    // The console counts properties too, so ViVi OS staff see the new one at once.
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: ['properties', orgId] }),
@@ -692,7 +692,7 @@ export function useApiToken(): string | null {
   return useToken();
 }
 
-// The V-01 console ----------------------------------------------------------------------------
+// The ViVi OS console ----------------------------------------------------------------------------
 // Console screens refresh every half minute, so sync problems show up without reloading.
 const CONSOLE_REFRESH = 30_000;
 
@@ -1026,7 +1026,7 @@ export function useSiteQuote(slug: string, request: SiteQuoteRequest | null, pre
   });
 }
 
-/** Book: V-01 checks the price again and sends the guest to Stripe's page to pay. */
+/** Book: ViVi OS checks the price again and sends the guest to Stripe's page to pay. */
 export function useSiteBook(slug: string, go: (path: string) => void) {
   return useMutation({
     mutationFn: (body: SiteBookRequest) =>

@@ -100,7 +100,7 @@ async function processGroup(
 
   const { property, mapping } = context;
   if (!property) return fail('Property not found.', true);
-  // During migration only properties switched to V-01 send anything (playbook, Section 13). Nothing
+  // During migration only properties switched to ViVi OS send anything (playbook, Section 13). Nothing
   // went wrong, so these are not failures: they don't count on Sync health or Today.
   if (property.managedBy !== 'v01') {
     await finish(deps, orgId, ids, {
@@ -108,7 +108,7 @@ async function processGroup(
       error:
         property.managedBy === 'guesty'
           ? 'Skipped: this property is still managed by Guesty.'
-          : "Skipped: this property's listings are not connected to V-01 yet.",
+          : "Skipped: this property's listings are not connected to ViVi OS yet.",
     });
     return 'sent';
   }

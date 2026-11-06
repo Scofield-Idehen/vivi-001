@@ -30,7 +30,7 @@ export const guestyImports = app.table(
   (t) => [index('guesty_imports_org_idx').on(t.organisationId, t.startedAt)],
 );
 
-/** A Guesty listing and the V-01 property made from it. */
+/** A Guesty listing and the ViVi OS property made from it. */
 export const guestyListings = app.table(
   'guesty_listings',
   {
@@ -57,7 +57,7 @@ export const guestyListings = app.table(
 );
 
 /**
- * The account map: each channel account Guesty's listings sit on, as a V-01 channel account. The
+ * The account map: each channel account Guesty's listings sit on, as a ViVi OS channel account. The
  * key is whatever identifies the account in Guesty's listing integrations; confirmed on the first
  * real pull (docs/decisions.md).
  */
@@ -108,7 +108,7 @@ export const guestyChannelListings = app.table(
   ],
 );
 
-/** A Guesty reservation and the V-01 booking made from it. */
+/** A Guesty reservation and the ViVi OS booking made from it. */
 export const guestyReservations = app.table(
   'guesty_reservations',
   {
@@ -154,7 +154,7 @@ export const integrationTokens = app.table(
 
 /**
  * The people on the operator's Guesty account (1 Nov 2026): cleaners, maintenance and the office,
- * staged so the team can choose who joins V-01. Guesty's tags give the skills ("cleaners",
+ * staged so the team can choose who joins ViVi OS. Guesty's tags give the skills ("cleaners",
  * "Maintenance"); a user's role lists the homes they work on (none listed: every home).
  * `user_id` is set once the person is on the team.
  */
@@ -171,7 +171,7 @@ export const guestyStaff = app.table(
     phone: text('phone'),
     tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
     skills: text('skills').array().notNull().default(sql`'{}'::text[]`),
-    /** The V-01 homes from the role's listings; null means every home. */
+    /** The ViVi OS homes from the role's listings; null means every home. */
     propertyIds: uuid('property_ids').array(),
     userId: uuid('user_id'),
     seenAt: timestamp('seen_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),

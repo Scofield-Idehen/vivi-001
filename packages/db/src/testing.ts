@@ -81,7 +81,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
 }
 
 /**
- * Adds a V-01 staff member with a sign-in, as the owner, for test setup only. With `linked: false`
+ * Adds a ViVi OS staff member with a sign-in, as the owner, for test setup only. With `linked: false`
  * the staff entry waits for its first sign-in, the way `pnpm db:staff add` leaves it.
  */
 export async function seedPlatformStaff(

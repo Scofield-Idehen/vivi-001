@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       org:
-        description: The operator's slug in V-01
+        description: The operator's slug in ViVi OS
         default: vivistays
         required: true
       probe_documents:

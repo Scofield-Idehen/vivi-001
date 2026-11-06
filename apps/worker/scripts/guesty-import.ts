@@ -9,7 +9,7 @@ import { liveDeps } from '../src/live-deps.ts';
  * pnpm guesty:import --org <slug> [--dry-run] [--bookings-days-back 365] [--calendar-days 730]
  *                     [--messages-days-back 90]   (0 leaves the guest conversations out)
  *
- * Brings an operator's Guesty account into V-01: listings as properties Guesty still runs, with
+ * Brings an operator's Guesty account into ViVi OS: listings as properties Guesty still runs, with
  * photos, amenities, custom fields, tags, nightly prices and blocks; bookings with their guests;
  * and the account map for the move-over. Reads GUESTY_CLIENT_ID and GUESTY_CLIENT_SECRET (and
  * FIELD_SECRET_KEY for lock codes) from apps/worker/.env. Run again any time: it updates.

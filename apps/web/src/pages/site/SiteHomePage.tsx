@@ -10,7 +10,7 @@ import { partyFrom } from './SitePage.tsx';
 /**
  * A home on the booking website (2 Nov 2026): photos, what it's like, its rules, and the box to
  * book it. The box goes dates → guests → price → the guest's details → Stripe's page, where the
- * card is authorised; V-01 charges it once the booking is saved. On a phone the box sits under the
+ * card is authorised; ViVi OS charges it once the booking is saved. On a phone the box sits under the
  * home's name; on a wide screen it stays beside the description.
  */
 

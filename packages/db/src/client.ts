@@ -250,7 +250,7 @@ export class WorkerDatabase extends Database {
   }
 
   /**
-   * Records a worker start and says how long V-01 was away: the gap since the previous run's last
+   * Records a worker start and says how long ViVi OS was away: the gap since the previous run's last
    * heartbeat, or null when this is the first run ever. The caller decides whether that gap needs
    * a recovery (draining the booking feed before anything is sent).
    */

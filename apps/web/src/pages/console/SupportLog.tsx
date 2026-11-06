@@ -21,7 +21,7 @@ export function ConsoleSupportLog() {
     <>
       <PageHeader
         title="Support log"
-        description="Every time V-01 staff opened an operator's workspace, newest first. Access is read-only, needs a reason, and closes by itself. Each operator sees the visits to their own workspace."
+        description="Every time ViVi OS staff opened an operator's workspace, newest first. Access is read-only, needs a reason, and closes by itself. Each operator sees the visits to their own workspace."
       />
       {grants.length === 0 ? (
         <p className="border-y border-hairline py-3 text-[14px]">

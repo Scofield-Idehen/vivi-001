@@ -185,7 +185,7 @@ import { SAMPLE_PHOTOS } from './sample-photos.ts';
  * error messages, using sample data kept in this browser, so the real screens can be tried
  * without a database or sign-in. Vivistays is the real first operator, empty until its
  * Guesty import; Northwind Stays and Brightwater Lets are invented, as are their people,
- * properties and guests. The demo user is a V-01 owner, a Vivistays admin, and an admin of
+ * properties and guests. The demo user is a ViVi OS owner, a Vivistays admin, and an admin of
  * Northwind Stays, so its sample bookings can be tried in the Calendar; Brightwater Lets is
  * reached only through support access.
  */
@@ -491,7 +491,7 @@ const NOT_CONNECTED: ChannexState = {
   crossCheckError: null,
 };
 
-/** A connection the stand-in worker finished: the sample properties V-01 runs were "connected" when added. */
+/** A connection the stand-in worker finished: the sample properties ViVi OS runs were "connected" when added. */
 function connectedSince(at: string): ChannexState {
   return {
     status: 'connected',
@@ -627,7 +627,7 @@ function sampleProperty(p: {
     tags: p.tags ?? [],
     createdAt,
     ...listingDefaults(),
-    // The sample properties V-01 runs were connected when they were added; the rest wait.
+    // The sample properties ViVi OS runs were connected when they were added; the rest wait.
     channex: p.managedBy === 'v01' ? connectedSince(createdAt) : NOT_CONNECTED,
     title: p.title ?? null,
     amenities: p.amenities ?? [],
@@ -1337,7 +1337,7 @@ function seed(): DemoState {
         organisationId: null,
         minutesAgo: 41,
         attempts: 3,
-        message: 'Channex property 7f3a-sample is not mapped to any V-01 property yet.',
+        message: 'Channex property 7f3a-sample is not mapped to any ViVi OS property yet.',
       },
     ],
   };
@@ -1689,7 +1689,7 @@ async function resolvedTask(task: Task): Promise<Task> {
 
 /**
  * What Channex would see on each connected account: a listing per property (two on Airbnb A, the
- * rest on Airbnb B), with the properties V-01 runs linked and live, and the ones still on Guesty
+ * rest on Airbnb B), with the properties ViVi OS runs linked and live, and the ones still on Guesty
  * seen but not linked. Invented ids throughout.
  */
 function seedLinks(s: DemoState): void {
@@ -2170,7 +2170,7 @@ function findProperty(operator: DemoOperator, id: string): PropertyDetail {
 /** Photo addresses point into this browser's storage; photos it no longer has are left out. */
 /**
  * The listings a sample property is on: one per connected account of the operator, for properties
- * V-01 runs or that are still on Guesty (step 7 will link real ones).
+ * ViVi OS runs or that are still on Guesty (step 7 will link real ones).
  */
 function listingsOf(operator: DemoOperator, detail: PropertyDetail): PropertyDetail['listings'] {
   return operator.links
@@ -2735,7 +2735,7 @@ function demoReservations(operator: DemoOperator, query: Record<string, string>)
   };
 }
 
-/** The nightly cross-check across the properties V-01 runs, from each property's state. */
+/** The nightly cross-check across the properties ViVi OS runs, from each property's state. */
 function demoCrossCheck(operator: DemoOperator): WorkspaceSyncCrossCheck {
   const live = operator.properties
     .filter((p) => p.managedBy === 'v01')
@@ -4820,7 +4820,7 @@ interface DemoSite {
 
 /**
  * The site's settings, made on first look. In the demo, Northwind's site is on with the homes
- * V-01 runs, so the website can be tried straight away.
+ * ViVi OS runs, so the website can be tried straight away.
  */
 function siteOf(operator: DemoOperator): DemoSite {
   const o = operator as DemoOperator & { site?: DemoSite };
@@ -5103,7 +5103,7 @@ async function demoSiteFetch(path: string, method: string, body: unknown): Promi
     if (!booking) throw new ApiError(404, 'booking_not_found', 'That booking isn’t on this site.');
     const p = operator.properties.find((x) => x.id === booking.propertyId);
     if (booking.status === 'open' && p) {
-      // In the demo the guest has paid: save the booking, as V-01 does when Stripe says so.
+      // In the demo the guest has paid: save the booking, as ViVi OS does when Stripe says so.
       const free = !siteTaken(operator, p.id).some(
         (t) => t.from < booking.checkOut && booking.checkIn < t.to,
       );
@@ -5314,7 +5314,7 @@ export async function demoFetch<T>(
       maxGuests: input.maxGuests,
       checkInTime: input.checkInTime ?? '15:00',
       checkOutTime: input.checkOutTime ?? '10:00',
-      // Added in V-01, so nothing is connected yet (the API does the same).
+      // Added in ViVi OS, so nothing is connected yet (the API does the same).
       managedBy: 'none',
       priceOwner: input.priceOwner ?? 'v01',
       minPriceMinor: input.minPriceMinor ?? null,
@@ -6731,7 +6731,7 @@ export async function demoFetch<T>(
     }
   }
 
-  // The V-01 console: the demo user is a V-01 owner.
+  // The ViVi OS console: the demo user is a ViVi OS owner.
   if (method === 'GET' && path === '/v1/console/overview') return overview() as T;
   if (method === 'GET' && path === '/v1/console/operators') {
     const list: ConsoleOperatorList = {

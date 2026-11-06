@@ -101,7 +101,7 @@ export const auditLog = app.table(
 
 /**
  * One row per worker start. The heartbeat keeps `last_seen_at` fresh; a start that finds the
- * previous row's heartbeat old knows V-01 was down, and drains the booking feed before any price
+ * previous row's heartbeat old knows ViVi OS was down, and drains the booking feed before any price
  * or availability goes out (the recovery runbook, done by the worker itself). Not tied to an
  * operator: the worker writes it, the console reads it through a function.
  */

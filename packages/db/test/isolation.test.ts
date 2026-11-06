@@ -167,7 +167,7 @@ describe('privileges', () => {
     await expectPgError(rawQuery(t.apiUrl, 'select * from app.webhook_events'), PG.insufficientPrivilege);
   });
 
-  it("never lets the API or worker hand a property's channels to V-01", async () => {
+  it("never lets the API or worker hand a property's channels to ViVi OS", async () => {
     const scope = { orgId: a.orgId, userId: a.userId };
     const setManagedBy = (db: ApiDatabase | WorkerDatabase, value: 'v01' | 'guesty' | 'none') =>
       db.withOrg(scope, (tx) =>

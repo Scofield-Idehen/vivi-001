@@ -44,7 +44,7 @@
   --color-pending-text: var(--brand-pending-text);
   --color-done: var(--brand-done);
   --color-done-text: var(--brand-done-text);
-  /* The V-01 console's sidebar sits on the accent; its quieter text is mixed from the accent tint. */
+  /* The ViVi OS console's sidebar sits on the accent; its quieter text is mixed from the accent tint. */
   --color-console-muted: color-mix(in srgb, var(--brand-accent-tint) 75%, var(--brand-accent));
 
   /* One clean sans for everything (Alpha, 29 Oct 2026): headings are the same face, heavier. */
@@ -176,7 +176,7 @@ dialog.sheet::backdrop {
   }
 }
 
-/* V-01's own confirmation: rises from the bottom on a phone, settles in the middle on a laptop. */
+/* ViVi OS's own confirmation: rises from the bottom on a phone, settles in the middle on a laptop. */
 dialog.confirm {
   transition:
     translate 260ms cubic-bezier(0.22, 1, 0.36, 1),

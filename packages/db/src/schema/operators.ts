@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { boolean, char, check, index, integer, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { app, createdAt, memberRole, updatedAt } from './common.ts';
 
-/** One row per operator (Vivistays is the first). Created by V-01, not by sign-up. */
+/** One row per operator (Vivistays is the first). Created by ViVi OS, not by sign-up. */
 export const organisations = app.table(
   'organisations',
   {

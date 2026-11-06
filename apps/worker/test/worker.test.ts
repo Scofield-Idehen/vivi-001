@@ -200,7 +200,7 @@ describe('outbox sender', () => {
     expect(row?.last_error).toContain('Guesty');
   });
 
-  it('never sends anything for a property added in V-01 and not yet moved over', async () => {
+  it('never sends anything for a property added in ViVi OS and not yet moved over', async () => {
     await queueAvailability(notConnected, '2026-11-01', '2026-11-30');
     await processOutbox(deps);
     expect(provider.availabilityCalls).toEqual([]);
@@ -210,7 +210,7 @@ describe('outbox sender', () => {
     );
     expect(row).toEqual({
       status: 'skipped',
-      last_error: "Skipped: this property's listings are not connected to V-01 yet.",
+      last_error: "Skipped: this property's listings are not connected to ViVi OS yet.",
     });
   });
 });
@@ -323,7 +323,7 @@ describe('prices and stay rules', () => {
 });
 
 describe('full sync', () => {
-  it('queues 500 days for properties V-01 manages, and none for any other', async () => {
+  it('queues 500 days for properties ViVi OS manages, and none for any other', async () => {
     await owner(`update app.ari_outbox set status = 'sent'`);
     const queued = await enqueueFullSync(deps, new Date('2026-10-14T12:00:00Z'));
     expect(queued).toBe(1);
@@ -343,7 +343,7 @@ describe('full sync', () => {
   });
 });
 
-/** A booking revision as Channex would send it for Harbour View Lodge (mapped, run by V-01). */
+/** A booking revision as Channex would send it for Harbour View Lodge (mapped, run by ViVi OS). */
 function revision(patch: Partial<Omit<BookingRevision, 'raw'>> & { id: string }): BookingRevision {
   return fakeRevision({
     bookingId: 'bk-1',
@@ -596,7 +596,7 @@ describe('bringing bookings in', () => {
     expect((await importBookings(deps, op.orgId)).acknowledged).toBe(0);
   });
 
-  it('links a booking V-01 already has under the same channel code, instead of saving it twice', async () => {
+  it('links a booking ViVi OS already has under the same channel code, instead of saving it twice', async () => {
     // As if brought across from Guesty before the listing was linked to Channex.
     await owner(
       `insert into app.reservations (organisation_id, property_id, channel, channel_reference, status, check_in, check_out)
@@ -750,7 +750,7 @@ describe('clean and dirty', () => {
 });
 
 describe('connecting properties to the channel manager', () => {
-  /** A property added in V-01 with no Channex ids yet. */
+  /** A property added in ViVi OS with no Channex ids yet. */
   async function plainProperty(name: string, managedBy: 'v01' | 'guesty' | 'none'): Promise<string> {
     const [row] = await owner<{ id: string }>(
       `insert into app.properties (organisation_id, name, country_code, max_guests, managed_by, city, postcode, address_line1)
@@ -826,7 +826,7 @@ describe('connecting properties to the channel manager', () => {
     expect(await connectProperties(deps)).toEqual({ claimed: 0, done: 0, deferred: 0, failed: 0 });
   });
 
-  it('queues a full sync straight away for a property V-01 already runs', async () => {
+  it('queues a full sync straight away for a property ViVi OS already runs', async () => {
     const studio = await plainProperty('Pier Studio', 'v01');
     await ask(studio);
     await connectProperties(deps);
@@ -991,7 +991,7 @@ describe('the safety net for downtime', () => {
     );
     expect(draining).toEqual({ recovery: 'draining' });
 
-    // Two bookings arrived at Channex while V-01 was away.
+    // Two bookings arrived at Channex while ViVi OS was away.
     provider.feed = [
       revision({
         id: 'gap-1',
@@ -1020,7 +1020,7 @@ describe('the safety net for downtime', () => {
     expect(alerts.sent).toContainEqual(
       expect.objectContaining({
         severity: 'info',
-        title: 'V-01 is back after 40 minutes away',
+        title: 'ViVi OS is back after 40 minutes away',
         detail: '2 booking changes saved before anything was sent to the channels.',
       }),
     );
@@ -1168,7 +1168,7 @@ describe('the nightly cross-check with Channex', () => {
     expect(alerts.sent).toEqual([
       expect.objectContaining({
         severity: 'warning',
-        title: "Channex didn't match V-01 for Check Cottage",
+        title: "Channex didn't match ViVi OS for Check Cottage",
         detail: expect.stringContaining(
           '3 nights differed (price on 2, availability on 1, shortest stay on 1)',
         ),
@@ -1236,7 +1236,7 @@ describe('channel accounts and listing links', () => {
   };
   let airbnbA: string;
   let bookingA: string;
-  /** A property added in V-01 and never connected to Channex. */
+  /** A property added in ViVi OS and never connected to Channex. */
   let unmapped: string;
 
   /** The stand-in forgets between tests; this one knows both connections as Channex still holds them. */

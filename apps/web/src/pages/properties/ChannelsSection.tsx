@@ -45,21 +45,22 @@ function ChannelManager({
     state.status === 'connected' ? (
       <span className="flex flex-col gap-1">
         <StatusDot status="done">
-          Connected to Channex{state.finishedAt ? `, ${when(state.finishedAt)}` : ''}. Its Airbnb, Booking.com
-          and Vrbo listings can be linked to it next.
+          Connected to channel sync{state.finishedAt ? `, ${when(state.finishedAt)}` : ''}. Its Airbnb,
+          Booking.com and Vrbo listings can be linked to it next.
         </StatusDot>
         {state.autoClose === true ? (
           <StatusDot status="done">
-            Channex closes a booked night by itself, so nothing is sold twice even while {V01} is catching up
-            or down. Checked {state.autoCloseCheckedAt ? when(state.autoCloseCheckedAt) : 'today'}.
+            Channel sync closes a booked night by itself, so nothing is sold twice even while {V01} is
+            catching up or down. Checked {state.autoCloseCheckedAt ? when(state.autoCloseCheckedAt) : 'today'}
+            .
           </StatusDot>
         ) : state.autoClose === false ? (
           <StatusDot status="urgent">
-            Channex had stopped closing booked nights itself; the worker is turning it back on.
+            Channel sync had stopped closing booked nights itself; the worker is turning it back on.
           </StatusDot>
         ) : (
           <StatusDot status="pending">
-            Whether Channex closes booked nights itself hasn’t been checked yet; the worker looks daily.
+            Whether channel sync closes booked nights itself hasn’t been checked yet; the worker looks daily.
           </StatusDot>
         )}
         <CrossCheckLine state={state} />
@@ -68,19 +69,19 @@ function ChannelManager({
       <span className="inline-flex items-center gap-2">
         <Spinner size={16} />
         <span>
-          Connecting to Channex, asked for by {state.requestedBy ?? 'the team'}
+          Connecting to channel sync, asked for by {state.requestedBy ?? 'the team'}
           {state.attempts > 1 ? `; attempt ${state.attempts}` : ''}.
           {state.error ? ` Last try: ${state.error}` : ''}
         </span>
       </span>
     ) : state.status === 'failed' ? (
       <StatusDot status="urgent">
-        Couldn’t connect to Channex after {state.attempts} {state.attempts === 1 ? 'try' : 'tries'}
+        Couldn’t connect to channel sync after {state.attempts} {state.attempts === 1 ? 'try' : 'tries'}
         {state.error ? `: ${state.error}` : ''}
       </StatusDot>
     ) : (
       <StatusDot status="neutral">
-        Not in Channex yet. Connecting makes it there; nothing is sent to any channel.
+        Not in channel sync yet. Connecting makes it there; nothing is sent to any channel.
       </StatusDot>
     );
 
@@ -97,7 +98,7 @@ function ChannelManager({
       </div>
       {canManage && (state.status === 'not_connected' || state.status === 'failed') ? (
         <Button variant="primary" disabled={connect.isPending} onClick={() => connect.mutate()}>
-          {state.status === 'failed' ? 'Try again' : 'Connect to Channex'}
+          {state.status === 'failed' ? 'Try again' : 'Connect to channel sync'}
         </Button>
       ) : null}
     </div>
@@ -105,23 +106,23 @@ function ChannelManager({
 }
 
 /**
- * Last night's cross-check: V-01's calendar against what Channex holds for the next 90 nights. A
+ * Last night's cross-check: ViVi OS's calendar against what Channex holds for the next 90 nights. A
  * difference was already sent again; it is shown so a pattern (someone editing in Channex) gets seen.
  */
 function CrossCheckLine({ state }: { state: ChannexState }) {
   if (state.crossCheckError) {
     return (
       <StatusDot status="urgent">
-        Couldn’t check the calendar against Channex {when(state.crossCheckedAt)}: {state.crossCheckError} The
-        worker tries again tonight.
+        Couldn’t check the calendar against channel sync {when(state.crossCheckedAt)}: {state.crossCheckError}{' '}
+        The worker tries again tonight.
       </StatusDot>
     );
   }
   if (state.crossCheckedAt === null || state.crossCheckDifferences === null) {
     return (
       <StatusDot status="pending">
-        The calendar hasn’t been checked against Channex yet; the worker compares the next 90 nights every
-        night.
+        The calendar hasn’t been checked against channel sync yet; the worker compares the next 90 nights
+        every night.
       </StatusDot>
     );
   }
@@ -129,15 +130,15 @@ function CrossCheckLine({ state }: { state: ChannexState }) {
     const n = state.crossCheckDifferences;
     return (
       <StatusDot status="pending">
-        Channex didn’t match {V01} on {n} {n === 1 ? 'night' : 'nights'} when checked{' '}
+        Channel sync didn’t match {V01} on {n} {n === 1 ? 'night' : 'nights'} when checked{' '}
         {when(state.crossCheckedAt)}; {n === 1 ? 'it was' : 'they were'} sent again. If this keeps happening,
-        someone is changing things in Channex or on a channel.
+        someone is changing things in channel sync or on a channel.
       </StatusDot>
     );
   }
   return (
     <StatusDot status="done">
-      Calendar checked against Channex {when(state.crossCheckedAt)}: the next 90 nights match.
+      Calendar checked against channel sync {when(state.crossCheckedAt)}: the next 90 nights match.
     </StatusDot>
   );
 }
@@ -240,8 +241,8 @@ export function ChannelsSection({
         </table>
       </div>
       <p className="mt-4 max-w-[64ch] text-[13px] leading-relaxed text-mist">
-        Channex, which connects {V01} to the channels, doesn't carry photos, descriptions or amenities. Where
-        it says "Set on", copy them from this page into the channel's own editor.
+        Channel sync doesn't carry photos, descriptions or amenities. Where it says "Set on", copy them from
+        this page into the channel's own editor.
       </p>
     </Section>
   );

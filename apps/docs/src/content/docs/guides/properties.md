@@ -15,7 +15,7 @@ description: Adding a home, its listing, photos, rules, prices, custom fields, a
 
 Only the name is required. Your draft is kept in that browser until you add the home. Photos are held until the home exists, then uploaded; a page reload loses them.
 
-Homes can also come across from Guesty. See [Setting up an operator](/start/set-up/).
+Homes can also be brought across from your previous system. See [Setting up an operator](/start/set-up/).
 
 ## The home's page
 
@@ -31,7 +31,7 @@ Under **Parts of the listing**:
 - **Licence**: a licence or registration number, where the law needs one.
 - **Channels**. See [Channels](/guides/channels/).
 
-Photos, descriptions and amenities don't go to the channels automatically. Use the copy buttons to paste them into each channel. Prices, stay rules and free nights do go to the channels once V-01 runs them.
+Photos, descriptions and amenities don't go to the channels automatically. Use the copy buttons to paste them into each channel. Prices, stay rules and free nights do go to the channels once ViVi OS runs them.
 
 **Tags** under the name are your own labels, such as an owner's name or "Sea view". Guests never see them; the Calendar can filter by them.
 
@@ -57,4 +57,4 @@ The **Settings** part at the end of the page shows the short code, area, who run
 
 ## Archiving
 
-**Archive this property** takes the home off every screen and stops anything more being sent for it. Its bookings and history are kept. To bring an archived home back, ask V-01 support.
+**Archive this property** takes the home off every screen and stops anything more being sent for it. Its bookings and history are kept. To bring an archived home back, ask ViVi OS support.

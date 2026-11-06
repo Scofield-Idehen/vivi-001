@@ -1,11 +1,11 @@
 ---
 title: Using the API
-description: How to call V-01's API, sign in, choose a workspace, and read its errors.
+description: How to call ViVi OS's API, sign in, choose a workspace, and read its errors.
 sidebar:
   order: 1
 ---
 
-V-01's own screens use this API, so anything the screens do, the API does. The full list of
+ViVi OS's own screens use this API, so anything the screens do, the API does. The full list of
 endpoints, with what to send and what comes back, is under **API endpoints** in the sidebar. It is
 written from the API's code on every build, so it always matches what is running.
 
@@ -47,11 +47,11 @@ If you'd rather keep your own website's design, it can call the booking website'
 3. `POST /v1/site/{workspace}/quote` with the home, dates and guests gives the price, line by line.
 4. `POST /v1/site/{workspace}/book` with the same plus the guest's name, email and `acceptTerms: true` returns a
    Stripe payment page address. Send the guest there.
-5. Stripe sends the guest back to `/book/{workspace}/done/{bookingId}` on V-01, which confirms the booking.
+5. Stripe sends the guest back to `/book/{workspace}/done/{bookingId}` on ViVi OS, which confirms the booking.
    `GET /v1/site/{workspace}/bookings/{bookingId}` says whether it's `open`, `booked`, `refused` (the nights went
    while they paid; nothing charged) or `expired`.
 
-The price is always worked out again by V-01 when the guest books; a price sent by a website is never
+The price is always worked out again by ViVi OS when the guest books; a price sent by a website is never
 trusted.
 
 ## Errors
@@ -69,6 +69,6 @@ Every error has the same shape, with a stable code to act on and a message a per
 | 403 | Signed in, but the role doesn't allow this. |
 | 404 | Not found in this workspace (or not yours to see). |
 | 409 | It can't be done as things stand: the nights are taken, the booking is cancelled, and so on. |
-| 502 / 503 | A service V-01 relies on (Stripe, Channex) didn't answer, or isn't set up yet. |
+| 502 / 503 | A service ViVi OS relies on (such as payments or the channels) didn't answer, or isn't set up yet. |
 
-Every response carries an `x-request-id`. Quote it when asking V-01 support about a call.
+Every response carries an `x-request-id`. Quote it when asking ViVi OS support about a call.

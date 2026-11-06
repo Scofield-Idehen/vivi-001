@@ -248,7 +248,7 @@ async function listingsOf(tx: Tx, id: string): Promise<PropertyDetail['listings'
 const CONSTRAINT_MESSAGES: Record<string, string> = {
   properties_price_limits: 'The lowest price is above the highest.',
   properties_booking_site_managed:
-    'Guesty still runs this home’s channels, so a booking on the website wouldn’t close its nights on Airbnb or Booking.com. It can go on the website once V-01 runs its channels.',
+    'Guesty still runs this home’s channels, so a booking on the website wouldn’t close its nights on Airbnb or Booking.com. It can go on the website once ViVi OS runs its channels.',
   properties_stay_lengths: 'The shortest stay is longer than the longest.',
   properties_quiet_hours: 'Give quiet hours a start and an end.',
   properties_title_length: 'Keep the title to 50 characters.',
@@ -389,7 +389,7 @@ export function propertyRoutes(
             cleaningFeeMinor: input.cleaningFeeMinor ?? null,
             title: input.title ?? null,
             summary: input.summary ?? null,
-            // Added here, so no channel listings are connected yet. V-01 sends nothing for it until
+            // Added here, so no channel listings are connected yet. ViVi OS sends nothing for it until
             // the move-over step, which the database keeps out of the API's reach.
             managedBy: 'none',
           })

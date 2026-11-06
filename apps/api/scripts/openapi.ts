@@ -67,7 +67,7 @@ const AREAS: [RegExp, string, string][] = [
     'Today and insights',
     'What needs doing, and how the homes are doing.',
   ],
-  [/^\/v1\/console\b/, 'V-01 console', 'V-01 staff only.'],
+  [/^\/v1\/console\b/, 'ViVi OS console', 'ViVi OS staff only.'],
 ];
 const PUBLIC = /^\/v1\/(site|stay|app-brand)\b/;
 

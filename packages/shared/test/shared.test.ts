@@ -94,7 +94,7 @@ describe('permissions', () => {
     expect(can('admin', 'members.manage')).toBe(true);
   });
 
-  it('lets V-01 support read a workspace but never change anything in it, nor see its secrets', () => {
+  it('lets ViVi OS support read a workspace but never change anything in it, nor see its secrets', () => {
     for (const [permission, roles] of Object.entries(PERMISSIONS)) {
       const allowed = (roles as readonly string[]).includes('v01_support');
       expect(allowed, permission).toBe(
@@ -117,7 +117,7 @@ describe('permissions', () => {
     expect(can('operations', 'fields.manage')).toBe(false);
   });
 
-  it('keeps the console to V-01 staff, and support access to owners and support', () => {
+  it('keeps the console to ViVi OS staff, and support access to owners and support', () => {
     expect(canPlatform(null, 'console.read')).toBe(false);
     expect(canPlatform('viewer', 'console.read')).toBe(true);
     expect(canPlatform('viewer', 'support.open')).toBe(false);

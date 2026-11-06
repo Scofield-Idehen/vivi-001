@@ -5,10 +5,10 @@ import { processWebhooks, sweepBookingFeed } from './bookings.ts';
 import type { WorkerDeps } from './deps.ts';
 
 /**
- * The safety net for V-01's own downtime (playbook, Section 8). Two halves:
+ * The safety net for ViVi OS's own downtime (playbook, Section 8). Two halves:
  *
  * 1. Channex closes a booked night by itself on every connected property, so a night is never sold
- *    twice while V-01 is unreachable. The setting is sent when a property is created; this checks
+ *    twice while ViVi OS is unreachable. The setting is sent when a property is created; this checks
  *    it is still on, daily and after every connection, and turns it back on if someone turned it off.
  * 2. When the worker starts after a gap, it saves every booking that arrived meanwhile before a
  *    single price or availability goes out. A stale push would reopen a night booked in the gap.
@@ -149,7 +149,7 @@ export async function recover(deps: WorkerDeps, run: RunStart, maxPasses = 10): 
   const minutes = Math.round(gapSeconds / 60);
   await deps.alerts.send({
     severity: 'info',
-    title: `V-01 is back after ${minutes} minute${minutes === 1 ? '' : 's'} away`,
+    title: `ViVi OS is back after ${minutes} minute${minutes === 1 ? '' : 's'} away`,
     detail: `${drained} booking change${drained === 1 ? '' : 's'} saved before anything was sent to the channels.`,
   });
   deps.log.info({ gapSeconds, drained, passes }, 'Recovered: drained before pushing');

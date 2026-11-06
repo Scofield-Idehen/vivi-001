@@ -1,7 +1,7 @@
 import { StripeGateway, stripeForm } from '@v01/integrations';
 
 /**
- * pnpm stripe:check — proves the Stripe key works, in test mode only, without touching V-01's
+ * pnpm stripe:check — proves the Stripe key works, in test mode only, without touching ViVi OS's
  * data: makes a payment page, then holds a £1 deposit on Stripe's test card, keeps 50p and
  * checks the rest went back; holds another and releases it. Prints statuses only.
  */
@@ -34,7 +34,7 @@ const page = await gateway.createCheckout({
   kind: 'payment',
   amountMinor: 100,
   currency: 'GBP',
-  description: 'V-01 check (test)',
+  description: 'ViVi OS check (test)',
   successUrl: 'https://example.com/paid',
   cancelUrl: 'https://example.com/paid?not=1',
   metadata: { v01_check: 'yes' },
@@ -54,7 +54,7 @@ const hold = (amount: number) =>
     payment_method: 'pm_card_visa',
     payment_method_types: ['card'],
     confirm: true,
-    description: 'V-01 check deposit (test)',
+    description: 'ViVi OS check deposit (test)',
   });
 const d1 = await hold(100);
 results.depositHeld = `${d1.status} (${d1.amount_capturable}p held)`;

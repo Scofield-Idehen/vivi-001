@@ -1,12 +1,12 @@
 import { type Me, SUPPORT_ROLE, type WorkspaceRole } from '@v01/shared';
 import { createContext, type ReactNode, useContext, useMemo, useState } from 'react';
 
-/** A workspace the person can open: as a member, or as V-01 staff on an open support grant. */
+/** A workspace the person can open: as a member, or as ViVi OS staff on an open support grant. */
 export interface WorkspaceEntry {
   organisationId: string;
   organisationName: string;
   role: WorkspaceRole;
-  /** Set for V-01 support access: read-only, and it ends at `expiresAt`. */
+  /** Set for ViVi OS support access: read-only, and it ends at `expiresAt`. */
   support: { grantId: string; expiresAt: string } | null;
 }
 

@@ -41,9 +41,9 @@ export function slackRoutes(app: FastifyInstance, deps: { scope: RequestScope; s
         throw new HttpError(
           404,
           'not_on_slack',
-          `No one in your Slack uses ${me?.email ?? 'your email'}. Job messages find people by the email they sign in to V-01 with.`,
+          `No one in your Slack uses ${me?.email ?? 'your email'}. Job messages find people by the email they sign in to ViVi OS with.`,
         );
-      await deps.slack.dm(id, 'This is V-01. Job messages for you will arrive here.');
+      await deps.slack.dm(id, 'This is ViVi OS. Job messages for you will arrive here.');
       return { connected: true, team: await deps.slack.team(), error: null };
     }),
   );

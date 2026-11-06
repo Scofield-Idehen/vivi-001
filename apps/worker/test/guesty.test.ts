@@ -288,7 +288,7 @@ function stubGuesty(
   return { client, paths };
 }
 
-describe('Guesty words into V-01 words', () => {
+describe('Guesty words into ViVi OS words', () => {
   it('reads a booking’s price from the total, else the subtotal, else the stay and cleaning', () => {
     expect(totalOf({ totalPrice: 540, subTotalPrice: 500 })).toBe(540);
     expect(totalOf({ subTotalPrice: 500, fareAccommodation: 420, fareCleaning: 80 })).toBe(500);
@@ -622,7 +622,7 @@ describe('importing an account', () => {
     expect(box.open(values[0]?.secret as Buffer)).toBe('4321');
   });
 
-  it('keeps the account map: one V-01 channel account per account Guesty’s listings sit on', async () => {
+  it('keeps the account map: one ViVi OS channel account per account Guesty’s listings sit on', async () => {
     const accounts = await owner<{ label: string; channel: string; status: string; key: string }>(
       `select a.label, a.channel, a.status, g.account_key as key from app.guesty_accounts g
          join app.channel_accounts a on a.id = g.channel_account_id where g.organisation_id = $1 order by a.label`,

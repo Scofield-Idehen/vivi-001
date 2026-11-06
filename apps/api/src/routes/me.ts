@@ -10,7 +10,7 @@ import { HttpError } from '../errors.ts';
 
 /**
  * The web app calls this first after sign-in. It records the person, turns any invitations
- * for their email into memberships, links them to V-01 staff if their email is on the staff
+ * for their email into memberships, links them to ViVi OS staff if their email is on the staff
  * list, and returns the operators they can open (as members, or on an open support grant).
  */
 export function meRoutes(app: FastifyInstance, deps: { db: ApiDatabase; scope: RequestScope }) {

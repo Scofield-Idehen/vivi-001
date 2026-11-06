@@ -3,7 +3,7 @@ import { CHANNELS, MEMBER_ROLES } from './enums.ts';
 import { Uuid } from './schemas.ts';
 
 /**
- * The V-01 console: what V-01 staff see across every operator.
+ * The ViVi OS console: what ViVi OS staff see across every operator.
  * Totals, statuses and operator metadata only. Guests' details never appear here;
  * reading an operator's own data needs a support grant (see SupportAccessStartSchema).
  */
@@ -22,11 +22,11 @@ export const OPERATOR_STATUS_LABELS: Record<OperatorStatus, string> = {
 
 export const ConsoleOverviewSchema = z.object({
   operators: Count,
-  /** Operators with at least one property whose channels V-01 now runs. */
+  /** Operators with at least one property whose channels ViVi OS now runs. */
   operatorsLive: Count,
   properties: Count,
   propertiesOnV01: Count,
-  /** Still on Guesty. The rest of `properties` were added in V-01 and aren't connected yet. */
+  /** Still on Guesty. The rest of `properties` were added in ViVi OS and aren't connected yet. */
   propertiesOnGuesty: Count,
   arrivalsToday: Count,
   departuresToday: Count,
@@ -49,7 +49,7 @@ export const ConsoleOperatorSchema = z.object({
   status: z.enum(OPERATOR_STATUSES),
   properties: Count,
   propertiesOnV01: Count,
-  /** Still on Guesty. The rest of `properties` were added in V-01 and aren't connected yet. */
+  /** Still on Guesty. The rest of `properties` were added in ViVi OS and aren't connected yet. */
   propertiesOnGuesty: Count,
   members: Count,
   channelAccounts: Count,
@@ -158,7 +158,7 @@ export const ConsoleSyncSchema = z.object({
 });
 export type ConsoleSync = z.infer<typeof ConsoleSyncSchema>;
 
-/** What an operator sees about V-01 support visits to their own workspace. */
+/** What an operator sees about ViVi OS support visits to their own workspace. */
 export const SupportVisitSchema = z.object({
   id: Uuid,
   staffEmail: z.string(),

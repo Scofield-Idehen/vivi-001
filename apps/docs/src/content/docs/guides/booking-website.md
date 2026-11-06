@@ -3,7 +3,7 @@ title: Booking website
 description: Your own site where guests search your homes, choose dates and pay by card.
 ---
 
-The booking website is where guests book your homes directly, without Airbnb or Booking.com. It replaces Guesty's booking engine and works the same way for guests: the same search, the same price box and the same details form.
+The booking website is where guests book your homes directly, without Airbnb or Booking.com. Guests search, see the full price and fill in their details in one place.
 
 ## What guests see
 
@@ -13,9 +13,9 @@ The booking website is where guests book your homes directly, without Airbnb or 
 4. **Your details**: name, email, phone (optional), anything you should know, and the **Booking terms**.
 5. Stripe's secure page to pay.
 
-The guest's card is authorised on Stripe's page and charged once V-01 has saved the booking. If the nights were booked on a channel while the guest was paying, the hold is let go and the guest is told. Nobody pays for a stay they can't have. The price is always worked out again when the guest pays; the figure on the page is never trusted. A payment page lasts 30 minutes.
+The guest's card is authorised on Stripe's page and charged once ViVi OS has saved the booking. If the nights were booked on a channel while the guest was paying, the hold is let go and the guest is told. Nobody pays for a stay they can't have. The price is always worked out again when the guest pays; the figure on the page is never trusted. A payment page lasts 30 minutes.
 
-Guesty saved the card and charged it 7 days before arrival. V-01 takes the payment at booking, which is simpler and doesn't fail later on an expired card.
+ViVi OS takes the payment at booking, rather than saving the card to charge later, so it never fails later on an expired card.
 
 ## What a website booking becomes
 
@@ -40,12 +40,12 @@ In **Workspace → Booking website** (admin):
 
 Then, on each home's **Settings**, turn on **Show and take bookings on the booking website**.
 
-Only homes whose channels V-01 runs, or that have no channels, can go on the site. A website booking must close those nights on Airbnb and Booking.com, and that only happens once V-01 runs the channels. Homes still run by Guesty say so. See [Channels](/guides/channels/).
+Only homes whose channels ViVi OS runs, or that have no channels, can go on the site. A website booking must close those nights on Airbnb and Booking.com, and that only happens once ViVi OS runs the channels. Homes still run by your previous system say so. See [Channels](/guides/channels/).
 
 While Stripe is in test mode, the site shows a line saying payments use test cards and no real money moves.
 
 ## Not yet
 
 - The site on its own address (such as book.vivistays.com). For now it is under the app's address, at /book/ followed by your workspace's short name.
-- A confirmation email from V-01. Stripe's receipt is sent meanwhile.
+- A confirmation email from ViVi OS. Stripe's receipt is sent meanwhile.
 - Discount codes.

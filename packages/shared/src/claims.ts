@@ -7,7 +7,7 @@ import { IsoDate, Uuid } from './schemas.ts';
 
 /**
  * Claims (design roadmap Phase 2, built 30 Oct 2026): one per booking, for damage a guest left.
- * V-01 keeps the case together (what was damaged and what it costs, the photos from the team's
+ * ViVi OS keeps the case together (what was damaged and what it costs, the photos from the team's
  * jobs before and after the stay, receipts and invoices kept as uploaded) and counts down to the
  * deadline. It is filed by a person, on the channel or with the guest; nothing is sent from here.
  *

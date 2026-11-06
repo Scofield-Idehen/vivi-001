@@ -17,7 +17,7 @@ import {
 } from '@v01/shared';
 
 /**
- * Guesty's words into V-01's, with nothing invented: a value Guesty doesn't give stays null, and
+ * Guesty's words into ViVi OS's, with nothing invented: a value Guesty doesn't give stays null, and
  * anything that can't be mapped is reported rather than dropped quietly. Pure functions, tested on
  * their own; the import (import.ts) does the database work.
  */
@@ -28,7 +28,7 @@ export interface OrgDefaults {
   timeZone: string;
 }
 
-/** Guesty's channel names (its "platform" values) as V-01 names them. */
+/** Guesty's channel names (its "platform" values) as ViVi OS names them. */
 export function channelOf(platform: string | null | undefined): Channel | null {
   const p = (platform ?? '').toLowerCase().replace(/[^a-z]/g, '');
   if (p === 'airbnb' || p === 'airbnb2') return 'airbnb';
@@ -77,7 +77,7 @@ export function countryCodeOf(country: string | null | undefined): string | null
   return COUNTRY_CODES[trimmed.toLowerCase()] ?? null;
 }
 
-/** Guesty's property types (Airbnb's words) as V-01's shorter list. */
+/** Guesty's property types (Airbnb's words) as ViVi OS's shorter list. */
 export function propertyTypeOf(type: string | null | undefined): PropertyType | null {
   const t = (type ?? '').toLowerCase();
   if (!t) return null;
@@ -91,7 +91,7 @@ export function propertyTypeOf(type: string | null | undefined): PropertyType | 
   return 'other';
 }
 
-/** Guesty's room types (Airbnb's words) as V-01's. */
+/** Guesty's room types (Airbnb's words) as ViVi OS's. */
 export function spaceTypeOf(
   roomType: string | null | undefined,
 ): 'entire_place' | 'private_room' | 'shared_room' {
@@ -102,7 +102,7 @@ export function spaceTypeOf(
 }
 
 /**
- * Guesty keeps amenities as Airbnb's names. Each pattern below names the V-01 code it means; a
+ * Guesty keeps amenities as Airbnb's names. Each pattern below names the ViVi OS code it means; a
  * name no pattern matches is reported so the list can grow.
  */
 const AMENITY_PATTERNS: [RegExp, string][] = [
@@ -199,7 +199,7 @@ const AMENITY_PATTERNS: [RegExp, string][] = [
 
 const KNOWN_CODES = new Set(AMENITIES.map((a) => a.code));
 
-/** Guesty amenity names → V-01 codes, and the names nothing matched. */
+/** Guesty amenity names → ViVi OS codes, and the names nothing matched. */
 export function amenityCodes(names: readonly string[] | null | undefined): {
   codes: string[];
   unknown: string[];
@@ -261,7 +261,7 @@ export interface MappedProperty {
     beds: number | null;
     bathrooms: number | null;
     maxGuests: number;
-    /** Left out when Guesty gives none, so the property keeps V-01's usual time. */
+    /** Left out when Guesty gives none, so the property keeps ViVi OS's usual time. */
     checkInTime?: string;
     checkOutTime?: string;
     minNights: number;
@@ -284,7 +284,7 @@ export interface MappedProperty {
   warnings: string[];
 }
 
-/** A V-01 property from a Guesty listing. */
+/** A ViVi OS property from a Guesty listing. */
 export function propertyFromListing(listing: GuestyListing, org: OrgDefaults): MappedProperty {
   const warnings: string[] = [];
   const currency = listing.prices?.currency?.toUpperCase() || org.currency;
@@ -420,7 +420,7 @@ export interface MappedReservation {
   guest: { fullName: string | null; email: string | null; phone: string | null } | null;
 }
 
-/** Guesty's reservation statuses as V-01's five. Stays that have ended ("closed") were confirmed. */
+/** Guesty's reservation statuses as ViVi OS's five. Stays that have ended ("closed") were confirmed. */
 export function reservationStatusOf(status: string | null | undefined): ReservationStatus | null {
   switch ((status ?? '').toLowerCase()) {
     case 'confirmed':
@@ -456,13 +456,13 @@ export function totalOf(money: GuestyReservation['money']): number | null {
   return positive(money.totalPrice) ?? positive(money.subTotalPrice) ?? (parts > 0 ? parts : null);
 }
 
-/** A V-01 booking from a Guesty reservation, or why it can't be one. */
+/** A ViVi OS booking from a Guesty reservation, or why it can't be one. */
 export function reservationFrom(
   r: GuestyReservation,
   org: OrgDefaults,
 ): { ok: true; value: MappedReservation } | { ok: false; reason: string } {
   const status = reservationStatusOf(r.status);
-  if (!status) return { ok: false, reason: `status "${r.status}" has no place in V-01` };
+  if (!status) return { ok: false, reason: `status "${r.status}" has no place in ViVi OS` };
   const checkIn = r.checkInDateLocalized ?? r.checkIn?.slice(0, 10) ?? null;
   const checkOut = r.checkOutDateLocalized ?? r.checkOut?.slice(0, 10) ?? null;
   if (!checkIn || !checkOut || !DATE.test(checkIn) || !DATE.test(checkOut) || checkOut <= checkIn) {
@@ -590,7 +590,7 @@ export function plainText(html: string): string {
 }
 
 /**
- * One message from Guesty's Inbox as a V-01 message, or null for what isn't a conversation: Guesty's
+ * One message from Guesty's Inbox as a ViVi OS message, or null for what isn't a conversation: Guesty's
  * own log lines and the team's private notes. Where the message came by isn't always said, so the
  * booking's channel stands in (a direct booking's falls back to email).
  */

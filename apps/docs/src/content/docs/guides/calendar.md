@@ -41,7 +41,7 @@ Things to know:
 - A price must be within the home's lowest and highest price.
 - Homes priced by PriceLabs keep PriceLabs' prices; you can still change stay rules.
 - Nights that have passed can't be changed.
-- For homes still run by Guesty, changes stay in V-01 and don't reach the channels.
+- For homes still run by your previous system, changes stay in ViVi OS and don't reach the channels.
 
 If your role can't change the calendar, you see it read-only.
 

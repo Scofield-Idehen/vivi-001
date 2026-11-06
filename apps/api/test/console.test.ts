@@ -115,18 +115,18 @@ afterAll(async () => {
 });
 
 describe('who sees the console', () => {
-  it('tells the web app an operator admin is not V-01 staff', async () => {
+  it('tells the web app an operator admin is not ViVi OS staff', async () => {
     const { status, body } = await call('GET', '/v1/me', 'adminA');
     expect(status).toBe(200);
     expect(body).toMatchObject({ platformRole: null, supportAccess: [] });
   });
 
-  it('recognises V-01 staff on their first sign-in', async () => {
+  it('recognises ViVi OS staff on their first sign-in', async () => {
     const { body } = await call('GET', '/v1/me', 'owner');
     expect(body).toMatchObject({ platformRole: 'owner', memberships: [], supportAccess: [] });
   });
 
-  it('keeps every console route to V-01 staff', async () => {
+  it('keeps every console route to ViVi OS staff', async () => {
     for (const url of [
       '/v1/console/overview',
       '/v1/console/operators',
@@ -206,7 +206,7 @@ describe('console reads', () => {
 describe('support access', () => {
   let grantId: string;
 
-  it('is needed before V-01 staff can open a workspace they are not a member of', async () => {
+  it('is needed before ViVi OS staff can open a workspace they are not a member of', async () => {
     const { status, body } = await call('GET', '/v1/properties', 'support', { org: a.orgId });
     expect(status).toBe(403);
     expect(errorCode(body)).toBe('not_a_member');
@@ -247,7 +247,7 @@ describe('support access', () => {
     ]);
   });
 
-  it('lets them read that workspace, as V-01 support', async () => {
+  it('lets them read that workspace, as ViVi OS support', async () => {
     const properties = await call('GET', '/v1/properties', 'support', { org: a.orgId });
     expect(properties.status).toBe(200);
     expect((properties.body.properties as { name: string }[]).map((p) => p.name)).toEqual([

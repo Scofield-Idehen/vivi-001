@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
 
 /**
- * TTLock's cloud API (euopen.ttlock.com, "Open platform API"): enough for V-01 to run door codes
- * the way Guesty's Locks Manager does. One developer application for all of V-01 (client id and
+ * TTLock's cloud API (euopen.ttlock.com, "Open platform API"): enough for ViVi OS to run door codes
+ * the way Guesty's Locks Manager does. One developer application for all of ViVi OS (client id and
  * secret in the API's and the worker's settings); each operator signs in once with the TTLock
- * *app* account that owns its locks, and V-01 keeps the token that sign-in returns, never the
+ * *app* account that owns its locks, and ViVi OS keeps the token that sign-in returns, never the
  * password.
  *
  * TTLock's quirks, which shape this client:
@@ -39,14 +39,14 @@ export interface ProviderGateway {
 
 export interface CodeWindow {
   lockId: string;
-  /** What shows against the code in the TTLock app: "V-01 · Claire Dubois". */
+  /** What shows against the code in the TTLock app: "ViVi OS · Claire Dubois". */
   name: string;
   code: string;
   startsAt: Date;
   endsAt: Date;
 }
 
-/** What V-01 needs from a lock maker; TTLock now, others behind the same shape later. */
+/** What ViVi OS needs from a lock maker; TTLock now, others behind the same shape later. */
 export interface LockProvider {
   readonly name: string;
   signIn(username: string, password: string): Promise<LockToken>;

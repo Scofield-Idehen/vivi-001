@@ -112,7 +112,7 @@ export const messages = app.table(
       .notNull()
       .references(() => messageThreads.id, { onDelete: 'cascade' }),
     direction: text('direction').notNull(),
-    /** A site's chat (airbnb, booking_com, vrbo, expedia), or email or sms from V-01. */
+    /** A site's chat (airbnb, booking_com, vrbo, expedia), or email or sms from ViVi OS. */
     via: text('via').notNull(),
     body: text('body').notNull(),
     /** received | queued | sent | waiting | failed. */

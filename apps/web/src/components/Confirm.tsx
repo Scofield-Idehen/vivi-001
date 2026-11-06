@@ -10,7 +10,7 @@ import {
 } from 'react';
 
 /**
- * V-01's own "are you sure?" (1 Nov 2026), in place of the browser's confirm box, which shows the
+ * ViVi OS's own "are you sure?" (1 Nov 2026), in place of the browser's confirm box, which shows the
  * web address and its own OK and Cancel. On a laptop it is a small box in the middle of the page;
  * on a phone it rises from the bottom with two full-width buttons in reach of a thumb. The button
  * names the action ("Finalise", "Remove"), never "OK". Escape, Cancel or a tap outside says no.

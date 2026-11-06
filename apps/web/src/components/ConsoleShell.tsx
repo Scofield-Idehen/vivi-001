@@ -93,7 +93,7 @@ function ConsoleFooter({ onNavigate }: { onNavigate?: () => void }) {
   const { session } = useSession();
   const reset = useResetSampleData();
   const role = useMe().data?.platformRole;
-  const roleText = role ? `V-01 ${PLATFORM_ROLE_LABELS[role].toLowerCase()}` : '';
+  const roleText = role ? `ViVi OS ${PLATFORM_ROLE_LABELS[role].toLowerCase()}` : '';
 
   return (
     <RailFooter>
@@ -105,13 +105,13 @@ function ConsoleFooter({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-/** The console's name at the top of the sidebar: "V-01" in the closed rail, in full once open. */
+/** The console's name at the top of the sidebar: "ViVi OS" in the closed rail, in full once open. */
 function ConsoleHeader() {
   return (
     <RailMark
       small={
         <span aria-hidden className="text-[13px] font-semibold tracking-[0.06em] text-canvas">
-          V-01
+          ViVi OS
         </span>
       }
       full={<ConsoleMark />}
@@ -120,7 +120,7 @@ function ConsoleHeader() {
 }
 
 /**
- * V-01's own console, above every operator. The dark teal sidebar keeps it unmistakable
+ * ViVi OS's own console, above every operator. The dark teal sidebar keeps it unmistakable
  * from an operator's workspace, which has a light one.
  */
 export function ConsoleShell() {

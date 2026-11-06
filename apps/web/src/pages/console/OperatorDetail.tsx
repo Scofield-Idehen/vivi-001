@@ -151,7 +151,7 @@ export function ConsoleOperatorDetail() {
           <SectionHeading id="team">Team</SectionHeading>
           {team === null ? (
             <p className="border-y border-hairline py-3 text-[14px] text-slate">
-              Names and emails are shown to V-01 owners and support only.
+              Names and emails are shown to ViVi OS owners and support only.
             </p>
           ) : team.length === 0 ? (
             <p className="border-y border-hairline py-3 text-[14px] text-slate">
@@ -185,7 +185,7 @@ export function ConsoleOperatorDetail() {
       <section aria-labelledby="support" className="mt-10">
         <SectionHeading id="support">Support access</SectionHeading>
         <p className="mb-3 max-w-[70ch] text-[13.5px] leading-relaxed text-slate">
-          V-01 staff can open this workspace read-only, for up to four hours, with a reason. {op.name} sees
+          ViVi OS staff can open this workspace read-only, for up to four hours, with a reason. {op.name} sees
           every visit on their Workspace page.
         </p>
         {support.length === 0 ? (

@@ -2,7 +2,7 @@
  * Slack direct messages to the team (2 Nov 2026): a cleaner or repairer hears about a job where they
  * already are. One Slack app (a bot) installed in the operator's Slack, with chat:write,
  * im:write and users:read.email; its bot token (xoxb-…) lives only in GitHub secrets. People are
- * found by the email they sign in to V-01 with, so nothing extra is kept about them.
+ * found by the email they sign in to ViVi OS with, so nothing extra is kept about them.
  *
  * Behind an interface so tests and the demo use the stand-in.
  */

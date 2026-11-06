@@ -203,7 +203,7 @@ describe('door locks', () => {
   it('warns on Today about a low battery and a lost sign-in', async () => {
     await owner(`update app.locks set battery = 12 where name = 'Front door'`);
     await owner(
-      `update app.lock_accounts set status = 'error', last_error = 'TTLock refused V-01’s sign-in'`,
+      `update app.lock_accounts set status = 'error', last_error = 'TTLock refused ViVi OS’s sign-in'`,
     );
     const today = await call('GET', '/v1/today', { as: asA() });
     const ids = today.body.attention.map((x: { id: string }) => x.id);

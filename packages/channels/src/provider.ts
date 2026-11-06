@@ -60,7 +60,7 @@ export interface PushResult {
 
 export type RevisionStatus = 'new' | 'modified' | 'cancelled';
 
-/** Where a booking came from, as V-01 names channels. Any other source comes in as direct. */
+/** Where a booking came from, as ViVi OS names channels. Any other source comes in as direct. */
 export type BookingChannel = 'airbnb' | 'booking_com' | 'vrbo' | 'expedia' | 'direct';
 
 export interface BookingRevision {
@@ -115,7 +115,7 @@ export interface ChannelProvider {
   /**
    * Makes sure the channel manager closes a booked night by itself (Channex's availability
    * auto-update settings), turning it on if someone turned it off. This is the safety net while
-   * V-01 is down: a night is never sold twice in the gap. Says whether it was already on.
+   * ViVi OS is down: a night is never sold twice in the gap. Says whether it was already on.
    */
   ensureAutoClose(externalPropertyId: string): Promise<{ wasOn: boolean }>;
   /**
@@ -146,7 +146,7 @@ export interface ChannelProvider {
   /**
    * Reads back what the channel manager holds for a property, night by night, across
    * [dateFrom, dateTo]: the availability and the prices and stay rules it would send to the channels.
-   * The nightly cross-check compares this with V-01's own calendar and re-sends any night that differs.
+   * The nightly cross-check compares this with ViVi OS's own calendar and re-sends any night that differs.
    */
   fetchInventory(ref: ExternalPropertyRef, dateFrom: string, dateTo: string): Promise<ChannelNight[]>;
 }

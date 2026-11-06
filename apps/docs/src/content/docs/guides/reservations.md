@@ -15,7 +15,7 @@ You can change:
 - **Times for this stay**: check-in from and check-out by, if they differ from the home's usual times
 - notes for the team, which guests and channels never see
 
-The dates, party size and price of a channel booking can't be changed here. Change them on the channel; the channel tells V-01. If a channel later sends new guest details they replace yours, but a detail it doesn't send (Airbnb shares no email address) keeps what you typed.
+The dates, party size and price of a channel booking can't be changed here. Change them on the channel; the channel tells ViVi OS. If a channel later sends new guest details they replace yours, but a detail it doesn't send (Airbnb shares no email address) keeps what you typed.
 
 ## Making a booking
 
@@ -34,8 +34,8 @@ Use **Add a charge**, **Record a payment** and **Record a refund**. Admins, oper
 
 ## Cancelling
 
-- **A direct booking**: **Cancel booking**, give a reason, then confirm. The nights are free at once. V-01 keeps the reason and who cancelled it.
-- **A channel booking**: cancel it on the channel. The channel tells V-01 and the nights are freed. V-01 won't let you cancel it here, so the two never disagree.
+- **A direct booking**: **Cancel booking**, give a reason, then confirm. The nights are free at once. ViVi OS keeps the reason and who cancelled it.
+- **A channel booking**: cancel it on the channel. The channel tells ViVi OS and the nights are freed. ViVi OS won't let you cancel it here, so the two never disagree.
 
 A cancellation also removes the open clean for that stay and takes the door code off the lock.
 

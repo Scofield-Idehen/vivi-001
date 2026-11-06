@@ -1,6 +1,6 @@
 name: Guesty import
 
-# Brings an operator's Guesty account into V-01 from GitHub's servers, so a slow or patchy office
+# Brings an operator's Guesty account into ViVi OS from GitHub's servers, so a slow or patchy office
 # connection doesn't matter. Run it from Actions → Guesty import → Run workflow. "Rehearse" (the
 # default) does everything and keeps nothing; untick it to import for real. Uses the worker's
 # settings from the WORKER_ENV secret (the worker's .env: DATABASE_URL, GUESTY_CLIENT_ID,
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       org:
-        description: The operator's slug in V-01
+        description: The operator's slug in ViVi OS
         default: vivistays
         required: true
       rehearse:

@@ -107,7 +107,7 @@ export async function saveRevision(
   let [existing] = link
     ? await tx.select().from(reservations).where(eq(reservations.id, link.reservationId))
     : [];
-  // A booking V-01 already has under the channel's own code (brought across from Guesty, say) is the
+  // A booking ViVi OS already has under the channel's own code (brought across from Guesty, say) is the
   // same booking: link it rather than save it twice.
   if (!existing && revision.otaReservationCode) {
     [existing] = await tx

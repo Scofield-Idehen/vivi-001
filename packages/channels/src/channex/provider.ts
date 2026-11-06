@@ -22,7 +22,7 @@ import { ChannexClient, type ChannexConfig, type ChannexEnvelope } from './clien
 
 /** The id Channex gave something it just created. */
 /**
- * Channex closes a night itself the moment a booking arrives, so it is never sold twice while V-01
+ * Channex closes a night itself the moment a booking arrives, so it is never sold twice while ViVi OS
  * is catching up, or down (recovery runbook). These are checked again after every connection and
  * daily, in case someone turned them off in Channex.
  */
@@ -33,7 +33,7 @@ const AUTO_CLOSE_SETTINGS = {
 } as const;
 const AUTO_CLOSE_KEYS = Object.keys(AUTO_CLOSE_SETTINGS) as (keyof typeof AUTO_CLOSE_SETTINGS)[];
 
-/** V-01's cancellation policies in Airbnb's words. "Firm" is Airbnb's own name; the rest map by meaning. */
+/** ViVi OS's cancellation policies in Airbnb's words. "Firm" is Airbnb's own name; the rest map by meaning. */
 const AIRBNB_CANCELLATION: Record<AirbnbListingSettings['cancellationPolicy'], string> = {
   flexible: 'flexible',
   moderate: 'moderate',
@@ -170,7 +170,7 @@ export class ChannexProvider implements ChannelProvider {
         ...(setup.postcode ? { zip_code: setup.postcode } : {}),
         settings: {
           ...AUTO_CLOSE_SETTINGS,
-          // V-01's minimum stay applies to the night a guest arrives.
+          // ViVi OS's minimum stay applies to the night a guest arrives.
           min_stay_type: 'arrival',
         },
       },
@@ -460,7 +460,7 @@ interface RevisionResource {
   };
 }
 
-/** Channex's names for the channels, squashed to letters, mapped to V-01's. */
+/** Channex's names for the channels, squashed to letters, mapped to ViVi OS's. */
 const CHANNELS: Record<string, BookingChannel> = {
   airbnb: 'airbnb',
   bookingcom: 'booking_com',

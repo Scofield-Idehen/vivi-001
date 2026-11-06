@@ -17,7 +17,7 @@ export interface OrgContext {
   orgId: string;
   userId: string;
   role: WorkspaceRole;
-  /** Set when a V-01 staff member is here on a support grant: read-only, and every request logged. */
+  /** Set when a ViVi OS staff member is here on a support grant: read-only, and every request logged. */
   supportGrantId: string | null;
 }
 
@@ -50,7 +50,7 @@ export class RequestScope {
    * person belongs to it and their role allows `permission`. Row-level security in
    * Postgres also enforces the operator boundary, so a mistake here cannot leak data.
    *
-   * V-01 staff who are not members get in only on an open support grant: read-only,
+   * ViVi OS staff who are not members get in only on an open support grant: read-only,
    * time-limited, and every request (allowed or refused) is logged where the operator can see it.
    */
   async inOrg<T>(
@@ -90,7 +90,7 @@ export class RequestScope {
   }
 
   /**
-   * Runs `fn` for a V-01 staff member whose role allows `permission`. The console functions in
+   * Runs `fn` for a ViVi OS staff member whose role allows `permission`. The console functions in
    * the database check the role again, so a route that forgets to ask here still gets nothing.
    */
   async asStaff<T>(
@@ -102,9 +102,9 @@ export class RequestScope {
     return this.db.withUser(user.id, async (tx) => {
       const result = await tx.execute(sql`select app.platform_role() as role`);
       const role = (result.rows[0]?.role as PlatformRole | null | undefined) ?? null;
-      if (!role) throw new HttpError(403, 'not_platform_staff', 'This area is for V-01 staff.');
+      if (!role) throw new HttpError(403, 'not_platform_staff', 'This area is for ViVi OS staff.');
       if (!canPlatform(role, permission)) {
-        throw new HttpError(403, 'not_allowed', 'Your V-01 role does not allow this.');
+        throw new HttpError(403, 'not_allowed', 'Your ViVi OS role does not allow this.');
       }
       return fn(tx, { userId: user.id, email: user.email, role });
     });

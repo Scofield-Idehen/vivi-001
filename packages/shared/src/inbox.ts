@@ -5,7 +5,7 @@ import { CHANNELS, RESERVATION_STATUSES } from './enums.ts';
  * The Inbox (design roadmap, Phase 2, D2): one thread per booking, whichever site the guest booked
  * on. A guest on Airbnb or Booking.com keeps talking inside that site's chat; their messages come
  * into the thread through Channex and a reply goes back the same way, so the guest never notices.
- * A direct guest is reached by email or text from V-01 itself. Automatic messages (a confirmation,
+ * A direct guest is reached by email or text from ViVi OS itself. Automatic messages (a confirmation,
  * the day before arrival with the stay link, the check-out reminder) are templates sent into the
  * same threads by the worker.
  */
@@ -15,7 +15,7 @@ const Timestamp = z.string();
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'A date like 2026-11-05');
 const Clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'A time like 10:00');
 
-/** The way a message travelled: a site's own chat (through Channex), or email or a text from V-01. */
+/** The way a message travelled: a site's own chat (through Channex), or email or a text from ViVi OS. */
 export const MESSAGE_VIAS = ['airbnb', 'booking_com', 'vrbo', 'expedia', 'email', 'sms'] as const;
 export type MessageVia = (typeof MESSAGE_VIAS)[number];
 

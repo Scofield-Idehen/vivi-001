@@ -123,12 +123,12 @@ export const channexMappings = app.table(
     /**
      * Whether Channex closes a booked night itself (its availability auto-update settings), as last
      * checked. Null until the worker has looked. This is what keeps a night from being sold twice
-     * while V-01 is down or catching up.
+     * while ViVi OS is down or catching up.
      */
     autoClose: boolean('auto_close'),
     autoCloseCheckedAt: timestamp('auto_close_checked_at', { withTimezone: true, mode: 'string' }),
     /**
-     * The nightly cross-check: when V-01's calendar was last compared with what Channex holds for the
+     * The nightly cross-check: when ViVi OS's calendar was last compared with what Channex holds for the
      * nights ahead, how many nights differed (null when the check could not be made), and why it
      * couldn't. A night that differed is sent again straight away; the count is what the team sees.
      */

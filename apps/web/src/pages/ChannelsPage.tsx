@@ -33,7 +33,7 @@ function ConnectLink({ url }: { url: string }) {
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-linen px-3.5 py-2.5 text-[13.5px]">
       <span className="text-slate">
-        Whoever signs in to this account opens this link and approves Channex:
+        Whoever signs in to this account opens this link and approves the connection:
       </span>
       <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 action">
         Open the link <IconExternalLink size={14} stroke={1.75} aria-hidden />
@@ -73,9 +73,9 @@ function Account({ a, orgId, canManage }: { a: ChannelAccount; orgId: string; ca
         <Spinner size={14} />
         {a.connection?.channexChannelId
           ? a.channel === 'booking_com'
-            ? 'Made in Channex; waiting for Booking.com to approve the connection.'
-            : "Made in Channex; waiting for the account's owner to approve it."
-          : 'Asked for; the worker is making the connection in Channex.'}
+            ? 'Made; waiting for Booking.com to approve the connection.'
+            : "Made; waiting for the account's owner to approve it."
+          : 'Asked for; the worker is making the connection.'}
       </span>
     ) : a.status === 'error' ? (
       <StatusDot status="urgent">
@@ -160,7 +160,7 @@ function Account({ a, orgId, canManage }: { a: ChannelAccount; orgId: string; ca
             <Notice tone="urgent">{explain(listings.error)}</Notice>
           ) : listings.data?.listings.length === 0 ? (
             <p className="text-[13.5px] text-slate">
-              Channex sees no listings on this account yet. The list refreshes hourly.
+              Channel sync sees no listings on this account yet. The list refreshes hourly.
             </p>
           ) : (
             <ul className="divide-y divide-hairline">
@@ -387,7 +387,7 @@ export function ChannelsPage() {
 }
 
 /**
- * The nightly cross-check: every property V-01 runs, compared with what Channex holds for the next
+ * The nightly cross-check: every property ViVi OS runs, compared with what Channex holds for the next
  * 90 nights. All matching is the quiet, expected state; a difference was sent again and is worth a look.
  */
 function CrossCheckTile({ check, now }: { check: WorkspaceSync['crossCheck']; now: number }) {
@@ -395,7 +395,7 @@ function CrossCheckTile({ check, now }: { check: WorkspaceSync['crossCheck']; no
   const trouble = check.differing + check.failed;
   return (
     <div className="rounded-2xl bg-paper px-4 py-3.5">
-      <p className="text-[12.5px] text-slate">Checked against Channex</p>
+      <p className="text-[12.5px] text-slate">Checked against channel sync</p>
       <p
         className={`mt-1 font-semibold tracking-[-0.015em] text-[20px] leading-none tnum ${trouble ? 'text-urgent' : 'text-ink'}`}
       >
@@ -417,10 +417,10 @@ function CrossCheckTile({ check, now }: { check: WorkspaceSync['crossCheck']; no
 const WHAT: Record<string, string> = {
   availability: 'Availability sent',
   restrictions: 'Prices and stay rules sent',
-  setup: 'Property connected to Channex',
+  setup: 'Property connected to channel sync',
   channel: 'Channel account',
   link: 'Listing link',
   safety: 'Safety check',
-  cross_check: 'Checked against Channex',
+  cross_check: 'Checked against channel sync',
   booking: 'Booking in',
 };

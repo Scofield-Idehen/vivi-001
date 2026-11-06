@@ -7,7 +7,7 @@ description: Cleans, maintenance and inspections, who gets which job, and what c
 
 ## Cleans are made for you
 
-V-01 makes a clean for every check-out. It is due by the next guest's arrival if someone arrives that day, and goes to the home's usual cleaner with your cleaning checklist. If the booking is cancelled, its open clean goes too. When a clean is marked done, the home is marked clean.
+ViVi OS makes a clean for every check-out. It is due by the next guest's arrival if someone arrives that day, and goes to the home's usual cleaner with your cleaning checklist. If the booking is cancelled, its open clean goes too. When a clean is marked done, the home is marked clean.
 
 The usual cleaner and the usual maintenance person are set on each home's **Settings**. Maintenance jobs made by the office, and damage the cleaners report, go to the usual maintenance person.
 
@@ -44,11 +44,11 @@ On a job they can:
 
 Every photo has the time, the home and its address, and who took it written onto the picture, like the Timemark app. The time comes from the camera. A photo taken more than an hour before it was added says so ("Taken 14:50 · added 17:51"), so an old photo can't pass as new. Photos are private.
 
-## Adding the field team from Guesty
+## Adding the field team from your previous system
 
-On **Workspace → Team**, **From Guesty** lists the people on your Guesty account, grouped as cleaners, maintenance and everyone else. Their Guesty tags give their skills, and their Guesty homes give the homes they work on.
+On **Workspace → Team**, the import list shows the people on your previous system's account, grouped as cleaners, maintenance and everyone else. Their tags there give their skills, and the homes they're on there give the homes they work on.
 
-Tick who to add and press **Add to the team**. Nobody is sent an email. They join the field team, can be given jobs straight away, and sign in later with their email as the same person. Someone with no email in Guesty can't be added this way; invite them instead.
+Tick who to add and press **Add to the team**. Nobody is sent an email. They join the field team, can be given jobs straight away, and sign in later with their email as the same person. Someone with no email there can't be added this way; invite them instead.
 
 ## Slack messages
 
@@ -60,5 +60,5 @@ If your Slack is connected (Workspace → Slack), the team hears about jobs wher
 - **Running late:** an hour after a job's time (or the day after, for jobs with no time), whoever made the job
   hears it isn't done. For automatic check-out cleans, your admins and operations hear instead.
 
-Each message is sent once. People are found on Slack by the email they sign in to V-01 with, so their Slack
+Each message is sent once. People are found on Slack by the email they sign in to ViVi OS with, so their Slack
 email must match. Use **Send me a test message** on the Workspace page to check yours.

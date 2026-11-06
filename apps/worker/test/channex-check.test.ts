@@ -40,7 +40,7 @@ function stubChannex(stub: Stub) {
             {
               id: 'prop-test',
               type: 'property',
-              attributes: { title: 'V-01 test property', currency: 'GBP' },
+              attributes: { title: 'ViVi OS test property', currency: 'GBP' },
             },
           ]
         : []),
@@ -314,14 +314,14 @@ describe('pnpm channex:check', () => {
   it('makes a test property through the adapter, then sends it a test night', async () => {
     const stub = stubChannex({ knownOn: 'staging', properties: 0 });
     const { passed, output } = await check(stub, { makeTestProperty: true });
-    expect(output).toContain('Made "V-01 test property" on staging, with one unit and one rate plan.');
+    expect(output).toContain('Made "ViVi OS test property" on staging, with one unit and one rate plan.');
     expect(output).toContain('Channex id: prop-1');
     expect(output).toContain('Channex shows £151.00 a night, minimum stay 2, closed.');
     expect(passed).toBe(true);
     expect(stub.state.made).toEqual({
       property: {
         property: {
-          title: 'V-01 test property',
+          title: 'ViVi OS test property',
           currency: 'GBP',
           country: 'GB',
           timezone: 'Europe/London',
@@ -362,7 +362,7 @@ describe('pnpm channex:check', () => {
   it('uses the test property made before rather than making another', async () => {
     const stub = stubChannex({ knownOn: 'staging', testPropertyMade: true });
     const { passed, output } = await check(stub, { makeTestProperty: true });
-    expect(output).toContain('Using "V-01 test property", made before.');
+    expect(output).toContain('Using "ViVi OS test property", made before.');
     expect(output).toContain('Channex id: prop-test');
     expect(passed).toBe(true);
     expect(stub.state.calls).not.toContain('POST staging /properties');
@@ -398,7 +398,7 @@ describe('pnpm channex:check', () => {
       now: NOW,
       print: (line) => lines.push(line),
     });
-    expect(lines[0]).toBe('V-01 Channex check, code 3a92166');
+    expect(lines[0]).toBe('ViVi OS Channex check, code 3a92166');
 
     expect(parseCheckArgs([])).toEqual({ makeTestProperty: false });
     expect(parseCheckArgs(['--make-test-property'])).toEqual({ makeTestProperty: true });

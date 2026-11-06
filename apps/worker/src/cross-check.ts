@@ -8,10 +8,10 @@ import { restrictionRanges } from './restrictions.ts';
 
 /**
  * The nightly cross-check (playbook, Section 8; integration step 6). Every night, for every property
- * V-01 runs, the worker reads back what Channex holds for the nights ahead and compares it with
- * V-01's own calendar: availability, prices (when V-01 sets them) and stay rules. A night that
+ * ViVi OS runs, the worker reads back what Channex holds for the nights ahead and compares it with
+ * ViVi OS's own calendar: availability, prices (when ViVi OS sets them) and stay rules. A night that
  * differs is queued to be sent again, the difference is logged, and the team hears about it. Channex
- * is the measure of what the channels see; V-01's calendar is the truth it must match.
+ * is the measure of what the channels see; ViVi OS's calendar is the truth it must match.
  */
 
 /** How far ahead the check looks. Most bookings fall inside it, and Channex answers it in one call. */
@@ -31,7 +31,7 @@ export type DifferenceField =
 export interface Difference {
   date: string;
   field: DifferenceField;
-  /** What V-01 has, and what Channex read back. */
+  /** What ViVi OS has, and what Channex read back. */
   ours: number | boolean | null;
   theirs: number | boolean | null;
 }
@@ -46,7 +46,7 @@ export interface CrossCheckStats {
   nightsResent: number;
 }
 
-/** One night as V-01 holds it, for comparing: the same fields the outbox sends. */
+/** One night as ViVi OS holds it, for comparing: the same fields the outbox sends. */
 export interface OurNight {
   date: string;
   available: number;
@@ -58,8 +58,8 @@ export interface OurNight {
 }
 
 /**
- * Compares V-01's nights with the channel manager's. A part the channel manager has never been
- * given (null) is a difference too, since the channels have nothing to go on; a price V-01 doesn't
+ * Compares ViVi OS's nights with the channel manager's. A part the channel manager has never been
+ * given (null) is a difference too, since the channels have nothing to go on; a price ViVi OS doesn't
  * set (PriceLabs does) is not compared.
  */
 export function compareNights(ours: OurNight[], theirs: ChannelNight[], currency: string): Difference[] {
@@ -130,7 +130,7 @@ interface CheckedMapping {
   channexRatePlanId: string | null;
 }
 
-/** V-01's own nights for one property across [dateFrom, dateTo], as the outbox would send them. */
+/** ViVi OS's own nights for one property across [dateFrom, dateTo], as the outbox would send them. */
 async function ourNights(
   deps: WorkerDeps,
   orgId: string,
@@ -250,7 +250,7 @@ export async function crossCheckProperty(
         .update(channexMappings)
         .set({ crossCheckedAt: now.toISOString(), crossCheckDifferences: nights, crossCheckError: null })
         .where(eq(channexMappings.id, mapping.id));
-      // Send the differing nights again, from V-01's calendar, through the usual sender.
+      // Send the differing nights again, from ViVi OS's calendar, through the usual sender.
       const resend = [
         ...datesToRanges(availabilityDates).map((r) => ({ kind: 'availability' as const, ...r })),
         ...datesToRanges(restrictionDates).map((r) => ({ kind: 'restrictions' as const, ...r })),
@@ -280,8 +280,8 @@ export async function crossCheckProperty(
     if (nights > 0) {
       await deps.alerts.send({
         severity: 'warning',
-        title: `Channex didn't match V-01 for ${property.name}`,
-        detail: `${describeDifferences(differences)} between ${dateFrom} and ${dateTo}. The nights have been sent again from V-01's calendar; check Channex and the channel if it happens again tomorrow.`,
+        title: `Channex didn't match ViVi OS for ${property.name}`,
+        detail: `${describeDifferences(differences)} between ${dateFrom} and ${dateTo}. The nights have been sent again from ViVi OS's calendar; check Channex and the channel if it happens again tomorrow.`,
         path: `/properties/${property.id}`,
       });
       deps.log.warn(
@@ -314,7 +314,7 @@ export async function crossCheckProperty(
   }
 }
 
-/** Every property V-01 runs, every operator: the nightly job. */
+/** Every property ViVi OS runs, every operator: the nightly job. */
 export async function crossCheckAll(
   deps: WorkerDeps,
   options: { days?: number } = {},

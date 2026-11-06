@@ -66,7 +66,7 @@ export function MessageGuest({ reservation, routes }: { reservation: Reservation
         <span className="min-w-0">
           <span className="block font-medium">Write in the Inbox</span>
           <span className="block truncate text-[12.5px] text-slate">
-            The conversation for this booking, kept in V-01.
+            The conversation for this booking, kept in ViVi OS.
           </span>
         </span>
       </Link>

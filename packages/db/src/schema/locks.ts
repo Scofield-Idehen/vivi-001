@@ -68,7 +68,7 @@ export const locks = app.table(
     propertyId: uuid('property_id').references(() => properties.id, { onDelete: 'set null' }),
     battery: integer('battery'),
     hasGateway: boolean('has_gateway').notNull().default(false),
-    /** Off until the team turns it on, so V-01 never fights Guesty's Locks Manager over a lock. */
+    /** Off until the team turns it on, so ViVi OS never fights Guesty's Locks Manager over a lock. */
     makesCodes: boolean('makes_codes').notNull().default(false),
     /** When the lock maker last listed it; a lock it stops listing is gone. */
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true, mode: 'string' }),

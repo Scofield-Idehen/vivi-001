@@ -5,7 +5,7 @@ import { ApiError, useSlackStatus, useSlackTest } from '../../lib/api.ts';
 /**
  * Slack for job messages (2 Nov 2026): the team hears about a job the moment it's given to them, a
  * reminder on the day if it hasn't started, and the office hears when one runs late. People are
- * found on Slack by the email they sign in to V-01 with.
+ * found on Slack by the email they sign in to ViVi OS with.
  */
 
 const explain = (error: unknown) =>
@@ -23,7 +23,7 @@ export function SlackSection({ orgId }: { orgId: string }) {
       <p className="mb-3 max-w-[640px] text-[13px] text-slate">
         Cleaners and maintenance hear about a job on Slack the moment it’s given to them, and get a reminder
         on the day if it hasn’t started. Whoever made a job hears if it runs an hour late. People are found on
-        Slack by the email they sign in to V-01 with.
+        Slack by the email they sign in to ViVi OS with.
       </p>
       <div className="flex max-w-[640px] flex-wrap items-center justify-between gap-3 rounded-xl border border-hairline bg-white px-4 py-3 text-[14px]">
         <span className="flex items-center gap-2 text-ink">
@@ -32,7 +32,7 @@ export function SlackSection({ orgId }: { orgId: string }) {
             ? `Connected to ${s.team}`
             : s?.error
               ? `Not working: ${s.error}`
-              : 'Not connected yet. V-01 support adds the Slack app.'}
+              : 'Not connected yet. ViVi OS support adds the Slack app.'}
         </span>
         {s?.connected ? (
           <Button onClick={() => test.mutate()} disabled={test.isPending}>

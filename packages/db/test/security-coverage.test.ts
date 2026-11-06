@@ -12,8 +12,8 @@ const NOT_OPERATOR_TABLES: Record<string, string> = {
   organisations: 'the operators themselves; custom policies',
   app_users: 'people can belong to several operators; custom policies',
   webhook_events: 'raw inbox before the operator is known; API insert-only, worker read',
-  platform_staff: "V-01's own staff; no application role can read it, only the console functions",
-  platform_audit: 'V-01 staff activity across operators; written and read only through functions',
+  platform_staff: "ViVi OS's own staff; no application role can read it, only the console functions",
+  platform_audit: 'ViVi OS staff activity across operators; written and read only through functions',
   worker_runs:
     "the worker's own heartbeats and recoveries; worker-only policy, console reads through a function",
   integration_tokens: 'access tokens for outside services (Guesty); worker-only policy, never read back',

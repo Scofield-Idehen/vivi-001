@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * Asking a guest to pay by card, or to let a damage deposit be held (1 Nov 2026). Stripe's page
- * takes the card; V-01 keeps the request and what became of it.
+ * takes the card; ViVi OS keeps the request and what became of it.
  */
 
 export const CARD_KINDS = ['payment', 'deposit'] as const;

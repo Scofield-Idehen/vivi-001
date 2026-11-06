@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * What a property's listing is made of, beyond its basics: amenities, rooms and beds, photos,
- * descriptions, house rules, booking rules and fees. V-01 keeps the master copy, in a vocabulary
+ * descriptions, house rules, booking rules and fees. ViVi OS keeps the master copy, in a vocabulary
  * richer than any one channel's, and maps it down to each channel's nearest equivalent.
  */
 
@@ -352,7 +352,7 @@ export const CHECK_IN_METHOD_LABELS: Record<CheckInMethod, string> = {
   building_staff: 'Building staff',
 };
 
-/** V-01's policy; each channel applies its nearest equivalent. */
+/** ViVi OS's policy; each channel applies its nearest equivalent. */
 export const CANCELLATION_POLICIES = ['flexible', 'moderate', 'firm', 'strict', 'non_refundable'] as const;
 export type CancellationPolicy = (typeof CANCELLATION_POLICIES)[number];
 
@@ -367,7 +367,7 @@ export const CANCELLATION_POLICY_LABELS: Record<CancellationPolicy, { label: str
 
 // Limits the channels set ----------------------------------------------------------------------
 
-/** Airbnb cuts titles at 50 characters, so V-01 keeps every title within that. */
+/** Airbnb cuts titles at 50 characters, so ViVi OS keeps every title within that. */
 export const TITLE_MAX = 50;
 /** Airbnb's main description holds 500 characters; longer detail goes in the other sections. */
 export const SUMMARY_MAX = 500;

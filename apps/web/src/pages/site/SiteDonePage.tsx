@@ -5,7 +5,7 @@ import { useSite, useSiteBooking } from '../../lib/api.ts';
 import { longDay, money, SiteFrame } from './parts.tsx';
 
 /**
- * Where Stripe sends the guest back (2 Nov 2026). V-01 saves the booking here and only then
+ * Where Stripe sends the guest back (2 Nov 2026). ViVi OS saves the booking here and only then
  * charges the card; this page says which way it went: booked (with their stay page), still
  * waiting for payment, the dates gone meanwhile (nothing charged), or the payment page closed.
  */

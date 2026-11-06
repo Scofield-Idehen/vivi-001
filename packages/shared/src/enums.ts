@@ -10,7 +10,7 @@ export const STAFF_ROLES = ['admin', 'operations', 'guest_comms', 'accounts', 'f
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
 /**
- * A V-01 staff member looking at an operator's workspace through support access.
+ * A ViVi OS staff member looking at an operator's workspace through support access.
  * Never stored as a membership: it exists only while a time-limited grant is open, and it is read-only.
  */
 export const SUPPORT_ROLE = 'v01_support';
@@ -24,10 +24,10 @@ export const ROLE_LABELS: Record<WorkspaceRole, string> = {
   accounts: 'Accounts',
   field: 'Field team',
   owner: 'Owner',
-  v01_support: 'V-01 support, read-only',
+  v01_support: 'ViVi OS support, read-only',
 };
 
-/** V-01's own staff, who use the console. Separate from any operator's roles. */
+/** ViVi OS's own staff, who use the console. Separate from any operator's roles. */
 export const PLATFORM_ROLES = ['owner', 'support', 'viewer'] as const;
 export type PlatformRole = (typeof PLATFORM_ROLES)[number];
 
@@ -55,7 +55,7 @@ export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
 /** `live` takes new bookings; `closing` honours existing stays during an account move; `archived` is history. */
 /**
  * A listing link's life: `linking` while the worker maps it in Channex, `live` once it takes
- * bookings through V-01, `closing` while the worker unmaps it, `archived` after.
+ * bookings through ViVi OS, `closing` while the worker unmaps it, `archived` after.
  */
 export const LISTING_STATUSES = ['linking', 'live', 'closing', 'archived'] as const;
 export type ListingStatus = (typeof LISTING_STATUSES)[number];
@@ -66,8 +66,8 @@ export type ChannelAccountStatus = (typeof CHANNEL_ACCOUNT_STATUSES)[number];
 /**
  * Who runs a property's channel listings during the move from Guesty.
  * `guesty`: came across from Guesty, which still runs its listings.
- * `none`: added in V-01, with no listings connected yet.
- * `v01`: moved over; V-01 runs its listings.
+ * `none`: added in ViVi OS, with no listings connected yet.
+ * `v01`: moved over; ViVi OS runs its listings.
  * Only `v01` properties send anything to Channex (playbook, Section 19), so a listing never has two
  * managers. The database refuses `v01` from the API and worker: only the move-over step may set it.
  */
@@ -130,7 +130,7 @@ export type PriceOwner = (typeof PRICE_OWNERS)[number];
 export const OUTBOX_KINDS = ['availability', 'restrictions'] as const;
 export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 
-/** `skipped`: nothing to send, because the property is not run by V-01 (still on Guesty, or not moved over). */
+/** `skipped`: nothing to send, because the property is not run by ViVi OS (still on Guesty, or not moved over). */
 export const OUTBOX_STATUSES = ['pending', 'sending', 'sent', 'failed', 'skipped'] as const;
 export type OutboxStatus = (typeof OUTBOX_STATUSES)[number];
 

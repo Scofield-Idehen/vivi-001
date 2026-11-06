@@ -1,6 +1,6 @@
 /**
  * Alerts reach a person in minutes (playbook, Section 14). Operational alerts go to the
- * operator's own Slack channel; platform alerts go to V-01's.
+ * operator's own Slack channel; platform alerts go to ViVi OS's.
  */
 
 export type AlertSeverity = 'urgent' | 'warning' | 'info';

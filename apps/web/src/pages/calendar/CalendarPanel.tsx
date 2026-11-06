@@ -76,15 +76,15 @@ function usualPrice(p: CalendarProperty, currency: string, locale: string): stri
     : base;
 }
 
-/** Properties whose channels V-01 doesn't run yet: their changes stay in V-01 for now. */
+/** Properties whose channels ViVi OS doesn't run yet: their changes stay in ViVi OS for now. */
 function notSentLine(properties: CalendarProperty[]): string {
   const [only] = properties;
   if (properties.length === 1 && only) {
     return only.managedBy === 'guesty'
-      ? `${only.name} is still on Guesty, so these changes stay in V-01 and aren't sent to its channels.`
-      : `${only.name} isn't connected to its channels yet, so these changes stay in V-01 for now.`;
+      ? `${only.name} is still on Guesty, so these changes stay in ViVi OS and aren't sent to its channels.`
+      : `${only.name} isn't connected to its channels yet, so these changes stay in ViVi OS for now.`;
   }
-  return `${propertyNames(properties)} aren't run through V-01 yet, so their changes stay here and aren't sent to the channels.`;
+  return `${propertyNames(properties)} aren't run through ViVi OS yet, so their changes stay here and aren't sent to the channels.`;
 }
 
 function limits(p: CalendarProperty, currency: string, locale: string): string | null {

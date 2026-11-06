@@ -62,7 +62,7 @@ export const properties = app.table(
     checkOutTime: time('check_out_time').notNull().default('10:00'),
     slackChannel: text('slack_channel'),
     /**
-     * Who runs the property's channel listings: Guesty, V-01, or nobody yet (`none`, added in V-01).
+     * Who runs the property's channel listings: Guesty, ViVi OS, or nobody yet (`none`, added in ViVi OS).
      * Only `v01` properties send anything to Channex, and a trigger stops the API and worker from
      * setting `v01` (migration 0007): only the move-over step may.
      */
@@ -129,7 +129,7 @@ export const properties = app.table(
     depositOnAirbnb: boolean('deposit_on_airbnb').notNull().default(false),
     /**
      * Shown and bookable on the operator's booking website (2 Nov 2026). Only a home whose channels
-     * V-01 runs (or that has none) may be: a booking made here must close its nights everywhere.
+     * ViVi OS runs (or that has none) may be: a booking made here must close its nights everywhere.
      */
     onBookingSite: boolean('on_booking_site').notNull().default(false),
     ownerId: uuid('owner_id'),

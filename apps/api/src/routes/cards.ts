@@ -29,7 +29,7 @@ import { settleSiteBooking } from './site.ts';
 
 /**
  * Card payments and deposits through Stripe (1 Nov 2026). The team makes a link on a booking; the
- * guest pays (or lets a deposit be held) on Stripe's page; V-01 learns the outcome from Stripe's
+ * guest pays (or lets a deposit be held) on Stripe's page; ViVi OS learns the outcome from Stripe's
  * webhook or, failing that, by asking Stripe whenever the booking's card requests are read. Either
  * way the same `settle` runs, under a row lock, so nothing is recorded twice.
  */

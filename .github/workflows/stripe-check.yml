@@ -1,7 +1,7 @@
 name: Stripe check
 
 # Proves the Stripe key works, test mode only: a payment page, a held deposit kept in part, and a
-# held deposit released. Touches no V-01 data. Prints statuses only, never the key.
+# held deposit released. Touches no ViVi OS data. Prints statuses only, never the key.
 
 on:
   workflow_dispatch:

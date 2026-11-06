@@ -5,8 +5,8 @@ import { createTestDatabase, seedOperator, seedPlatformStaff, type TestDatabase 
 import { expectPgError, PG, rawQuery } from './helpers.ts';
 
 /**
- * The V-01 console reads across every operator, so it is the most sensitive path in the system.
- * These tests prove, in the database itself, that only V-01 staff can use it, that it returns
+ * The ViVi OS console reads across every operator, so it is the most sensitive path in the system.
+ * These tests prove, in the database itself, that only ViVi OS staff can use it, that it returns
  * totals rather than operators' data, and that support access is time-limited, read-only,
  * visible to the operator and logged.
  */
@@ -77,7 +77,7 @@ afterAll(async () => {
   await t?.drop();
 });
 
-describe('who counts as V-01 staff', () => {
+describe('who counts as ViVi OS staff', () => {
   it('links a staff entry to the sign-in with the same email, on first sign-in', async () => {
     const { userId } = await seedPlatformStaff(t.ownerUrl, {
       email: 'new.starter@v01.test',
@@ -100,13 +100,13 @@ describe('who counts as V-01 staff', () => {
     );
   });
 
-  it('gives an operator admin no V-01 role', async () => {
+  it('gives an operator admin no ViVi OS role', async () => {
     expect(await as(a.userId, sql`select app.platform_role() as role`)).toEqual([{ role: null }]);
   });
 });
 
 describe('console reads', () => {
-  it('refuses everyone who is not V-01 staff', async () => {
+  it('refuses everyone who is not ViVi OS staff', async () => {
     for (const query of [
       sql`select * from app.console_overview()`,
       sql`select * from app.console_operators()`,
@@ -129,7 +129,7 @@ describe('console reads', () => {
       viewer,
       sql`select name, properties, properties_on_v01, properties_on_guesty, members from app.console_operators()`,
     );
-    // Quay Studio was added in V-01 and isn't connected: it is neither run by V-01 nor on Guesty.
+    // Quay Studio was added in ViVi OS and isn't connected: it is neither run by ViVi OS nor on Guesty.
     expect(rows).toEqual([
       { name: 'Operator A', properties: 3, properties_on_v01: 1, properties_on_guesty: 1, members: 1 },
       { name: 'Operator B', properties: 1, properties_on_v01: 0, properties_on_guesty: 1, members: 1 },
@@ -270,7 +270,7 @@ describe('support access', () => {
     expect(await activeGrant(support, b.orgId)).toBeNull();
   });
 
-  it('stops at once for someone removed from V-01 staff', async () => {
+  it('stops at once for someone removed from ViVi OS staff', async () => {
     await startAccess(support, b.orgId);
     expect(await activeGrant(support, b.orgId)).not.toBeNull();
     await rawQuery(t.ownerUrl, `delete from app.platform_staff where user_id = $1`, [support]);

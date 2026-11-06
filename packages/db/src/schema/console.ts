@@ -4,7 +4,7 @@ import { app, createdAt, platformRole } from './common.ts';
 import { appUsers, organisations } from './operators.ts';
 
 /**
- * V-01's own staff: the people who can open the console. Added by email with
+ * ViVi OS's own staff: the people who can open the console. Added by email with
  * `pnpm db:staff`, and linked to a sign-in the first time that email signs in.
  * No application role can read this table; it is reached only through functions.
  */
@@ -25,7 +25,7 @@ export const platformStaff = app.table(
 );
 
 /**
- * Time-limited, read-only access for one V-01 staff member to one operator's workspace.
+ * Time-limited, read-only access for one ViVi OS staff member to one operator's workspace.
  * It always carries a reason, and the operator can read every grant for their own workspace.
  */
 export const supportAccessGrants = app.table(
@@ -38,7 +38,7 @@ export const supportAccessGrants = app.table(
     staffUserId: uuid('staff_user_id')
       .notNull()
       .references(() => appUsers.id, { onDelete: 'restrict' }),
-    /** Kept on the grant so the operator can see who it was without reading V-01's staff list. */
+    /** Kept on the grant so the operator can see who it was without reading ViVi OS's staff list. */
     staffEmail: text('staff_email').notNull(),
     reason: text('reason').notNull(),
     startedAt: timestamp('started_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
@@ -61,7 +61,7 @@ export const supportAccessGrants = app.table(
 );
 
 /**
- * What V-01 staff did: console views of an operator, support grants opened and closed, and every
+ * What ViVi OS staff did: console views of an operator, support grants opened and closed, and every
  * request made under a grant. Written and read only through functions.
  */
 export const platformAudit = app.table(

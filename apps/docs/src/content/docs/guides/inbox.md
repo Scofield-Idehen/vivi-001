@@ -7,12 +7,12 @@ The **Inbox** keeps every guest's conversation in one place. There is one conver
 
 ## How replies reach the guest
 
-- **Airbnb, Booking.com, Vrbo and Expedia guests**: through that site's chat, via Channex. This connection is not switched on yet. Until it is, what you write waits in the conversation, says so, and is sent the moment it is connected.
+- **Airbnb, Booking.com, Vrbo and Expedia guests**: through that site's chat. This connection is not switched on yet. Until it is, what you write waits in the conversation, says so, and is sent the moment it is connected.
 - **Direct guests**: by email. Email needs your sending address set up; until then an email waits in the same way.
 
 Texts are not built yet.
 
-Conversations from Guesty's inbox are brought across with the import, for bookings that ended in the last 90 days and every later one.
+Conversations from your previous system's inbox are brought across with the import, for bookings that ended in the last 90 days and every later one.
 
 ## The list
 
@@ -44,7 +44,7 @@ An automatic message is not a reply, so the guest still counts as waiting.
 
 ## Who can do what
 
-Everyone in the office can read the Inbox. Admins, operations and guest comms can reply and change automatic messages and saved replies. V-01 support can only read. The field team doesn't see it.
+Everyone in the office can read the Inbox. Admins, operations and guest comms can reply and change automatic messages and saved replies. ViVi OS support can only read. The field team doesn't see it.
 
 ## Not yet
 

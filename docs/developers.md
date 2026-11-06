@@ -1,10 +1,10 @@
 # For developers
 
-The technical side of V-01: how the code is laid out, how operators' data is kept apart, how to run
+The technical side of ViVi OS: how the code is laid out, how operators' data is kept apart, how to run
 it with a real database, and the checks. To just see what's built, follow the README instead.
 
-Built from the V-01 Build Playbook (v1.2) and the V-01 Design Roadmap (v1.3): the **base** (Phase 0 plus
-integration steps 1 and 2) and the **first V-01 console**. The product uses the Vivistays palette for now,
+Built from the ViVi OS Build Playbook (v1.2) and the ViVi OS Design Roadmap (v1.3): the **base** (Phase 0 plus
+integration steps 1 and 2) and the **first ViVi OS console**. The product uses the Vivistays palette for now,
 with a soft white page.
 
 | What | Where | State |
@@ -16,8 +16,8 @@ with a soft white page.
 | Worker: outbox sender, webhook handling, feed sweep, nightly full sync | `apps/worker` | Done |
 | Channel swap layer and Channex adapter | `packages/channels` | Built, not yet certified |
 | Web app: sign-in, shell, Today, Properties, Workspace | `apps/web` | Done |
-| V-01 console: overview, operators, sync health, support log | `apps/web/src/pages/console`, `apps/api/src/routes/console.ts` | Done |
-| V-01 staff and read-only support access, logged and visible to the operator | `packages/db/migrations/0003_console_security.sql` | Done |
+| ViVi OS console: overview, operators, sync health, support log | `apps/web/src/pages/console`, `apps/api/src/routes/console.ts` | Done |
+| ViVi OS staff and read-only support access, logged and visible to the operator | `packages/db/migrations/0003_console_security.sql` | Done |
 | Booking import into reservations, then acknowledgement | `apps/worker/src/bookings.ts` | Done, tested against the stand-in |
 | Calendar: nightly prices, stay rules and blocks | `apps/api/src/routes/calendar.ts`, `packages/shared/src/calendar.ts` | Done |
 | Calendar screen: one scrolling timeline (a year back, two ahead, loaded four weeks at a time), Availability, filters, channel marks and the actions panel | `apps/web/src/pages/calendar` | Done; awaiting design sign-off |
@@ -34,7 +34,7 @@ with a soft white page.
 apps/
   api/          Node API (Fastify): sign-in, workspaces, properties, webhooks
   worker/       Outbox sender, webhook handling, booking feed sweep, nightly jobs (pg-boss)
-  web/          React app (Vite): the V-01 console and each operator's workspace
+  web/          React app (Vite): the ViVi OS console and each operator's workspace
 packages/
   db/           Drizzle schema, migrations, row-level security, roles, seeds, test helpers
   shared/       Zod schemas, enums, money and date helpers used everywhere
@@ -53,14 +53,14 @@ docs/           Decision log and runbooks
    fails the lint.
 4. The few operations that must cross operators (claiming queued work, routing a webhook) are narrow
    `sys_*` functions that only the worker role may call.
-5. The V-01 console reads across operators only through `console_*` functions. Each checks the caller is
-   V-01 staff and returns totals, statuses and operator metadata, never guests' details.
-6. To look inside an operator's workspace, V-01 staff open a support grant: it needs a reason, is
+5. The ViVi OS console reads across operators only through `console_*` functions. Each checks the caller is
+   ViVi OS staff and returns totals, statuses and operator metadata, never guests' details.
+6. To look inside an operator's workspace, ViVi OS staff open a support grant: it needs a reason, is
    read-only, lasts at most four hours, logs every request, and the operator sees it on their Workspace page.
 7. Tests in `packages/db/test/security-coverage.test.ts` fail if a new table or function skips these rules.
 8. Secret custom fields (lock codes, Wi-Fi passwords) are sealed in the API (`apps/api/src/secrets.ts`,
    AES-256-GCM under `FIELD_SECRET_KEY`) before they reach Postgres, and opened only for roles with
-   `secrets.read`. Support grants never include it, so V-01 staff never see a secret.
+   `secrets.read`. Support grants never include it, so ViVi OS staff never see a secret.
 
 ## Local setup
 
@@ -80,7 +80,7 @@ pnpm dev               # API on :3001, worker, web on :5173
 ```
 
 Sign in with the email in `SEED_ADMIN_EMAIL`; the invitation turns into a membership on first sign-in,
-and the same email is a V-01 owner, so you land in the console. Add other V-01 staff with
+and the same email is a ViVi OS owner, so you land in the console. Add other ViVi OS staff with
 `pnpm db:staff add <email> <owner|support|viewer>` (see `docs/runbooks/v01-staff.md`).
 
 ## See it without a backend
@@ -91,7 +91,7 @@ pnpm demo              # opens the web app at http://localhost:5173 with sample 
 ```
 
 Demo mode runs the real screens against sample data kept in your browser: no database, API or
-sign-in. You are a V-01 owner and a Vivistays admin; Northwind Stays and Brightwater Lets are invented
+sign-in. You are a ViVi OS owner and a Vivistays admin; Northwind Stays and Brightwater Lets are invented
 operators you can open with support access. `pnpm --filter @v01/web build:demo` builds the same thing as
 static files in `apps/web/dist-demo`.
 
@@ -121,30 +121,30 @@ properties in the account with their room types, rate plans and channels, and co
 waiting in the feed. It only reads, never prints the key, and never acknowledges a booking.
 
 On staging, `pnpm channex:check --round-trip <Channex property id>` sends one test price, minimum stay
-and closed night, about 300 days ahead, through V-01's own adapter, reads them back, then puts the night
+and closed night, about 300 days ahead, through ViVi OS's own adapter, reads them back, then puts the night
 back as it was. That proves the adapter's requests before certification.
 
 An empty staging account has nothing to send to, so `pnpm channex:check --make-test-property` first
-makes a property called "V-01 test property" through the adapter, the way V-01 will make each property
+makes a property called "ViVi OS test property" through the adapter, the way ViVi OS will make each property
 it connects (one unit, one rate plan), then runs the round trip on it. Run again, it uses the same one.
 It never makes anything on live.
 
-`pnpm cross-check` (in `apps/worker`) runs the nightly cross-check now: every calendar V-01 runs
+`pnpm cross-check` (in `apps/worker`) runs the nightly cross-check now: every calendar ViVi OS runs
 against what Channex holds for the next 90 nights (`--days 500` for the whole horizon). Differing
 nights are sent again through the outbox and logged; the Today page lists them. Set `APP_URL` in the
 worker's `.env` so alerts link to the page that fixes them.
 
 ## Door locks (TTLock)
 
-V-01 has one TTLock developer application (euopen.ttlock.com). Its Client ID and Secret go in the
+ViVi OS has one TTLock developer application (euopen.ttlock.com). Its Client ID and Secret go in the
 API's and the worker's settings as `TTLOCK_CLIENT_ID` and `TTLOCK_CLIENT_SECRET` (in `API_ENV` and
 `WORKER_ENV` on GitHub, and the worker's `.env` on a laptop); `TTLOCK_API_URL` defaults to
 `https://euapi.ttlock.com`. Both also need `FIELD_SECRET_KEY`, which seals the token and the codes.
 
 An admin or operations person connects the operator's TTLock **app** account in Workspace → Door
 locks. The password goes to TTLock once (as its MD5, which is what TTLock asks for) and is dropped;
-only the token is kept, sealed, in `lock_accounts`. Each lock is then put on a home and "V-01 makes
-the codes" turned on. It stays off by default so V-01 never fights Guesty's Locks Manager over a
+only the token is kept, sealed, in `lock_accounts`. Each lock is then put on a home and "ViVi OS makes
+the codes" turned on. It stays off by default so ViVi OS never fights Guesty's Locks Manager over a
 lock: turn it on only for locks Guesty no longer codes.
 
 The worker (`apps/worker/src/locks.ts`, every 5 minutes) gives every confirmed stay up to 14 days
@@ -161,7 +161,7 @@ that didn't reach a lock, and batteries under 25%.
 
 The import also brings each booking's guest conversation from Guesty's Inbox (bookings that ended
 in the last 90 days and every later one; `--messages-days-back 0` leaves them out) into the
-booking's V-01 thread, oldest first, each message once by Guesty's id, marked read and not waiting.
+booking's ViVi OS thread, oldest first, each message once by Guesty's id, marked read and not waiting.
 Guesty's log lines and private notes stay behind. It can also run from GitHub: Actions → Guesty
 import → Run workflow (rehearses by default), using the `WORKER_ENV` secret.
 
@@ -181,7 +181,7 @@ keeps it. Run it again any time: it updates what it made before. `--bookings-day
 `--calendar-days 730` are the defaults. Guesty allows five tokens a day per client; the token is
 kept in the database, so runs and restarts share it.
 
-What the import does is in `apps/worker/src/guesty/mapping.ts` (Guesty's words into V-01's, pure
+What the import does is in `apps/worker/src/guesty/mapping.ts` (Guesty's words into ViVi OS's, pure
 functions) and `import.ts` (the database work), tested in `apps/worker/test/guesty.test.ts`
 against a stand-in for Guesty's API.
 

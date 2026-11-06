@@ -42,7 +42,7 @@ log.info(
 );
 
 // Drain before push. While `holding` is true nothing goes out to the channel manager: the bookings
-// that arrived while V-01 was away are saved first (docs/runbooks/recovery.md, done by the worker).
+// that arrived while ViVi OS was away are saved first (docs/runbooks/recovery.md, done by the worker).
 const run = await beginRun(deps);
 let holding = run.recovering;
 if (holding) log.warn({ gapSeconds: run.gapSeconds }, 'Back after a gap: draining bookings before sending');

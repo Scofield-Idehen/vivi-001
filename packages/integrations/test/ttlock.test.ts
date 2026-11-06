@@ -62,7 +62,7 @@ describe('TTLock', () => {
     const { ttlock, seen } = stub({ '/v3/keyboardPwd/add': { keyboardPwdId: 9001 } });
     const made = await ttlock.addCode(token, {
       lockId: '55',
-      name: 'V-01 · Claire',
+      name: 'ViVi OS · Claire',
       code: '481593',
       startsAt: new Date('2026-11-05T15:00:00Z'),
       endsAt: new Date('2026-11-08T10:30:00Z'),

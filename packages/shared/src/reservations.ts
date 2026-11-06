@@ -198,7 +198,7 @@ const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'A date like 2026-11-05');
 /**
  * A booking made by the team: a direct or repeat guest, a friend of the owner, a stay that came by
  * phone. It holds the nights like any other booking (and sends them to the channels once the
- * property runs through V-01). The price is for the record; nothing is charged yet.
+ * property runs through ViVi OS). The price is for the record; nothing is charged yet.
  */
 export const ReservationCreateSchema = z
   .object({

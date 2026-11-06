@@ -319,7 +319,7 @@ export const cardRequests = app.table(
 /**
  * A booking made on the operator's booking website (2 Nov 2026), from the guest's quote to Stripe
  * and back. The card is authorised, not charged, while the guest is on Stripe's page; when they come
- * back V-01 saves the booking and only then takes the money. If the nights went to another booking
+ * back ViVi OS saves the booking and only then takes the money. If the nights went to another booking
  * in between, the hold is let go and nothing is charged.
  *
  * open      the guest is on Stripe's page

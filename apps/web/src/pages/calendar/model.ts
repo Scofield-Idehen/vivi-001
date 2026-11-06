@@ -288,7 +288,7 @@ export interface SelectionSummary {
   cells: number;
   /** Properties whose prices PriceLabs sets. */
   pricedByPriceLabs: CalendarProperty[];
-  /** Properties whose channels V-01 doesn't run yet, so nothing is sent for them. */
+  /** Properties whose channels ViVi OS doesn't run yet, so nothing is sent for them. */
   notSent: CalendarProperty[];
 }
 

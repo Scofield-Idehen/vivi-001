@@ -12,7 +12,7 @@ export function useNow(intervalMs = 15_000): number {
 
 const MINUTE = 60_000;
 
-/** "V-01" with a word joiner after the hyphen, so a line never breaks inside the name. */
+/** "ViVi OS" with a word joiner after the hyphen, so a line never breaks inside the name. */
 export const V01 = 'V-\u206001';
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;

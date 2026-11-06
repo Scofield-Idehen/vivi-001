@@ -7,7 +7,7 @@ description: Owners, their homes and terms, expenses, monthly statements, and th
 
 ## Adding owners
 
-- **From Guesty**: the import brings each owner with all their homes. Owners with several homes come across complete.
+- **From your previous system**: the import brings each owner with all their homes. Owners with several homes come across complete.
 - **By hand**: **Add an owner** (or **New → Owner**): name, company, email, phone, **Management fee (%)** and notes.
 
 Give an owner their homes with **Choose homes** on their page, or set **Owner** on a home's Settings. **Homes without an owner** on the Owners page lists homes with no owner yet, each given to an owner with **Give to…**.
@@ -22,7 +22,7 @@ On an owner's page, under **Homes and terms**, set each home's deal from a month
 
 Also set who arranges repairs (you, or the owner) and the contract the terms come from. Earlier months keep the terms they had. A home with no terms uses the owner's management fee, and the page asks you to set them.
 
-Under **Contracts**, **Add a contract** uploads the signed management agreement with its signed, start and end dates. Guesty held no owner documents, so these come from your office.
+Under **Contracts**, **Add a contract** uploads the signed management agreement with its signed, start and end dates. Contracts aren't brought across by the import, so these come from your office.
 
 **Who is paid** holds the payee, sort code and account number for each home. Only admins and accounts can see or change it.
 

@@ -3,7 +3,7 @@ import { liveDeps } from '../src/live-deps.ts';
 
 /**
  * pnpm cross-check [--days N]
- * Runs the nightly cross-check now: every calendar V-01 runs against what Channex holds for the
+ * Runs the nightly cross-check now: every calendar ViVi OS runs against what Channex holds for the
  * next N nights (90 by default). Reads the worker's .env. Use it after a long outage, once the
  * recovery has drained, or whenever Channex looks wrong.
  */

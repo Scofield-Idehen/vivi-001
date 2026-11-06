@@ -23,8 +23,8 @@ import { isoOrNull, pgErrorCode, type RequestScope } from '../context.ts';
 import { HttpError } from '../errors.ts';
 
 /**
- * The V-01 console. Every read goes through the console functions in the database, which check
- * the caller is V-01 staff and return totals, statuses and operator metadata, never guests' details.
+ * The ViVi OS console. Every read goes through the console functions in the database, which check
+ * the caller is ViVi OS staff and return totals, statuses and operator metadata, never guests' details.
  */
 
 type Row = Record<string, unknown>;

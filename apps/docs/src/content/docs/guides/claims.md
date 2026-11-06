@@ -3,7 +3,7 @@ title: Claims
 description: Damage claims, one per booking, with the evidence, the costs and the deadline.
 ---
 
-A **claim** collects everything you need to ask a channel or a guest to pay for damage after a stay. There is one claim per booking. V-01 doesn't file the claim for you: a person files it on the channel or with the guest, and records it in V-01.
+A **claim** collects everything you need to ask a channel or a guest to pay for damage after a stay. There is one claim per booking. ViVi OS doesn't file the claim for you: a person files it on the channel or with the guest, and records it in ViVi OS.
 
 ## Starting a claim
 
@@ -27,7 +27,7 @@ Photos added to a claim get the time, the home and who added it written on the p
 
 ## The deadline
 
-V-01 works out the deadline: 14 days after check-out. For Airbnb it is also before the next guest checks in, whichever comes first. You can change it with **Change the deadline**. Today and the bell warn you three days before. The Claims list is ordered by deadline.
+ViVi OS works out the deadline: 14 days after check-out. For Airbnb it is also before the next guest checks in, whichever comes first. You can change it with **Change the deadline**. Today and the bell warn you three days before. The Claims list is ordered by deadline.
 
 ## Where it stands
 
@@ -42,7 +42,7 @@ Money received for repairs the owner paid for goes back to the owner on their st
 
 ## Who can do what
 
-Admins, operations and accounts make and file claims. Guest comms and V-01 support can read them. The field team doesn't see claims; they report damage from their jobs.
+Admins, operations and accounts make and file claims. Guest comms and ViVi OS support can read them. The field team doesn't see claims; they report damage from their jobs.
 
 ## Damage protection
 

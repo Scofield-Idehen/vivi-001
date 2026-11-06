@@ -37,7 +37,7 @@ export function OperatorStatusDot({ status }: { status: OperatorStatus }) {
   );
 }
 
-/** "3 run by V-01 · 9 still on Guesty · 1 not connected yet", leaving out anything at zero. */
+/** "3 run by ViVi OS · 9 still on Guesty · 1 not connected yet", leaving out anything at zero. */
 export function propertySplit(o: {
   properties: number;
   propertiesOnV01: number;

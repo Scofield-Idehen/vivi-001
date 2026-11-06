@@ -3,7 +3,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 /**
  * Card payments through Stripe Checkout (1 Nov 2026). The team asks a guest to pay, or to let a
  * damage deposit be held on their card; Stripe's own page takes the card, so no card number ever
- * reaches V-01. Two kinds:
+ * reaches ViVi OS. Two kinds:
  *   payment  charged at once; it lands on the booking as a card payment.
  *   deposit  authorised but not charged (a hold, which a card keeps for about 7 days). The team
  *            then keeps some or all of it, or releases it.
@@ -13,7 +13,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 
 /**
  * booking  a stay paid on the booking website (2 Nov 2026): authorised on Stripe's page, then
- *          charged by V-01 once the booking is saved (or let go if the nights went meanwhile).
+ *          charged by ViVi OS once the booking is saved (or let go if the nights went meanwhile).
  */
 export type CardKind = 'payment' | 'deposit' | 'booking';
 

@@ -93,7 +93,7 @@ export function workspaceRoutes(app: FastifyInstance, deps: { scope: RequestScop
         }),
     );
 
-  // Every time V-01 staff opened this workspace on support access: who, why and for how long.
+  // Every time ViVi OS staff opened this workspace on support access: who, why and for how long.
   // Row-level security limits the grants to this operator's own.
   app
     .withTypeProvider<ZodTypeProvider>()

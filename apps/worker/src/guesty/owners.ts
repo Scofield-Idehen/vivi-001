@@ -5,11 +5,11 @@ import type { WorkerDeps } from '../deps.ts';
 import type { GuestyReader } from './snapshot.ts';
 
 /**
- * Owners from Guesty (1 Nov 2026). Each Guesty owner becomes a V-01 owner, matched on a later run
+ * Owners from Guesty (1 Nov 2026). Each Guesty owner becomes a ViVi OS owner, matched on a later run
  * by Guesty's id (or, the first time, by email to an owner the team already added by hand), and
  * every listing Guesty says they own becomes their home here. One owner can own many homes.
  *
- * A home already given to an owner by hand in V-01 keeps that owner; the run says so. A home
+ * A home already given to an owner by hand in ViVi OS keeps that owner; the run says so. A home
  * Guesty gives to two owners goes to the first, and the run says so too. Names, company, email
  * and phone follow Guesty; the fee and notes are only set the first time, so the team's own
  * changes are kept.
@@ -56,7 +56,7 @@ export function feeOf(o: GuestyOwner): number {
 }
 
 /**
- * Saves the owners and their homes. `propertyOf` maps a Guesty listing id to the V-01 home.
+ * Saves the owners and their homes. `propertyOf` maps a Guesty listing id to the ViVi OS home.
  */
 export async function saveGuestyOwners(
   tx: Tx,
@@ -148,7 +148,7 @@ export async function saveGuestyOwners(
   return summary;
 }
 
-/** Guesty listing id → V-01 home, from earlier imports. */
+/** Guesty listing id → ViVi OS home, from earlier imports. */
 export async function importedHomes(tx: Tx): Promise<Map<string, string>> {
   const rows = await tx
     .select({ listingId: guestyListings.guestyListingId, propertyId: guestyListings.propertyId })

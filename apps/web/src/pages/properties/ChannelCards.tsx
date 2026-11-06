@@ -91,8 +91,8 @@ function LinkPicker({
         </span>
       ) : free.length === 0 ? (
         <p className="text-[13.5px] text-slate">
-          Every listing Channex sees on this account is linked already, or it has none yet. The list refreshes
-          hourly.
+          Every listing channel sync sees on this account is linked already, or it has none yet. The list
+          refreshes hourly.
         </p>
       ) : (
         <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-hairline">
@@ -184,7 +184,7 @@ function ChannelCard({
             </StatusDot>
           ) : link.status === 'linking' ? (
             <span className="inline-flex items-center gap-2 text-[13.5px] text-slate">
-              <Spinner size={14} /> Linking in Channex
+              <Spinner size={14} /> Linking
               {link.requestedBy ? `, asked for by ${link.requestedBy}` : ''}
             </span>
           ) : (
@@ -282,7 +282,7 @@ function ChannelCard({
             <Button
               onClick={() => setPicking(true)}
               disabled={!inChannex}
-              title={inChannex ? undefined : 'Connect the property to Channex first.'}
+              title={inChannex ? undefined : 'Connect the property to channel sync first.'}
             >
               Link a listing
             </Button>
@@ -305,7 +305,7 @@ function ChannelCard({
 }
 
 /**
- * List on channels, V-01's way: a card per channel. A linked card names the listing, opens it on
+ * List on channels, ViVi OS's way: a card per channel. A linked card names the listing, opens it on
  * the channel's site and can be unlinked; an unlinked one links a listing from a connected account.
  * Pausing a listing on the channel waits for Channex's answer (decisions, 19 Oct 2026).
  */

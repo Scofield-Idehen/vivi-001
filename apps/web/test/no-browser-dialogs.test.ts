@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * The browser's own confirm, alert and prompt boxes never appear in V-01 (Alpha, 1 Nov 2026): they
+ * The browser's own confirm, alert and prompt boxes never appear in ViVi OS (Alpha, 1 Nov 2026): they
  * show the web address and their own buttons. Use useConfirm() from components/Confirm.tsx.
  */
 

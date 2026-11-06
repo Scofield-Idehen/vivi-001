@@ -4,11 +4,15 @@ import { fileURLToPath } from 'node:url';
 import { PERMISSIONS, ROLE_LABELS, WORKSPACE_ROLES } from '@v01/shared';
 
 /**
- * Pages written from the code on every build, so they can't drift from what V-01 does:
+ * Pages written from the code on every build, so they can't drift from what ViVi OS does:
  *   reference/roles.md          who may do what, from packages/shared/src/permissions.ts
- *   how-it-works/decisions.md   the decision log, docs/decisions.md
- *   how-it-works/security.md    docs/security.md
- * The API reference itself comes from the API (apps/api/scripts/openapi.ts).
+ *   how-it-works/security.md    docs/security.md, without its internal housekeeping section
+ * The API reference itself comes from the API (apps/api/scripts/openapi.ts); this script then takes
+ * out what stays internal.
+ *
+ * The docs are public. The decision log, and the names of the services ViVi OS is built on or moves
+ * operators off (Guesty, Channex), stay internal to us (Alpha, 6 Nov 2026), so nothing here may
+ * publish them; the check at the end fails the build if one slips through.
  */
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../../..');
@@ -58,7 +62,7 @@ const ROLE_NOTES: Record<(typeof WORKSPACE_ROLES)[number], string> = {
   accounts: 'money: payments on bookings, claims, owners, expenses, statements and payees.',
   field: 'cleaners and maintenance: their own jobs, and marking homes clean.',
   owner: 'a home’s owner, through the owner log-in: their homes’ calendar and statements only.',
-  v01_support: 'V-01’s own staff, only while the operator allows it, and only to look.',
+  v01_support: 'ViVi OS’s own staff, only while the operator allows it, and only to look.',
 };
 const VERBS: Record<string, string> = { read: 'see', write: 'change', manage: 'set up' };
 const rows = Object.entries(PERMISSIONS).map(([key, allowed]) => {
@@ -74,13 +78,13 @@ write(
   'reference/roles.md',
   `---
 title: Roles and what they can do
-description: Every role in a workspace and what each may see and change, taken from V-01's own rules.
+description: Every role in a workspace and what each may see and change, taken from ViVi OS's own rules.
 ---
 
 ${generated}
 
 Everyone in a workspace has one role. An admin can also limit anyone except another admin to chosen homes:
-they then see only those homes, everywhere. V-01 support can only look, and only while the operator has given
+they then see only those homes, everywhere. ViVi OS support can only look, and only while the operator has given
 them access. See [Team and access](/guides/team-and-access/).
 
 ## The roles
@@ -95,29 +99,65 @@ ${rows.join('\n')}
 `,
 );
 
-// Decision log and security -----------------------------------------------------------------------
+// Security -----------------------------------------------------------------------------------------
 
 const withoutTitle = (text: string) => text.replace(/^# .*\n+/, '');
-write(
-  'how-it-works/decisions.md',
-  `---
-title: Decision log
-description: What was decided while building V-01, and why. Newest first.
-sidebar:
-  order: 90
----
-
-${withoutTitle(readFileSync(resolve(root, 'docs/decisions.md'), 'utf8'))}`,
-);
+/** Drops each `## ` section whose heading matches. */
+const withoutSection = (text: string, heading: RegExp) =>
+  text
+    .split(/\n(?=## )/)
+    .filter((part) => !(part.startsWith('## ') && heading.test(part.split('\n')[0] ?? '')))
+    .join('\n');
 write(
   'how-it-works/security.md',
   `---
 title: Security
-description: How V-01 keeps operators apart, signs people in, and protects codes and money.
+description: How ViVi OS keeps operators apart, signs people in, and protects codes and money.
 sidebar:
   order: 20
 ---
 
-${withoutTitle(readFileSync(resolve(root, 'docs/security.md'), 'utf8'))}`,
+${withoutSection(withoutTitle(readFileSync(resolve(root, 'docs/security.md'), 'utf8')), /housekeeping/)}`,
 );
-console.log(`Reference pages: ${rows.length} permissions, decision log and security written.`);
+
+// The public API reference --------------------------------------------------------------------------
+
+const INTERNAL = /guesty|channex/i;
+const specFile = resolve(here, '../src/openapi.json');
+const spec = JSON.parse(readFileSync(specFile, 'utf8')) as {
+  paths: Record<string, Record<string, unknown>>;
+  tags?: { name: string; description?: string }[];
+};
+for (const path of Object.keys(spec.paths)) if (INTERNAL.test(path)) delete spec.paths[path];
+/** Takes internal fields, required entries and enum values out of every schema. */
+const scrub = (node: unknown): unknown => {
+  if (Array.isArray(node)) return node.filter((v) => !(typeof v === 'string' && INTERNAL.test(v))).map(scrub);
+  if (node && typeof node === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(node)) {
+      if (INTERNAL.test(key)) continue;
+      out[key] = scrub(value);
+    }
+    return out;
+  }
+  return node;
+};
+const tagWords: Record<string, string> = { Channels: 'Airbnb, Booking.com and Vrbo accounts and listings.' };
+spec.tags = spec.tags?.map((t) => (tagWords[t.name] ? { ...t, description: tagWords[t.name] } : t));
+const publicSpec = scrub(spec);
+writeFileSync(specFile, `${JSON.stringify(publicSpec, null, 2)}\n`);
+
+// Nothing internal may reach the public site.
+const leaks: string[] = [];
+const check = (where: string, text: string) => {
+  if (INTERNAL.test(text)) leaks.push(where);
+};
+check('openapi.json', JSON.stringify(publicSpec));
+for (const page of ['reference/roles.md', 'how-it-works/security.md']) {
+  check(page, readFileSync(resolve(docs, page), 'utf8'));
+}
+if (leaks.length) {
+  console.error(`Internal names found in the public docs: ${leaks.join(', ')}`);
+  process.exit(1);
+}
+console.log(`Reference pages: ${rows.length} permissions, security and the public API reference written.`);

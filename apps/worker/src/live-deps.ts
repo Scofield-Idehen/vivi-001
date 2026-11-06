@@ -66,7 +66,7 @@ export function senders(env: WorkerEnv): Senders {
   return { email: new ResendSender(env.RESEND_API_KEY), from: env.MAIL_FROM };
 }
 
-/** Door codes through TTLock once V-01's TTLock application and the secret key are set; otherwise none. */
+/** Door codes through TTLock once ViVi OS's TTLock application and the secret key are set; otherwise none. */
 export function lockDeps(env: WorkerEnv): LockDeps | null {
   if (!env.TTLOCK_CLIENT_ID || !env.TTLOCK_CLIENT_SECRET || !env.FIELD_SECRET_KEY) return null;
   return {

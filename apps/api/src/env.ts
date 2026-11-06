@@ -35,7 +35,7 @@ const EnvSchema = z
      * kept in the secret manager and never rotated without re-encrypting first.
      */
     FIELD_SECRET_KEY: z.string().min(32).optional(),
-    /** V-01's TTLock developer application (euopen.ttlock.com), for connecting an operator's locks. */
+    /** ViVi OS's TTLock developer application (euopen.ttlock.com), for connecting an operator's locks. */
     TTLOCK_CLIENT_ID: z.string().min(1).optional(),
     TTLOCK_CLIENT_SECRET: z.string().min(1).optional(),
     TTLOCK_API_URL: z.url().optional(),
@@ -46,7 +46,7 @@ const EnvSchema = z
     STRIPE_SECRET_KEY: z.string().min(20).optional(),
     /** The Slack app's bot token (xoxb-…): job messages to the team. Only ever a GitHub secret. */
     SLACK_BOT_TOKEN: z.string().startsWith('xoxb-').optional(),
-    /** The signing secret of the Stripe webhook (whsec_…). Without it V-01 checks with Stripe instead. */
+    /** The signing secret of the Stripe webhook (whsec_…). Without it ViVi OS checks with Stripe instead. */
     STRIPE_WEBHOOK_SECRET: z.string().min(16).optional(),
     STRIPE_LIVE: z
       .enum(['true', 'false'])

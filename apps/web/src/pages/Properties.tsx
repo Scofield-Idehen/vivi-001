@@ -59,13 +59,13 @@ export function Properties() {
         <Button
           disabled={connectAll.isPending}
           onClick={() => connectAll.mutate()}
-          title="Puts every property that isn't in Channex yet there. Nothing is sent to any channel."
+          title="Puts every property that isn't in channel sync yet there. Nothing is sent to any channel."
         >
-          Connect all to Channex ({toConnect})
+          Connect all to channel sync ({toConnect})
         </Button>
       ) : connecting > 0 ? (
         <span className="inline-flex items-center gap-2 text-[13.5px] text-slate">
-          <Spinner size={14} /> Connecting {connecting} to Channex
+          <Spinner size={14} /> Connecting {connecting} to channel sync
         </span>
       ) : null}
       <Button variant="primary" onClick={() => navigate('/properties/new')}>
@@ -149,7 +149,7 @@ export function Properties() {
                   Sync
                 </th>
                 <th scope="col" className="py-2.5 font-normal">
-                  Channex
+                  Channel sync
                 </th>
               </tr>
             </thead>
@@ -185,7 +185,7 @@ export function Properties() {
                   </td>
                   <td className="py-2 text-[13px]">
                     {p.channexStatus === 'connected' ? (
-                      <StatusDot status="done">In Channex</StatusDot>
+                      <StatusDot status="done">In channel sync</StatusDot>
                     ) : p.channexStatus === 'connecting' ? (
                       <span className="inline-flex items-center gap-1.5 text-slate">
                         <Spinner size={13} /> Connecting

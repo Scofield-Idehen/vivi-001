@@ -72,7 +72,7 @@ export interface AppDeps {
   mailer?: InviteMailer;
   /** The clock, so tests can fix today for the guest page. */
   now?: () => Date;
-  /** Defaults to TTLock when V-01's TTLock application is configured. */
+  /** Defaults to TTLock when ViVi OS's TTLock application is configured. */
   locks?: LockProvider | null;
   /** Makes colleagues' sign-ins without emailing them; defaults to Supabase Auth with the service key. */
   directory?: UserDirectory;
@@ -118,10 +118,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     await app.register(swagger, {
       openapi: {
         info: {
-          title: 'V-01 API',
+          title: 'ViVi OS API',
           version: '1',
           description:
-            'Everything V-01’s own screens use. Signed-in calls carry a Supabase access token (`Authorization: Bearer …`) and the workspace (`x-org-id`). The booking website (`/v1/site/…`) and the guest’s stay page (`/v1/stay/…`) are public.',
+            'Everything ViVi OS’s own screens use. Signed-in calls carry a Supabase access token (`Authorization: Bearer …`) and the workspace (`x-org-id`). The booking website (`/v1/site/…`) and the guest’s stay page (`/v1/stay/…`) are public.',
         },
         components: {
           securitySchemes: {

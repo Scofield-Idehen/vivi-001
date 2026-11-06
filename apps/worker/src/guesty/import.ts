@@ -44,7 +44,7 @@ import { calendarWindows, type GuestyReader, GuestySnapshot } from './snapshot.t
 
 /**
  * The import from Guesty (playbook, Section 13; decisions, 19 Oct 2026): every listing becomes a
- * property that Guesty still runs (`managed_by = 'guesty'`, so V-01 sends nothing for it), with its
+ * property that Guesty still runs (`managed_by = 'guesty'`, so ViVi OS sends nothing for it), with its
  * photos, amenities, custom fields, tags, nightly prices and blocks; every booking becomes a
  * reservation with its guest; and each listing's place on Airbnb, Booking.com and Vrbo is kept as
  * the account map the move-over step links from. Running it again updates what it made before.
@@ -228,7 +228,7 @@ export async function importFromGuesty(
 
 /** The work of one import, inside its transaction. */
 class Importer {
-  /** Guesty listing id → V-01 property id, for the bookings. */
+  /** Guesty listing id → ViVi OS property id, for the bookings. */
   private readonly propertyOf = new Map<string, string>();
   private readonly fieldIds = new Map<string, { id: string; kind: string }>();
   private readonly accountIds = new Map<string, string>();
@@ -344,7 +344,7 @@ class Importer {
         .values({
           organisationId: this.options.orgId,
           ...mapped.values,
-          // Guesty runs it until the move-over step; V-01 sends nothing for it meanwhile.
+          // Guesty runs it until the move-over step; ViVi OS sends nothing for it meanwhile.
           managedBy: 'guesty',
           archivedAt: active ? null : this.now.toISOString(),
         })
@@ -381,7 +381,7 @@ class Importer {
     this.summary.amenities.set += codes.length;
   }
 
-  /** Photos stay on Guesty's addresses for now; copying them into V-01's storage is a follow-up. */
+  /** Photos stay on Guesty's addresses for now; copying them into ViVi OS's storage is a follow-up. */
   private async photos(
     propertyId: string,
     listingId: string,
@@ -530,7 +530,7 @@ class Importer {
     }
   }
 
-  /** A V-01 channel account for each account Guesty's listings sit on: "Airbnb A", "Airbnb B"… */
+  /** A ViVi OS channel account for each account Guesty's listings sit on: "Airbnb A", "Airbnb B"… */
   private async account(channel: Channel, key: string): Promise<string> {
     const mapKey = `${channel}|${key}`;
     const known = this.accountIds.get(mapKey);
@@ -614,7 +614,7 @@ class Importer {
   }
 
   /**
-   * Each booking's conversation from Guesty's Inbox, as history in its V-01 thread: oldest first,
+   * Each booking's conversation from Guesty's Inbox, as history in its ViVi OS thread: oldest first,
    * each message once (by Guesty's id), marked read and not waiting, because the team answered
    * these in Guesty. Guesty's log lines and private notes stay behind.
    */
@@ -693,7 +693,7 @@ class Importer {
     this.summary.messages.conversations += 1;
     this.summary.messages.imported += added;
     if (added) {
-      // History, answered in Guesty: nothing here is unread or waiting on V-01.
+      // History, answered in Guesty: nothing here is unread or waiting on ViVi OS.
       await this.tx.execute(sql`
         update app.message_threads
            set unread_count = 0, awaiting_since = null,
@@ -791,8 +791,8 @@ class Importer {
         }
       } catch (error) {
         if (pgCode(error) === '23505') {
-          // The same channel code is already on a booking V-01 has (say, one Channex sent): leave it.
-          this.summary.reservations.skipped.push(`${v.channelReference}: already in V-01 under that code`);
+          // The same channel code is already on a booking ViVi OS has (say, one Channex sent): leave it.
+          this.summary.reservations.skipped.push(`${v.channelReference}: already in ViVi OS under that code`);
           continue;
         }
         throw error;

@@ -3,9 +3,9 @@ title: Payments and deposits
 description: Taking card payments and holding damage deposits through Stripe.
 ---
 
-V-01 takes card payments through **Stripe**. The guest always types their card on Stripe's own page, so no card number ever reaches V-01 or your team. Stripe is connected by V-01 staff; until it is, the booking says "Card payments switch on once Stripe is connected."
+ViVi OS takes card payments through **Stripe**. The guest always types their card on Stripe's own page, so no card number ever reaches ViVi OS or your team. Stripe is connected by ViVi OS staff; until it is, the booking says "Card payments switch on once Stripe is connected."
 
-While Stripe is in test mode, V-01 says so ("Stripe test mode, no real money") and test payments are marked "(Stripe test)". You can try a payment with Stripe's test card, 4242 4242 4242 4242.
+While Stripe is in test mode, ViVi OS says so ("Stripe test mode, no real money") and test payments are marked "(Stripe test)". You can try a payment with Stripe's test card, 4242 4242 4242 4242.
 
 ## Asking for a card payment
 
@@ -39,7 +39,7 @@ On a booking's page, **Hold a deposit**, enter the amount, **Make link**, and se
 ### After the stay
 
 - **Release** lets the whole hold go. It can't be taken again after this.
-- **Keep some or all**: enter the amount and what it was for (for example, "Broken lamp"), then **Charge the card**. The rest goes back to the guest's card. V-01 records both a charge and a card payment of the same amount, so the balance doesn't move.
+- **Keep some or all**: enter the amount and what it was for (for example, "Broken lamp"), then **Charge the card**. The rest goes back to the guest's card. ViVi OS records both a charge and a card payment of the same amount, so the balance doesn't move.
 
 Long stays can outlast a hold. A "charge and refund" deposit for long stays is not built yet.
 

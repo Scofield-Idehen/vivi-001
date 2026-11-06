@@ -212,7 +212,7 @@ function GuestPhone({ orgId, value, canEdit }: { orgId: string; value: string | 
 }
 
 /**
- * Every time V-01 staff opened this workspace. They need a reason, they can only read, and the
+ * Every time ViVi OS staff opened this workspace. They need a reason, they can only read, and the
  * access closes by itself; this list is how the company checks that.
  */
 function SupportVisits({ orgId }: { orgId: string }) {
@@ -222,9 +222,9 @@ function SupportVisits({ orgId }: { orgId: string }) {
 
   return (
     <section aria-labelledby="support-visits" className="mt-12 max-w-[880px]">
-      <SectionHeading id="support-visits">V-01 support visits</SectionHeading>
+      <SectionHeading id="support-visits">ViVi OS support visits</SectionHeading>
       <p className="mb-3 text-[13.5px] leading-relaxed text-slate">
-        V-01 staff can open this workspace only with a reason, read-only, and for up to four hours. Every
+        ViVi OS staff can open this workspace only with a reason, read-only, and for up to four hours. Every
         visit is listed here.
       </p>
       {visits.error ? (

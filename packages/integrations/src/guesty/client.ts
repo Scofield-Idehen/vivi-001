@@ -1,5 +1,5 @@
 /**
- * Guesty's Open API, read-only: what V-01 needs to bring an operator's listings, bookings and
+ * Guesty's Open API, read-only: what ViVi OS needs to bring an operator's listings, bookings and
  * calendars across (playbook, Section 13). Credentials come from Guesty → Settings → Integrations →
  * Open API, and live only in the worker's .env.
  *

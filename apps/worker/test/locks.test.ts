@@ -115,7 +115,7 @@ describe('door codes', () => {
     expect(rows[0]?.ends_at.toISOString()).toBe('2026-11-08T10:30:00.000Z');
     const onLock = [...ttlock.codes.values()].filter((c) => c.code === digits[0]);
     expect(onLock.map((c) => c.lockId).sort()).toEqual(['1001', '1002']);
-    expect(onLock[0]?.name).toBe('V-01 · Claire Dubois · 05 Nov');
+    expect(onLock[0]?.name).toBe('ViVi OS · Claire Dubois · 05 Nov');
   });
 
   it('runs again without sending anything twice', async () => {

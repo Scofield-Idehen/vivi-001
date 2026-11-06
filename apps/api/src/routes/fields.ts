@@ -90,7 +90,7 @@ export async function fieldsOf(
 /**
  * Custom fields: the team's own details on every property. Admins define them for the workspace;
  * anyone who edits properties fills them in. Secrets are encrypted by the database and shown only
- * to roles with `secrets.read`: never to accounts, and never to V-01 support.
+ * to roles with `secrets.read`: never to accounts, and never to ViVi OS support.
  */
 export function fieldRoutes(app: FastifyInstance, deps: { scope: RequestScope; box: SecretBox | undefined }) {
   const typed = app.withTypeProvider<ZodTypeProvider>();

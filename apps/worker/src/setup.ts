@@ -41,7 +41,7 @@ interface Claimed {
  * in the mapping table. Nothing is sent to any channel by this: that needs the property moved over
  * and its listings linked (step 7).
  *
- * A property V-01 already runs gets a full sync queued the moment it is connected, so Channex
+ * A property ViVi OS already runs gets a full sync queued the moment it is connected, so Channex
  * holds its prices and availability before any listing is linked to it.
  */
 export async function connectProperties(deps: WorkerDeps, batchSize = 5): Promise<SetupStats> {
@@ -191,7 +191,7 @@ async function connectOne(
         status: 'ok',
         detail: { ...ref, groupId },
       });
-      // A property V-01 runs gets its whole calendar to Channex straight away.
+      // A property ViVi OS runs gets its whole calendar to Channex straight away.
       if (property.managedBy === 'v01') {
         const today = todayIn(timeZone, now);
         await tx.insert(ariOutbox).values(

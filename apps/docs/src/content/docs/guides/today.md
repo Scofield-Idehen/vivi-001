@@ -3,7 +3,7 @@ title: Today
 description: The page you open first, showing who is arriving and leaving, the money, and what needs you.
 ---
 
-**Today** is the first page in the staff app. It shows the state of your homes at a glance and what needs someone now. Like Guesty's dashboard, it starts with the day's check-ins and check-outs and the revenue trend, but it keeps the lists short.
+**Today** is the first page in the staff app. It shows the state of your homes at a glance and what needs someone now. It starts with the day's check-ins and check-outs and the revenue trend, but it keeps the lists short.
 
 ## Daily overview
 

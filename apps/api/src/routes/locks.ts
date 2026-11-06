@@ -26,7 +26,7 @@ const LockParams = z.object({ id: z.uuid() });
 
 export interface LockRouteDeps {
   scope: RequestScope;
-  /** Null when V-01 has no TTLock application set, or no key to seal the token with. */
+  /** Null when ViVi OS has no TTLock application set, or no key to seal the token with. */
   provider: LockProvider | null;
   box?: SecretBox;
 }
@@ -89,7 +89,7 @@ export function lockRoutes(app: FastifyInstance, deps: LockRouteDeps) {
       throw new HttpError(
         503,
         'locks_unavailable',
-        'V-01 isn’t set up for TTLock yet: its TTLock application is missing.',
+        'ViVi OS isn’t set up for TTLock yet: its TTLock application is missing.',
       );
     }
     return { provider: deps.provider, box: deps.box };

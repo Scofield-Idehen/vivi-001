@@ -4,7 +4,7 @@ import type { PlatformRole, WorkspaceRole } from './enums.ts';
  * What each role may do inside an operator's workspace.
  * The database already stops one operator seeing another; these checks decide
  * what a person may do within the workspace they are in.
- * `v01_support` (V-01 staff on a support grant) can only read.
+ * `v01_support` (ViVi OS staff on a support grant) can only read.
  */
 export const PERMISSIONS = {
   'properties.read': ['admin', 'operations', 'guest_comms', 'accounts', 'v01_support'],
@@ -18,7 +18,7 @@ export const PERMISSIONS = {
   'money.write': ['admin', 'operations', 'accounts'],
   /** Marking a property clean or dirty: the field team too, who do the cleaning. */
   'cleaning.write': ['admin', 'operations', 'field'],
-  // Lock codes, key-safe codes and Wi-Fi passwords: never accounts, never V-01 support.
+  // Lock codes, key-safe codes and Wi-Fi passwords: never accounts, never ViVi OS support.
   'secrets.read': ['admin', 'operations', 'guest_comms'],
   'fields.manage': ['admin'],
   /** Connecting the lock account and putting locks on properties. */
@@ -61,7 +61,7 @@ export function can(role: WorkspaceRole, permission: Permission): boolean {
   return (PERMISSIONS[permission] as readonly WorkspaceRole[]).includes(role);
 }
 
-/** What each V-01 staff role may do in the console. The database checks the same rules. */
+/** What each ViVi OS staff role may do in the console. The database checks the same rules. */
 export const PLATFORM_PERMISSIONS = {
   'console.read': ['owner', 'support', 'viewer'],
   /** Names and emails of an operator's team. */

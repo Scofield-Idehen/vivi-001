@@ -3,7 +3,7 @@ import { config } from './config.ts';
 
 /**
  * Supabase is used for sign-in only. The app never reads or writes database tables
- * directly: every request goes to the V-01 API with the sign-in token.
+ * directly: every request goes to the ViVi OS API with the sign-in token.
  */
 export const supabase: SupabaseClient | null =
   config.supabaseUrl && config.supabaseKey

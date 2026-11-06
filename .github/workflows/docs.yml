@@ -1,6 +1,6 @@
 name: Docs
 
-# The documentation site, rebuilt with every push to main so it always matches what V-01 does:
+# The documentation site, rebuilt with every push to main so it always matches what ViVi OS does:
 # the API reference is written from the API's own code and the roles page from its permissions
 # (apps/docs). Published to its own Firebase Hosting site in the staging project,
 # https://vivi-os-docs.web.app, until it has its own address.

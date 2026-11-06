@@ -148,7 +148,7 @@ function DateNav({
  * Every property by night (design phase D1): prices, minimum stays, bookings and blocks, with the
  * price limits behind every price, and whether each property is clean. It scrolls through a year
  * back and two years ahead, fetching four weeks at a time as they come into view. Choosing nights
- * opens a panel to change them; what changes goes to the channels for properties V-01 runs.
+ * opens a panel to change them; what changes goes to the channels for properties ViVi OS runs.
  */
 export function CalendarPage() {
   const { orgId } = useCurrentWorkspace();

@@ -3,7 +3,7 @@ title: Insights
 description: How the homes are doing, against the period before, home by home and channel by channel.
 ---
 
-**Insights** shows how your homes are doing: occupancy, nightly rate and revenue, compared with the period before. Admins, operations, accounts and V-01 support can see it.
+**Insights** shows how your homes are doing: occupancy, nightly rate and revenue, compared with the period before. Admins, operations, accounts and ViVi OS support can see it.
 
 ## Choosing a period
 

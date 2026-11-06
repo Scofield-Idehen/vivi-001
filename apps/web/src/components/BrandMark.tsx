@@ -26,11 +26,11 @@ export function OperatorMark({ name, logoUrl }: { name: string; logoUrl?: string
   );
 }
 
-/** V-01's own console. V-01 is the working name until the company has its own. */
+/** ViVi OS's own console. ViVi OS is the working name until the company has its own. */
 export function ConsoleMark() {
   return (
     <span className="flex items-baseline gap-2">
-      <span className="text-[15px] font-semibold tracking-[0.1em] text-canvas">V-01</span>
+      <span className="text-[15px] font-semibold tracking-[0.1em] text-canvas">ViVi OS</span>
       <span className="text-[12.5px] text-console-muted">Console</span>
     </span>
   );

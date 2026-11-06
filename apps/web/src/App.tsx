@@ -55,7 +55,7 @@ function useStartHeld(): boolean {
   return held;
 }
 
-/** Signed in, known to the API, and either V-01 staff or able to open at least one workspace. */
+/** Signed in, known to the API, and either ViVi OS staff or able to open at least one workspace. */
 function Gate() {
   const { session, loading } = useSession();
   const me = useMe();
@@ -100,7 +100,7 @@ function Gate() {
   );
 }
 
-/** V-01 staff start in the console; everyone else in their workspace. */
+/** ViVi OS staff start in the console; everyone else in their workspace. */
 function Home() {
   const platformRole = useMe().data?.platformRole;
   return <Navigate to={platformRole ? '/console' : '/today'} replace />;

@@ -23,7 +23,7 @@ export const FIELD_KIND_HINTS: Record<FieldKind, string> = {
   long_text: 'A paragraph or more, such as a cleaning policy.',
   link: 'A web address, such as check-in instructions in a shared document.',
   secret:
-    'A lock code, key-safe code or Wi-Fi password: stored encrypted, shown only on request, and never to accounts or V-01 support.',
+    'A lock code, key-safe code or Wi-Fi password: stored encrypted, shown only on request, and never to accounts or ViVi OS support.',
 };
 
 export const FIELD_NAME_MAX = 60;

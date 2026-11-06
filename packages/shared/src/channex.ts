@@ -34,7 +34,7 @@ export const ChannexStateSchema = z.object({
   autoClose: z.boolean().nullable(),
   autoCloseCheckedAt: z.string().nullable(),
   /**
-   * The nightly cross-check: when V-01's calendar was last compared with what Channex holds for the
+   * The nightly cross-check: when ViVi OS's calendar was last compared with what Channex holds for the
    * 90 nights ahead, how many nights differed (null when the check could not be made), and what went
    * wrong when it couldn't. Nights that differed were sent again at once.
    */

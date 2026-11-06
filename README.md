@@ -1,6 +1,6 @@
-# V-01
+# ViVi OS
 
-Our own platform for running short-stay properties, built to replace Guesty. V-01 is its own company.
+Our own platform for running short-stay properties, built to replace Guesty. ViVi OS is its own company.
 Its console oversees every operator on the platform (an operator is a company that manages properties),
 and each operator gets its own workspace. Vivistays is the first operator.
 
@@ -23,17 +23,17 @@ code, run `pnpm install` again before `pnpm demo`.
 
 ## What you'll see
 
-You're signed in as a V-01 owner and a Vivistays admin. Vivistays is empty until its properties come
+You're signed in as a ViVi OS owner and a Vivistays admin. Vivistays is empty until its properties come
 across from Guesty. Northwind Stays and Brightwater Lets are made-up companies: you belong to Northwind
 Stays too, so its sample bookings can be tried in the Calendar, and you open Brightwater Lets with support
 access.
 
-- **The V-01 console**
+- **The ViVi OS console**
   - Every operator in one place: their properties, their team, and whether prices and bookings are
     flowing to and from the channels.
   - Problems are listed first.
 - **Support access**
-  - V-01 staff open a company's workspace with a reason and a time limit, and can't change anything.
+  - ViVi OS staff open a company's workspace with a reason and a time limit, and can't change anything.
   - The company sees every visit.
 - **A company's workspace**
   - Today, Calendar, Reservations, Properties and Workspace settings. The sidebar is a row of icons
@@ -62,7 +62,7 @@ access.
   - Custom fields, as in Guesty: the team's own details on every property. An admin defines them once
     for the workspace (a check-in instructions link, the lock code, the cleaning policy, a note for
     the team); anyone who edits properties fills them in. Secrets such as lock codes are stored
-    encrypted, shown behind a Show button, and never shown to accounts or to V-01 support.
+    encrypted, shown behind a Show button, and never shown to accounts or to ViVi OS support.
   - Connect a property to Channex from its page. The worker makes it there, in the company's own group,
     and the page shows when it's done. Nothing reaches a channel until its listings are linked (next).
   - List on channels: Channels & sync lists the workspace's Airbnb, Booking.com and Vrbo accounts, connects
@@ -72,13 +72,13 @@ access.
     and what came in.
   - Airbnb specifics: a live Airbnb listing gets the property's prices, fees and booking rules through
     Channex, again whenever they change; the card can pause the listing on Airbnb and resume it.
-  - A safety net for V-01's own downtime: Channex closes booked nights by itself on every connected
+  - A safety net for ViVi OS's own downtime: Channex closes booked nights by itself on every connected
     property (checked daily), and a worker that comes back after a gap saves every booking that
     arrived meanwhile before it sends a single price or availability out. Sync health in the console
     shows the worker's heartbeat and its last recovery.
   - The other modules are in the menu and arrive in later phases.
 
-![The V-01 console overview](docs/images/console-overview.png)
+![The ViVi OS console overview](docs/images/console-overview.png)
 *The console: every operator, what needs attention, and channel sync.*
 
 ![One operator in the console](docs/images/console-operator.png)
@@ -104,7 +104,7 @@ access.
 
 ## Coming next
 
-Phase 1 connects V-01 to Airbnb, Booking.com and Vrbo through Channex: prices and availability out,
+Phase 1 connects ViVi OS to Airbnb, Booking.com and Vrbo through Channex: prices and availability out,
 bookings in. Channex can't send photos, descriptions or amenities to the channels yet, so for now those
 are copied across from each property's page. Phase 1 also adds the Channels & sync screen.
 

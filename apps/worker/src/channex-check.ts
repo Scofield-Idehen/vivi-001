@@ -10,7 +10,7 @@ import {
 import { addDays, formatMoney, minorDigits } from '@v01/shared';
 
 /**
- * `pnpm channex:check`: proves V-01 can talk to Channex with the key in apps/worker/.env.
+ * `pnpm channex:check`: proves ViVi OS can talk to Channex with the key in apps/worker/.env.
  *
  *   pnpm channex:check
  *     Which Channex server knows the key; the properties in the account with their room types,
@@ -18,10 +18,10 @@ import { addDays, formatMoney, minorDigits } from '@v01/shared';
  *
  *   pnpm channex:check --round-trip <Channex property id>
  *     Staging only. Sends a test price, minimum stay and closed night for one date about 300 days
- *     ahead through V-01's own adapter, reads them back from Channex, then puts the night back.
+ *     ahead through ViVi OS's own adapter, reads them back from Channex, then puts the night back.
  *
  *   pnpm channex:check --make-test-property
- *     Staging only. Makes a property called "V-01 test property" through V-01's adapter (one unit,
+ *     Staging only. Makes a property called "ViVi OS test property" through ViVi OS's adapter (one unit,
  *     one rate plan), or uses the one made before, then runs the round trip on it.
  *
  * It never prints the key, and never acknowledges a booking, so nothing leaves the feed.
@@ -57,7 +57,7 @@ const SERVER_NAMES: Record<Server, string> = {
 /** How many properties get their room types, rate plans and channels listed. */
 const DETAILED = 10;
 /** The one property the check may make, on staging only. Its name says what it is. */
-export const TEST_PROPERTY = 'V-01 test property';
+export const TEST_PROPERTY = 'ViVi OS test property';
 const ROUND_TRIP_DAYS_AHEAD = 300;
 const READ_BACK_TRIES = 5;
 
@@ -129,7 +129,7 @@ class Report {
 
 export async function runChannexCheck(options: CheckOptions): Promise<boolean> {
   const out = new Report(options.print);
-  out.line(options.version ? `V-01 Channex check, code ${options.version}` : 'V-01 Channex check');
+  out.line(options.version ? `ViVi OS Channex check, code ${options.version}` : 'ViVi OS Channex check');
   out.line();
 
   if (keyInExampleEnv(options.exampleEnv)) {
@@ -245,7 +245,7 @@ async function describeAccount(client: ChannexClient, out: Report): Promise<numb
   if (properties.length === 0) {
     out.ok('The account has no properties yet.');
     out.note(
-      'Expected on a new account: V-01 will create its properties in Channex when they are connected.',
+      'Expected on a new account: ViVi OS will create its properties in Channex when they are connected.',
     );
   } else {
     out.ok(`${plural(properties.length, 'property', 'properties')} in the account:`);
@@ -291,13 +291,13 @@ async function describeAccount(client: ChannexClient, out: Report): Promise<numb
   } else {
     const count = shown === 100 && typeof feed.meta?.total !== 'number' ? '100 or more' : String(waiting);
     out.ok(`${count} booking change${waiting === 1 ? ' is' : 's are'} waiting in the feed.`);
-    out.note('Left where they are: V-01 acknowledges each one only after saving it.');
+    out.note('Left where they are: ViVi OS acknowledges each one only after saving it.');
   }
   return properties.length;
 }
 
 /**
- * Makes the test property through V-01's own adapter, the way V-01 will make each property it
+ * Makes the test property through ViVi OS's own adapter, the way ViVi OS will make each property it
  * connects, or finds the one made before. Staging only. Returns its Channex id.
  */
 async function testProperty(client: ChannexClient, server: Server, out: Report): Promise<string | null> {
@@ -379,7 +379,7 @@ async function roundTrip(
     minStay: before.minStay === 2 ? 3 : 2,
     available: before.available === 0 ? 1 : 0,
   };
-  // V-01's own adapter does the sending: this is what the worker will send.
+  // ViVi OS's own adapter does the sending: this is what the worker will send.
   const provider = new ChannexProvider(client);
   const sent = await send(provider, ref, date, test);
   if (!reportSend(sent, `Sent ${describeNight(test, currency)}`, out)) return;

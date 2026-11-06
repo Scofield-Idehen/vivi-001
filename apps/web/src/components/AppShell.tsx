@@ -33,7 +33,7 @@ import {
 import { AccountActions } from './TopBar.tsx';
 import { Button, EmptyState } from './ui.tsx';
 
-/** The top of the sidebar: whose workspace this is, and the way back to the console for V-01 staff. */
+/** The top of the sidebar: whose workspace this is, and the way back to the console for ViVi OS staff. */
 function WorkspaceHeader({ onNavigate }: { onNavigate?: () => void }) {
   const { orgId, entry, entries, choose } = useCurrentWorkspace();
   const { collapsed } = useRail();
@@ -44,13 +44,13 @@ function WorkspaceHeader({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex flex-col gap-1">
       {platformRole ? (
-        <RailLink to="/console" label="V-01 console" icon={IconArrowLeft} end onNavigate={onNavigate} />
+        <RailLink to="/console" label="ViVi OS console" icon={IconArrowLeft} end onNavigate={onNavigate} />
       ) : null}
       <RailMark
         small={<RailInitial text={name} tone="light" />}
         full={<OperatorMark name={name} logoUrl={workspace.data?.brand.logoLightUrl} />}
       />
-      {/* People in more than one company switch here. V-01 staff switch from the console instead. */}
+      {/* People in more than one company switch here. ViVi OS staff switch from the console instead. */}
       {!platformRole && entries.length > 1 && !collapsed ? (
         <div className="px-2.5 pt-1">
           <label htmlFor="workspace" className="sr-only">
@@ -118,7 +118,7 @@ function AccountFooter({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-/** Always on screen while V-01 staff look at an operator's workspace on a support grant. */
+/** Always on screen while ViVi OS staff look at an operator's workspace on a support grant. */
 function SupportBanner() {
   const { orgId, entry } = useCurrentWorkspace();
   const end = useEndSupportAccess();
@@ -131,7 +131,7 @@ function SupportBanner() {
       <p className="flex min-w-0 items-start gap-2">
         <IconLock size={16} stroke={1.75} aria-hidden className="mt-[1px] shrink-0" />
         <span>
-          V-01 support access to <span className="font-medium">{entry.organisationName}</span>: read-only
+          ViVi OS support access to <span className="font-medium">{entry.organisationName}</span>: read-only
           until {clockTime(expiresAt)}. They can see this visit and the pages you open.
         </span>
       </p>
@@ -281,7 +281,7 @@ function FieldFrame() {
   );
 }
 
-/** An operator's workspace. V-01 staff with no workspace open go back to the console. */
+/** An operator's workspace. ViVi OS staff with no workspace open go back to the console. */
 export function AppShell() {
   const { current } = useWorkspaces();
   const me = useMe();

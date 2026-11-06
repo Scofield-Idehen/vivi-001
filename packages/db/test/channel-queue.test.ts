@@ -6,7 +6,7 @@ import { expectPgError, insertProperty, PG, rawQuery } from './helpers.ts';
 
 /**
  * Migration 0012: the database queues every change for the channels in the same transaction, and
- * only for properties V-01 runs. A property on Guesty, or not connected yet, never queues anything.
+ * only for properties ViVi OS runs. A property on Guesty, or not connected yet, never queues anything.
  */
 
 let t: TestDatabase;
@@ -35,7 +35,7 @@ beforeAll(async () => {
   api = new ApiDatabase(t.apiUrl);
   runs = await api.withOrg(scope(), (tx) => insertProperty(tx, op.orgId, 'Harbour View Lodge'));
   onGuesty = await api.withOrg(scope(), (tx) => insertProperty(tx, op.orgId, 'Mill Street Flat'));
-  // Only the move-over step, acting as the owner, hands a property to V-01.
+  // Only the move-over step, acting as the owner, hands a property to ViVi OS.
   await rawQuery(t.ownerUrl, `update app.properties set managed_by = 'v01' where id = $1`, [runs]);
 });
 

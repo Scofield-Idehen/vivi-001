@@ -1,6 +1,6 @@
 # Security: signing in and keeping people out
 
-An addition to the V-01 Build Playbook (for v1.3, as a new section after 15, "Adapters"). Decided
+An addition to the ViVi OS Build Playbook (for v1.3, as a new section after 15, "Adapters"). Decided
 with Alpha on 20 October 2026: written down now, built later; only item 1 is built today.
 
 ## What the playbook already settles
@@ -10,7 +10,7 @@ with Alpha on 20 October 2026: written down now, built later; only item 1 is bui
 - Three database roles (`app_api`, `app_worker`, `app_jobs`) with the least each needs; nothing
   connects as the owner.
 - Secrets (lock codes, Wi-Fi passwords) are encrypted by the API before they reach the database and
-  are shown only to admins, operations and guest comms; never to accounts, the field team or V-01
+  are shown only to admins, operations and guest comms; never to accounts, the field team or ViVi OS
   support.
 - Every change is in the audit trail. Support access is time-limited, read-only and logged where the
   operator can see it. Webhooks are refused until signed.
@@ -27,7 +27,7 @@ with Alpha on 20 October 2026: written down now, built later; only item 1 is bui
 
 ## 2. Two-step sign-in for admins (later)
 
-- Admins (and V-01 staff) add an authenticator app (TOTP) to their account; Supabase supports it.
+- Admins (and ViVi OS staff) add an authenticator app (TOTP) to their account; Supabase supports it.
   Required before an operator's real guest data is in; optional for other roles.
 - A lost authenticator is reset by another admin, logged in the audit trail.
 
@@ -35,12 +35,12 @@ with Alpha on 20 October 2026: written down now, built later; only item 1 is bui
 
 - Removing a membership also ends that person's sessions everywhere, at once (Supabase's sign-out
   of all sessions for the user), and revokes any field-team phone that was signed in.
-- The console can do the same for V-01 staff.
+- The console can do the same for ViVi OS staff.
 
 ## 4. A sign-in log and alerts (later)
 
 - Each sign-in is recorded: who, when, from where (country from the address), which device.
-  Admins see their workspace's; the console sees V-01 staff's.
+  Admins see their workspace's; the console sees ViVi OS staff's.
 - An alert on a sign-in from a new country for an admin, and on five failed attempts in a row.
 
 ## 5. Rate limits (later)

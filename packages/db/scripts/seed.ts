@@ -1,11 +1,11 @@
 import pg from 'pg';
 
 /**
- * Sets up the first operators by hand. The V-01 console lists operators; adding them from the
+ * Sets up the first operators by hand. The ViVi OS console lists operators; adding them from the
  * console comes later (design phase D8).
  *
  *   pnpm db:seed          Vivistays as the first operator. SEED_ADMIN_EMAIL gets an admin invitation
- *                         to Vivistays and becomes a V-01 owner (console access) on first sign-in.
+ *                         to Vivistays and becomes a ViVi OS owner (console access) on first sign-in.
  *   pnpm db:seed --demo   Also a fictional operator with invented properties, for local development.
  *
  * Runs as the owner. Real guest or property data never goes in a seed.
@@ -118,7 +118,7 @@ try {
   console.log(
     `Seeded Vivistays${demo ? ' and the Northwind Stays demo operator' : ''}.` +
       (adminEmail
-        ? ` ${adminEmail} is a V-01 owner, and their invitation is accepted on first sign-in.`
+        ? ` ${adminEmail} is a ViVi OS owner, and their invitation is accepted on first sign-in.`
         : ''),
   );
 } catch (error) {

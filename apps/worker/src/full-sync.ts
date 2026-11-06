@@ -7,7 +7,7 @@ import type { WorkerDeps } from './deps.ts';
 export const FULL_SYNC_DAYS = 500;
 
 /**
- * Queues a full sync for every property that V-01 manages and has mapped: availability, and prices
+ * Queues a full sync for every property that ViVi OS manages and has mapped: availability, and prices
  * and stay rules. The outbox sender then sends each as one batched call per property.
  *
  * Never run this straight after an outage: drain the booking feed first (playbook,

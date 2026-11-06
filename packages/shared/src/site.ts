@@ -7,10 +7,10 @@ import { GUEST_NAME_MAX, isEmail, isPhone } from './reservations.ts';
 /**
  * The operator's booking website (2 Nov 2026), in place of Guesty's booking engine
  * (vivistays.guestybookings.com). Guests find a home, see the price for their dates, give their
- * details and pay on Stripe's page. The card is only authorised there; V-01 saves the booking and
+ * details and pay on Stripe's page. The card is only authorised there; ViVi OS saves the booking and
  * then takes the money, so nobody pays for nights that went to another booking meanwhile.
  *
- * Only homes whose channels V-01 runs, or that have none, can be on the site: a booking made here
+ * Only homes whose channels ViVi OS runs, or that have none, can be on the site: a booking made here
  * closes the nights on every channel at once.
  */
 

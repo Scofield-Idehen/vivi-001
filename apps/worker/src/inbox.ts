@@ -19,7 +19,7 @@ import type { WorkerDeps } from './deps.ts';
 
 export interface Senders {
   email?: EmailSender;
-  /** The one address V-01 sends from, "hello@vivistays.com"; the operator's name goes in front. */
+  /** The one address ViVi OS sends from, "hello@vivistays.com"; the operator's name goes in front. */
   from?: string;
 }
 

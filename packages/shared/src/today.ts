@@ -3,7 +3,7 @@ import { CHANNELS } from './enums.ts';
 
 /**
  * The Today page: what the team deals with today, and what needs a person. Guesty's dashboard is
- * the measure; V-01's version leads with the problems, because arrivals take care of themselves and
+ * the measure; ViVi OS's version leads with the problems, because arrivals take care of themselves and
  * a booking sold twice does not.
  */
 

@@ -48,8 +48,8 @@ import { operatorToday } from './reservations.ts';
 
 /**
  * Damage claims (built 30 Oct 2026): one per booking. The team lists what was damaged and what it
- * costs, adds receipts and their own photos (kept as uploaded), and V-01 gathers the photos from
- * the cleans before and after the stay. Filing is done by a person on the channel; V-01 keeps the
+ * costs, adds receipts and their own photos (kept as uploaded), and ViVi OS gathers the photos from
+ * the cleans before and after the stay. Filing is done by a person on the channel; ViVi OS keeps the
  * deadline in front of them and records where it went and what came back.
  */
 

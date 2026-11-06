@@ -133,7 +133,7 @@ async function syncOrg(
     }
   } catch (error) {
     if (error instanceof LockError && error.kind === 'auth') {
-      await failAccount(`TTLock refused V-01’s sign-in (${error.message}). Connect the account again.`);
+      await failAccount(`TTLock refused ViVi OS’s sign-in (${error.message}). Connect the account again.`);
       return;
     }
     deps.log.warn({ error: String(error) }, 'Lock status could not be refreshed');
@@ -154,7 +154,7 @@ async function syncOrg(
              ((r.check_in + coalesce(r.check_in_time, p.check_in_time))::timestamp at time zone ${zone})::text as starts_at,
              ((r.check_out + coalesce(r.check_out_time, p.check_out_time))::timestamp at time zone ${zone}
                + make_interval(mins => ${CHECK_OUT_GRACE_MINUTES}))::text as ends_at,
-             'V-01 · ' || coalesce(g.full_name, 'Guest') || ' · ' || to_char(r.check_in, 'DD Mon') as label
+             'ViVi OS · ' || coalesce(g.full_name, 'Guest') || ' · ' || to_char(r.check_in, 'DD Mon') as label
         from app.locks l
         join app.properties p on p.id = l.property_id
         join app.reservations r on r.property_id = p.id and r.status = 'confirmed'
@@ -165,7 +165,7 @@ async function syncOrg(
       select l.id, l.provider_lock_id, null::uuid, t.id, 'crew',
              ((t.due_on + ${CREW_CODE_FROM}::time)::timestamp at time zone ${zone})::text,
              ((t.due_on + ${CREW_CODE_UNTIL}::time)::timestamp at time zone ${zone})::text,
-             'V-01 · ' || t.title || ' · ' || to_char(t.due_on, 'DD Mon')
+             'ViVi OS · ' || t.title || ' · ' || to_char(t.due_on, 'DD Mon')
         from app.locks l
         join app.tasks t on t.property_id = l.property_id
        where l.makes_codes and l.has_gateway
@@ -297,7 +297,7 @@ async function syncOrg(
     }
   } catch (error) {
     if (error instanceof LockError && error.kind === 'auth') {
-      await failAccount(`TTLock refused V-01’s sign-in (${error.message}). Connect the account again.`);
+      await failAccount(`TTLock refused ViVi OS’s sign-in (${error.message}). Connect the account again.`);
       return;
     }
     throw error;

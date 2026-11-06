@@ -190,7 +190,7 @@ describe('editing a property after it is added', () => {
     expect(quiet.body.error.message).toBe('Give quiet hours a start and an end.');
   });
 
-  it('never moves a property to V-01 from here', async () => {
+  it('never moves a property to ViVi OS from here', async () => {
     const { body } = await call('PATCH', `/v1/properties/${propertyId}`, {
       as: asA(),
       body: { managedBy: 'v01', otherNotes: 'Bins go out on Thursday.' },

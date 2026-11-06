@@ -44,8 +44,8 @@ export function LocksSection({ orgId, role }: { orgId: string; role: WorkspaceRo
         Door locks
       </h2>
       <p className="mb-3 max-w-[640px] text-[13px] text-slate">
-        Connect your TTLock account and V-01 makes the codes: each stay gets its own, from check-in to half an
-        hour after check-out, and each job gets a code that works on its day only. Codes go to the guest’s
+        Connect your TTLock account and ViVi OS makes the codes: each stay gets its own, from check-in to half
+        an hour after check-out, and each job gets a code that works on its day only. Codes go to the guest’s
         page and the cleaner’s job; cancelled stays lose theirs.
       </p>
       {locks.error ? <Notice tone="urgent">{explain(locks.error)}</Notice> : null}
@@ -57,7 +57,7 @@ export function LocksSection({ orgId, role }: { orgId: string; role: WorkspaceRo
 
       {view && !view.available ? (
         <Notice tone="pending">
-          V-01’s TTLock application isn’t set up on this server yet, so locks can’t be connected. Add
+          ViVi OS’s TTLock application isn’t set up on this server yet, so locks can’t be connected. Add
           TTLOCK_CLIENT_ID and TTLOCK_CLIENT_SECRET to the API and worker settings.
         </Notice>
       ) : null}
@@ -89,8 +89,8 @@ export function LocksSection({ orgId, role }: { orgId: string; role: WorkspaceRo
               className="h-9 rounded-lg border border-edge bg-white px-3 text-[14px] text-ink focus:border-accent focus:outline-none"
             />
             <span className="text-[12.5px] text-mist">
-              Sent to TTLock once to sign in, then forgotten. V-01 keeps only the sign-in TTLock gives back,
-              sealed.
+              Sent to TTLock once to sign in, then forgotten. ViVi OS keeps only the sign-in TTLock gives
+              back, sealed.
             </span>
           </label>
           <div>
@@ -142,7 +142,7 @@ export function LocksSection({ orgId, role }: { orgId: string; role: WorkspaceRo
                     if (
                       await confirm({
                         title: 'Disconnect TTLock?',
-                        body: 'V-01 stops making codes. Codes already on the locks keep working until they end.',
+                        body: 'ViVi OS stops making codes. Codes already on the locks keep working until they end.',
                         action: 'Disconnect',
                         tone: 'urgent',
                       })
@@ -263,7 +263,7 @@ function LockRow({
             onChange={(e) => onChange({ makesCodes: e.target.checked })}
             className="size-4 accent-[var(--color-accent)]"
           />
-          V-01 makes the codes
+          ViVi OS makes the codes
         </label>
       </div>
     </li>

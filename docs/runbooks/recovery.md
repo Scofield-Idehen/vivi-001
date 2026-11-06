@@ -1,6 +1,6 @@
 # Recovering from an outage: drain before push
 
-From the playbook, Section 8. While V-01 is down, Channex keeps closing dates on the other channels
+From the playbook, Section 8. While ViVi OS is down, Channex keeps closing dates on the other channels
 for new bookings, and holds every booking revision unacknowledged in its feed. What matters is the
 order in which we come back.
 
@@ -26,7 +26,7 @@ last heartbeat, whether it is recovering, and the last recovery (how long the ga
 booking changes were saved first); the alert channel gets one line too.
 
 Step 3, the cross-check, runs every night at 03:30 London (`nightly-cross-check`,
-`apps/worker/src/cross-check.ts`): the next 90 nights of every calendar V-01 runs against what
+`apps/worker/src/cross-check.ts`): the next 90 nights of every calendar ViVi OS runs against what
 Channex holds. Differing nights are queued again through the outbox, logged (`cross_check` in the
 sync log) and raised as a warning alert; the Today page lists them under Needs attention and the
 property page says when it was last checked. After a long outage, don't wait for the night: once
@@ -37,7 +37,7 @@ changes pending is skipped as "waiting", so run it again once they have gone.
 ## Channex closes booked nights itself
 
 Every property is created in Channex with its availability auto-update settings on, so a booking
-closes its nights in Channex the moment it arrives, before V-01 has heard of it. The worker reads
+closes its nights in Channex the moment it arrives, before ViVi OS has heard of it. The worker reads
 that back after every connection and every morning at 04:15 (`daily-safety-check`), turns it back on
 if someone turned it off in Channex, and raises a warning alert with the property's name. The
 property page's Channels section shows when it was last checked.
