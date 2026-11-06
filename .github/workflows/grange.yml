@@ -32,6 +32,7 @@ jobs:
           fi
       - name: Connect thegrangebyvivi.com, once, and print the DNS records it needs
         run: |
+          for D in thegrangebyvivi.com www.thegrangebyvivi.com; do for T in A CNAME TXT; do echo "DNS $D $T: $(dig +short $T $D @8.8.8.8 | tr '\n' ' ')"; done; done
           TOKEN=$(gcloud auth print-access-token)
           API="https://firebasehosting.googleapis.com/v1beta1/projects/$PROJECT/sites/$SITE/customDomains"
           for D in thegrangebyvivi.com www.thegrangebyvivi.com; do
