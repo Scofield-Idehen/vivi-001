@@ -324,7 +324,7 @@ document.addEventListener('DOMContentLoaded', function () {
   function store(s) { try { sessionStorage.setItem(KEY, JSON.stringify(s)); } catch (err) {} }
   function bookUrl() {
     var u = new URL(BOOK), s = saved();
-    if (s.checkin && s.checkout) {
+    if (s.checkin && s.checkout && s.checkout > s.checkin) {
       u.searchParams.set('checkIn', s.checkin);
       u.searchParams.set('checkOut', s.checkout);
       u.searchParams.set('adults', s.guests || '2');
@@ -335,18 +335,35 @@ document.addEventListener('DOMContentLoaded', function () {
     var url = bookUrl();
     document.querySelectorAll('a[href^="https://vivistays.guestybookings.com"]').forEach(function (a) { a.href = url; });
   }
+  function iso(d) { var m = ('0' + (d.getMonth() + 1)).slice(-2), day = ('0' + d.getDate()).slice(-2); return d.getFullYear() + '-' + m + '-' + day; }
+  function addDays(str, n) { var p = str.split('-'), d = new Date(+p[0], +p[1] - 1, +p[2] + n); return iso(d); }
+  function fixDates() {
+    if (!form) return;
+    var ci = form.elements.checkin, co = form.elements.checkout, today = iso(new Date());
+    ci.min = today;
+    if (ci.value && ci.value < today) ci.value = '';
+    co.min = ci.value ? addDays(ci.value, 1) : addDays(today, 1);
+    if (co.value && co.value < co.min) co.value = '';
+  }
   if (form) {
     var s0 = saved();
     if (s0.checkin) form.elements.checkin.value = s0.checkin;
     if (s0.checkout) form.elements.checkout.value = s0.checkout;
     if (s0.guests) form.elements.guests.value = s0.guests;
+    fixDates();
     var readForm = function () {
+      fixDates();
       store({ checkin: form.elements.checkin.value, checkout: form.elements.checkout.value, guests: form.elements.guests.value });
       syncBook();
     };
     form.addEventListener('change', readForm);
     form.addEventListener('input', readForm);
-    form.addEventListener('submit', function (e) { e.preventDefault(); readForm(); window.open(bookUrl(), '_blank', 'noopener'); });
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      readForm();
+      if (!form.elements.checkin.value || !form.elements.checkout.value) { (form.elements.checkin.value ? form.elements.checkout : form.elements.checkin).reportValidity(); return; }
+      window.open(bookUrl(), '_blank', 'noopener');
+    });
   }
   syncBook();
   document.addEventListener('click', function (e) {
